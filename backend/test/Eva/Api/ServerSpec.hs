@@ -42,6 +42,7 @@ import Eva.Api.Server (makeApp)
 import Eva.App (AppEnv (..))
 import Eva.Config (AppConfig (..), LogLevel (..))
 import Eva.Engine.Dispatch (execute)
+import Eva.Engine.LLM (dummyLLMClient)
 import Eva.Persistence.Migration (runMigrations)
 
 -- ---------------------------------------------------------------------------
@@ -61,9 +62,10 @@ makeTestApp = do
             , configLlmApiKey = Nothing
             , configLogLevel  = LogError
             }
-        , envDbPool   = pool
-        , envLogger   = \_ -> pure ()
-        , envDispatch = execute
+        , envDbPool    = pool
+        , envLogger    = \_ -> pure ()
+        , envDispatch  = execute
+        , envLLMClient = dummyLLMClient
         }
   pure (makeApp env)
 

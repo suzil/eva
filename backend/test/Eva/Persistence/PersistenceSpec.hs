@@ -14,6 +14,7 @@ import Eva.App (AppEnv (..), AppM, runAppM)
 import Eva.Config (AppConfig (..), LogLevel (..))
 import Eva.Core.Types
 import Eva.Engine.Dispatch (execute)
+import Eva.Engine.LLM (dummyLLMClient)
 import Eva.Persistence.Migration (runMigrations)
 import Eva.Persistence.Queries
 import Eva.Persistence.Schema
@@ -35,10 +36,11 @@ withTestEnv action = do
         , configLogLevel  = LogError
         }
   let env = AppEnv
-        { envConfig   = cfg
-        , envDbPool   = pool
-        , envLogger   = \_ -> pure ()
-        , envDispatch = execute
+        { envConfig    = cfg
+        , envDbPool    = pool
+        , envLogger    = \_ -> pure ()
+        , envDispatch  = execute
+        , envLLMClient = dummyLLMClient
         }
   action env
 

@@ -19,6 +19,7 @@ import Test.Hspec
 import Eva.App (AppEnv (..), AppM, runAppM)
 import Eva.Config (AppConfig (..), LogLevel (..))
 import Eva.Core.Types
+import Eva.Engine.LLM (dummyLLMClient)
 import Eva.Engine.Runner (startRun, waitForRun, withRetry)
 import Eva.Engine.StateMachine (RunContext (..))
 import Eva.Persistence.Migration (runMigrations)
@@ -103,10 +104,11 @@ withTestEnv dispatch action = do
         , configLogLevel  = LogError
         }
       env = AppEnv
-        { envConfig   = cfg
-        , envDbPool   = pool
-        , envLogger   = \_ -> pure ()
-        , envDispatch = dispatch
+        { envConfig    = cfg
+        , envDbPool    = pool
+        , envLogger    = \_ -> pure ()
+        , envDispatch  = dispatch
+        , envLLMClient = dummyLLMClient
         }
   action env
 
