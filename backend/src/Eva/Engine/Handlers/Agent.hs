@@ -10,7 +10,7 @@ module Eva.Engine.Handlers.Agent
 
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (asks)
+import Control.Monad.Reader (ask, asks)
 import Data.Aeson (Value (..), toJSON)
 import qualified Data.Aeson as Aeson
 import Data.Map.Strict (Map)
@@ -22,7 +22,9 @@ import Data.Time (getCurrentTime)
 import qualified Data.UUID as UUID
 import Data.UUID.V4 (nextRandom)
 
-import Eva.App (AppM, envLLMClient)
+import Eva.Api.WebSocket (llmTokenEvent)
+import Eva.App (AppM, broadcastEvent, runAppM)
+import qualified Eva.App as App
 import Eva.Core.Types
 import Eva.Engine.LLM
 
@@ -73,9 +75,13 @@ handleAgent rid node inputs bindings = do
         , llmResponseFormat = agentResponseFormat cfg
         }
 
-  -- 6. Call the LLM (non-streaming in M4; broadcast wired in EVA-26/27).
-  llmClient <- asks envLLMClient
-  result    <- liftIO $ clientCall llmClient llmReq
+  -- 6. Call the LLM with streaming; broadcast each token as an llm_token event.
+  env       <- ask
+  llmClient <- asks App.envLLMClient
+  let onToken tok = do
+        now <- getCurrentTime
+        runAppM env $ broadcastEvent rid (llmTokenEvent rid (nodeId node) tok now)
+  result    <- liftIO $ clientStream llmClient llmReq onToken
 
   -- 7. Build and return the output message.
   case result of

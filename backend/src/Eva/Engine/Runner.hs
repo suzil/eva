@@ -51,7 +51,12 @@ import qualified Data.UUID as UUID
 import Data.UUID.V4 (nextRandom)
 import System.Timeout (timeout)
 
-import Eva.App (AppEnv, AppM, runAppM)
+import Eva.Api.WebSocket
+  ( logEntryEvent
+  , runStateEvent
+  , stepStateEvent
+  )
+import Eva.App (AppEnv, AppM, broadcastEvent, registerRun, runAppM, unregisterRun)
 import qualified Eva.App as App
 import Eva.Core.Graph
   ( dataEdgesOf
@@ -125,8 +130,13 @@ startRun program triggerPayload = do
 
   ctx <- liftIO $ newRunContext run dataPorts
 
+  -- Register the broadcast channel before the run starts so WS clients
+  -- can subscribe as soon as the run is created.
+  registerRun rid (rcBroadcast ctx)
+
   insertRun run
   _ <- transitionRun (rcRun ctx) RunRunning now
+  broadcastEvent rid (runStateEvent rid RunRunning now)
 
   let dEdges = dataEdgesOf graph
   forM_ (rootNodes graph) $ \nid ->
@@ -207,9 +217,10 @@ graphWalkerLoop ctx graph = do
         RunRunning -> do
           hasErr <- liftIO $ readTVarIO (rcHasUnhandledError ctx)
           now    <- liftIO getCurrentTime
-          _      <- transitionRun (rcRun ctx)
-                      (if hasErr then RunFailed else RunCompleted) now
-          pure ()
+          let finalState = if hasErr then RunFailed else RunCompleted
+          _      <- transitionRun (rcRun ctx) finalState now
+          broadcastEvent (rcRunId ctx) (runStateEvent (rcRunId ctx) finalState now)
+          unregisterRun (rcRunId ctx)
         _ -> pure ()
 
 -- ---------------------------------------------------------------------------
@@ -248,7 +259,9 @@ executeNodeStep env ctx graph node inputs = do
     pure tv
   insertStep step
 
-  _ <- transitionStep stepTVar StepRunning now
+  stepRunning <- transitionStep stepTVar StepRunning now
+  broadcastEvent (rcRunId ctx)
+    (stepStateEvent (rcRunId ctx) (nodeId node) (stepId stepRunning) StepRunning now)
 
   let bindings = resolveResourceBindings graph (nodeId node)
       mPolicy  = nodeRetryPolicy (nodeType node)
@@ -262,7 +275,9 @@ executeNodeStep env ctx graph node inputs = do
       now2 <- liftIO getCurrentTime
       liftIO $ atomically $
         modifyTVar stepTVar (\s -> s { stepOutput = Just (toJSON outMsg) })
-      _ <- transitionStep stepTVar StepCompleted now2
+      stepDone <- transitionStep stepTVar StepCompleted now2
+      broadcastEvent (rcRunId ctx)
+        (stepStateEvent (rcRunId ctx) (nodeId node) (stepId stepDone) StepCompleted now2)
       pure (Just outMsg)
 
     Left finalErr -> do
@@ -270,7 +285,9 @@ executeNodeStep env ctx graph node inputs = do
       let errText = T.pack (show finalErr)
       liftIO $ atomically $
         modifyTVar stepTVar (\s -> s { stepError = Just errText })
-      _ <- transitionStep stepTVar StepFailed now2
+      stepFailed <- transitionStep stepTVar StepFailed now2
+      broadcastEvent (rcRunId ctx)
+        (stepStateEvent (rcRunId ctx) (nodeId node) (stepId stepFailed) StepFailed now2)
 
       if hasErrorEdge graph (nodeId node)
         then do
@@ -346,6 +363,10 @@ dispatchWithRetry env dispatch mPolicy sid ctx node inputs bindings =
                     ]
               runAppM env $ insertLogEntry sid "warn" msg (Just dat)
               runAppM env $ updateStepRetryCount sid attemptNum
+              retryNow <- getCurrentTime
+              runAppM env $
+                broadcastEvent (rcRunId ctx)
+                  (logEntryEvent (rcRunId ctx) sid "warn" msg retryNow)
               -- Update in-memory step TVar.
               steps <- readTVarIO (rcSteps ctx)
               case Map.lookup (nodeId node) steps of
@@ -529,5 +550,7 @@ skipDescendants ctx graph executableNodes failedNid = do
           modifyTVar (rcDispatched ctx) (Set.insert nid)
         pure tv
       insertStep step
-      _ <- transitionStep stepTVar StepSkipped now
+      skipped <- transitionStep stepTVar StepSkipped now
+      broadcastEvent (rcRunId ctx)
+        (stepStateEvent (rcRunId ctx) nid (stepId skipped) StepSkipped now)
       liftIO $ checkAndSignalDone ctx terminals

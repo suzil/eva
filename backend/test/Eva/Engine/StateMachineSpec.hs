@@ -38,12 +38,14 @@ withTestEnv action = do
         , configLlmApiKey = Nothing
         , configLogLevel  = LogError
         }
+  broadcasts <- newTVarIO Map.empty
   let env = AppEnv
-        { envConfig    = cfg
-        , envDbPool    = pool
-        , envLogger    = \_ -> pure ()
-        , envDispatch  = execute
-        , envLLMClient = dummyLLMClient
+        { envConfig     = cfg
+        , envDbPool     = pool
+        , envLogger     = \_ -> pure ()
+        , envDispatch   = execute
+        , envLLMClient  = dummyLLMClient
+        , envBroadcasts = broadcasts
         }
   action env
 

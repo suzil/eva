@@ -6,6 +6,7 @@
 -- directly with a mock LLM client injected via 'envLLMClient'.
 module Eva.Engine.Handlers.AgentSpec (spec) where
 
+import Control.Concurrent.STM (newTVarIO)
 import Control.Exception (SomeException, try)
 import Control.Monad.Logger (runNoLoggingT)
 import Data.Aeson (Value (..))
@@ -109,8 +110,9 @@ failingLLMClient = LLMClient
 
 withTestEnv :: LLMClient -> (AppEnv -> IO ()) -> IO ()
 withTestEnv llmClient action = do
-  pool <- runNoLoggingT $ createSqlitePool ":memory:" 2
+  pool       <- runNoLoggingT $ createSqlitePool ":memory:" 2
   runMigrations pool
+  broadcasts <- newTVarIO Map.empty
   let cfg = AppConfig
         { configDbPath    = ":memory:"
         , configPort      = 8080
@@ -118,11 +120,12 @@ withTestEnv llmClient action = do
         , configLogLevel  = LogError
         }
       env = AppEnv
-        { envConfig    = cfg
-        , envDbPool    = pool
-        , envLogger    = \_ -> pure ()
-        , envDispatch  = \_ _ _ _ -> error "dispatch not used in handler unit tests"
-        , envLLMClient = llmClient
+        { envConfig     = cfg
+        , envDbPool     = pool
+        , envLogger     = \_ -> pure ()
+        , envDispatch   = \_ _ _ _ -> error "dispatch not used in handler unit tests"
+        , envLLMClient  = llmClient
+        , envBroadcasts = broadcasts
         }
   action env
 

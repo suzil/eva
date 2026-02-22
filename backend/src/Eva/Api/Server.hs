@@ -27,9 +27,12 @@ import Network.Wai
   , requestMethod
   , responseLBS
   )
+import Network.Wai.Handler.WebSockets (websocketsOr)
+import qualified Network.WebSockets as WS
 import Servant
 
 import Eva.Api.Types
+import Eva.Api.WebSocket (wsServerApp)
 import Eva.App (AppEnv, AppM, runAppM)
 import Eva.Core.Types
 import Eva.Core.Validation (validateGraph)
@@ -80,9 +83,13 @@ type RunsAPI =
 -- Application entry point
 -- ---------------------------------------------------------------------------
 
--- | Build the WAI 'Application', wrapping all endpoints with CORS middleware.
+-- | Build the WAI 'Application'.
+-- WebSocket upgrade requests (to any path) are routed to 'wsServerApp';
+-- all other requests go to the Servant REST API with CORS middleware.
 makeApp :: AppEnv -> Application
-makeApp env = addCors $ serve (Proxy :: Proxy EvaAPI) (evaHandlers env)
+makeApp env =
+  websocketsOr WS.defaultConnectionOptions (wsServerApp env) $
+    addCors $ serve (Proxy :: Proxy EvaAPI) (evaHandlers env)
 
 -- ---------------------------------------------------------------------------
 -- CORS middleware (inline — no extra dependency)

@@ -2,6 +2,7 @@
 
 module Eva.Persistence.PersistenceSpec (spec) where
 
+import Control.Concurrent.STM (newTVarIO)
 import Control.Monad.Logger (runNoLoggingT)
 import qualified Data.Map.Strict as Map
 import Data.Time (UTCTime)
@@ -27,8 +28,9 @@ import Eva.Persistence.Schema
 -- suitable for running AppM actions in tests.
 withTestEnv :: (AppEnv -> IO ()) -> IO ()
 withTestEnv action = do
-  pool <- runNoLoggingT $ createSqlitePool ":memory:" 1
+  pool       <- runNoLoggingT $ createSqlitePool ":memory:" 1
   runMigrations pool
+  broadcasts <- newTVarIO Map.empty
   let cfg = AppConfig
         { configDbPath    = ":memory:"
         , configPort      = 8080
@@ -36,11 +38,12 @@ withTestEnv action = do
         , configLogLevel  = LogError
         }
   let env = AppEnv
-        { envConfig    = cfg
-        , envDbPool    = pool
-        , envLogger    = \_ -> pure ()
-        , envDispatch  = execute
-        , envLLMClient = dummyLLMClient
+        { envConfig     = cfg
+        , envDbPool     = pool
+        , envLogger     = \_ -> pure ()
+        , envDispatch   = execute
+        , envLLMClient  = dummyLLMClient
+        , envBroadcasts = broadcasts
         }
   action env
 

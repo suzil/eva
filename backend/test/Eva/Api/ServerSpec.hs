@@ -38,6 +38,9 @@ import Network.Wai.Test
   )
 import Test.Hspec
 
+import Control.Concurrent.STM (newTVarIO)
+import qualified Data.Map.Strict as Map
+
 import Eva.Api.Server (makeApp)
 import Eva.App (AppEnv (..))
 import Eva.Config (AppConfig (..), LogLevel (..))
@@ -53,8 +56,9 @@ import Eva.Persistence.Migration (runMigrations)
 -- gets an isolated SQLite database.
 makeTestApp :: IO Application
 makeTestApp = do
-  pool <- runNoLoggingT $ createSqlitePool ":memory:" 1
+  pool       <- runNoLoggingT $ createSqlitePool ":memory:" 1
   runMigrations pool
+  broadcasts <- newTVarIO Map.empty
   let env = AppEnv
         { envConfig = AppConfig
             { configDbPath    = ":memory:"
@@ -62,10 +66,11 @@ makeTestApp = do
             , configLlmApiKey = Nothing
             , configLogLevel  = LogError
             }
-        , envDbPool    = pool
-        , envLogger    = \_ -> pure ()
-        , envDispatch  = execute
-        , envLLMClient = dummyLLMClient
+        , envDbPool     = pool
+        , envLogger     = \_ -> pure ()
+        , envDispatch   = execute
+        , envLLMClient  = dummyLLMClient
+        , envBroadcasts = broadcasts
         }
   pure (makeApp env)
 

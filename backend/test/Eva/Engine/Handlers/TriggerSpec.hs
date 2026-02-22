@@ -6,6 +6,7 @@
 module Eva.Engine.Handlers.TriggerSpec (spec) where
 
 import Control.Exception (SomeException, try)
+import Control.Concurrent.STM (newTVarIO)
 import Control.Monad.Logger (runNoLoggingT)
 import qualified Data.Aeson as Aeson
 import qualified Data.Map.Strict as Map
@@ -79,8 +80,9 @@ emptyBindings = ResourceBindings { rbKnowledge = [], rbConnectors = [] }
 
 withTestEnv :: (AppEnv -> IO ()) -> IO ()
 withTestEnv action = do
-  pool <- runNoLoggingT $ createSqlitePool ":memory:" 2
+  pool       <- runNoLoggingT $ createSqlitePool ":memory:" 2
   runMigrations pool
+  broadcasts <- newTVarIO Map.empty
   let cfg = AppConfig
         { configDbPath    = ":memory:"
         , configPort      = 8080
@@ -92,11 +94,12 @@ withTestEnv action = do
         , clientStream = \_ _ -> pure (Right (LLMResponse "unused" (TokenUsage 0 0 0)))
         }
       env = AppEnv
-        { envConfig    = cfg
-        , envDbPool    = pool
-        , envLogger    = \_ -> pure ()
-        , envDispatch  = \_ _ _ _ -> error "dispatch not used in handler unit tests"
-        , envLLMClient = placeholderLLMClient
+        { envConfig     = cfg
+        , envDbPool     = pool
+        , envLogger     = \_ -> pure ()
+        , envDispatch   = \_ _ _ _ -> error "dispatch not used in handler unit tests"
+        , envLLMClient  = placeholderLLMClient
+        , envBroadcasts = broadcasts
         }
   action env
 

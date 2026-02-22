@@ -6,7 +6,7 @@
 module Eva.Engine.RetrySpec (spec) where
 
 import Control.Concurrent (threadDelay)
-import Control.Concurrent.STM (readTVarIO)
+import Control.Concurrent.STM (newTVarIO, readTVarIO)
 import Control.Exception (Exception, throwIO)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Logger (runNoLoggingT)
@@ -95,8 +95,9 @@ withTestEnv
   -> (AppEnv -> IO ())
   -> IO ()
 withTestEnv dispatch action = do
-  pool <- runNoLoggingT $ createSqlitePool ":memory:" 4
+  pool       <- runNoLoggingT $ createSqlitePool ":memory:" 4
   runMigrations pool
+  broadcasts <- newTVarIO Map.empty
   let cfg = AppConfig
         { configDbPath    = ":memory:"
         , configPort      = 8080
@@ -104,11 +105,12 @@ withTestEnv dispatch action = do
         , configLogLevel  = LogError
         }
       env = AppEnv
-        { envConfig    = cfg
-        , envDbPool    = pool
-        , envLogger    = \_ -> pure ()
-        , envDispatch  = dispatch
-        , envLLMClient = dummyLLMClient
+        { envConfig     = cfg
+        , envDbPool     = pool
+        , envLogger     = \_ -> pure ()
+        , envDispatch   = dispatch
+        , envLLMClient  = dummyLLMClient
+        , envBroadcasts = broadcasts
         }
   action env
 
