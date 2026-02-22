@@ -7,19 +7,21 @@ module Eva.Api.Types
   ( -- * Request bodies
     CreateProgramReq (..)
   , PatchProgramReq (..)
+  , CreateRunReq (..)
 
     -- * Response bodies
   , HealthResponse (..)
   , ValidateResult (..)
+  , RunDetail (..)
 
     -- * Error response
   , ApiError (..)
   ) where
 
-import Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.:), (.:?), (.=))
+import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
 import Data.Text (Text)
 
-import Eva.Core.Types (ValidationError (..))
+import Eva.Core.Types (Run, Step, ValidationError (..))
 
 -- ---------------------------------------------------------------------------
 -- Request bodies
@@ -61,6 +63,28 @@ data ValidateResult = ValidateResult
 
 instance ToJSON ValidateResult where
   toJSON r = object ["valid" .= vrValid r, "errors" .= vrErrors r]
+
+-- | Request body for POST /api/programs/:id/runs.
+-- 'triggerPayload' is forwarded to the Trigger node as its seed value.
+newtype CreateRunReq = CreateRunReq
+  { crrTriggerPayload :: Maybe Value
+  }
+
+instance FromJSON CreateRunReq where
+  parseJSON = withObject "CreateRunReq" $ \o ->
+    CreateRunReq <$> o .:? "triggerPayload"
+
+-- | Response body for GET /api/runs/:id — embeds the Run and its Steps.
+data RunDetail = RunDetail
+  { rdRun   :: Run
+  , rdSteps :: [Step]
+  }
+
+instance ToJSON RunDetail where
+  toJSON rd = object
+    [ "run"   .= rdRun   rd
+    , "steps" .= rdSteps rd
+    ]
 
 -- ---------------------------------------------------------------------------
 -- Error response

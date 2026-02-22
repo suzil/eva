@@ -287,7 +287,7 @@ spec = around withTestEnv $ do
     it "listRunsForProgram returns runs for that program" $ \env -> do
       runTest env (insertProgram sampleProgram)
       runTest env (insertRun sampleRun)
-      runs <- runTest env (listRunsForProgram "prog-test-1")
+      runs <- runTest env (listRunsForProgram "prog-test-1" 100 0)
       map runId runs `shouldBe` ["run-1"]
 
     it "updateRun changes state and timestamps" $ \env -> do

@@ -8,6 +8,7 @@ import Data.Aeson (Value (..), decode, encode, object, (.=))
 import Data.Aeson.Key (fromText)
 import Data.Aeson.KeyMap ((!?))
 import qualified Data.ByteString.Lazy as BL
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as TE
 import Database.Persist.Sqlite (createSqlitePool)
@@ -21,6 +22,7 @@ import Network.HTTP.Types
   , status200
   , status201
   , status204
+  , status400
   , status404
   , status409
   )
@@ -265,6 +267,126 @@ spec = before makeTestApp $ do
       _   <- doPostJson ("/api/programs/" <> pid <> "/deploy") (object [])
       res <- doPostJson ("/api/programs/" <> pid <> "/resume") (object [])
       liftIO $ simpleStatus res `shouldBe` status409
+
+  describe "Execution API" $ do
+
+    -- A graph with a single manual trigger node passes all 8 validation checks:
+    -- trigger presence, DAG, port names, port categories, required wiring,
+    -- config completeness (manual trigger needs no schedule), and reachability
+    -- (only Agent/Action are checked, not TriggerNode).
+    let minimalValidGraph :: Value
+        minimalValidGraph = object
+          [ "nodes" .= object
+              [ "n1" .= object
+                  [ "id"    .= ("n1" :: Text)
+                  , "label" .= ("Start" :: Text)
+                  , "type"  .= object
+                      [ "type"   .= ("trigger" :: Text)
+                      , "config" .= object
+                          [ "type"            .= ("manual" :: Text)
+                          , "schedule"        .= Null
+                          , "eventFilter"     .= Null
+                          , "payloadTemplate" .= Null
+                          ]
+                      ]
+                  , "posX"  .= (0.0 :: Double)
+                  , "posY"  .= (0.0 :: Double)
+                  ]
+              ]
+          , "edges" .= ([] :: [Value])
+          ]
+
+    -- Helper: create a program and PUT the minimal valid graph. Runs inside
+    -- an existing Session so it can be composed in each test.
+    let createProgramWithValidGraph :: Session BL.ByteString
+        createProgramWithValidGraph = do
+          created <- doPostJson "/api/programs"
+            (object ["name" .= ("Exec Test" :: Text)])
+          let Just pid = responseId created
+          _ <- doPutJson ("/api/programs/" <> pid <> "/graph") minimalValidGraph
+          pure pid
+
+    describe "POST /api/programs/:id/runs" $ do
+
+      it "returns 400 with validation errors when graph has no trigger" $ \app -> sess app $ do
+        created <- doPostJson "/api/programs"
+          (object ["name" .= ("Empty Graph" :: Text)])
+        let Just pid = responseId created
+        res <- doPostJson ("/api/programs/" <> pid <> "/runs") (object [])
+        liftIO $ do
+          simpleStatus res `shouldBe` status400
+          let Just (Object body) = decode (simpleBody res) :: Maybe Value
+          body !? "valid"  `shouldBe` Just (Bool False)
+          isJust (body !? "errors") `shouldBe` True
+
+      it "returns 201 with run when graph is valid" $ \app -> sess app $ do
+        pid <- createProgramWithValidGraph
+        res <- doPostJson ("/api/programs/" <> pid <> "/runs") (object [])
+        liftIO $ do
+          simpleStatus res `shouldBe` status201
+          isJust (responseId res) `shouldBe` True
+
+      it "returns 404 for unknown program" $ \app -> sess app $ do
+        res <- doPostJson "/api/programs/ghost/runs" (object [])
+        liftIO $ simpleStatus res `shouldBe` status404
+
+    describe "GET /api/programs/:id/runs" $ do
+
+      it "returns empty list when no runs exist" $ \app -> sess app $ do
+        pid <- createProgramWithValidGraph
+        res <- doGet ("/api/programs/" <> pid <> "/runs")
+        liftIO $ do
+          simpleStatus res `shouldBe` status200
+          decode (simpleBody res) `shouldBe` Just ([] :: [Value])
+
+      it "returns the created run in the list" $ \app -> sess app $ do
+        pid <- createProgramWithValidGraph
+        _ <- doPostJson ("/api/programs/" <> pid <> "/runs") (object [])
+        res <- doGet ("/api/programs/" <> pid <> "/runs")
+        liftIO $ do
+          simpleStatus res `shouldBe` status200
+          let Just runs = decode (simpleBody res) :: Maybe [Value]
+          length runs `shouldBe` 1
+
+    describe "GET /api/runs/:id" $ do
+
+      it "returns run detail with run and steps fields" $ \app -> sess app $ do
+        pid    <- createProgramWithValidGraph
+        runRes <- doPostJson ("/api/programs/" <> pid <> "/runs") (object [])
+        let Just rid = responseId runRes
+        res <- doGet ("/api/runs/" <> rid)
+        liftIO $ do
+          simpleStatus res `shouldBe` status200
+          let Just (Object body) = decode (simpleBody res) :: Maybe Value
+          isJust (body !? "run")   `shouldBe` True
+          isJust (body !? "steps") `shouldBe` True
+
+      it "returns 404 for unknown run id" $ \app -> sess app $ do
+        res <- doGet "/api/runs/no-such-run"
+        liftIO $ simpleStatus res `shouldBe` status404
+
+    describe "POST /api/runs/:id/cancel" $ do
+
+      it "returns 404 for unknown run id" $ \app -> sess app $ do
+        res <- doPostJson "/api/runs/no-such-run/cancel" (object [])
+        liftIO $ simpleStatus res `shouldBe` status404
+
+      it "transitions a running run to canceled (200) and returns state=canceled" $ \app -> sess app $ do
+        pid    <- createProgramWithValidGraph
+        runRes <- doPostJson ("/api/programs/" <> pid <> "/runs") (object [])
+        let Just rid = responseId runRes
+        res <- doPostJson ("/api/runs/" <> rid <> "/cancel") (object [])
+        liftIO $ do
+          simpleStatus res `shouldBe` status200
+          responseField "state" res `shouldBe` Just "canceled"
+
+      it "returns 409 when cancelling an already-canceled run" $ \app -> sess app $ do
+        pid    <- createProgramWithValidGraph
+        runRes <- doPostJson ("/api/programs/" <> pid <> "/runs") (object [])
+        let Just rid = responseId runRes
+        _   <- doPostJson ("/api/runs/" <> rid <> "/cancel") (object [])
+        res <- doPostJson ("/api/runs/" <> rid <> "/cancel") (object [])
+        liftIO $ simpleStatus res `shouldBe` status409
 
   describe "CORS headers" $ do
     it "includes Access-Control-Allow-Origin: * on all responses" $ \app -> sess app $ do

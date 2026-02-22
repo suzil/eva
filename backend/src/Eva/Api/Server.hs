@@ -9,8 +9,11 @@ module Eva.Api.Server
   , makeApp
   ) where
 
+import Control.Concurrent.STM (readTVarIO)
+import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (encode)
+import Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -30,13 +33,15 @@ import Eva.Api.Types
 import Eva.App (AppEnv, AppM, runAppM)
 import Eva.Core.Types
 import Eva.Core.Validation (validateGraph)
+import Eva.Engine.Runner (startRun)
+import Eva.Engine.StateMachine (RunContext (..))
 import Eva.Persistence.Queries
 
 -- ---------------------------------------------------------------------------
 -- API type
 -- ---------------------------------------------------------------------------
 
-type EvaAPI = HealthAPI :<|> ProgramsAPI
+type EvaAPI = HealthAPI :<|> ProgramsAPI :<|> RunsAPI
 
 type HealthAPI =
   "api" :> "health" :> Get '[JSON] HealthResponse
@@ -57,6 +62,19 @@ type ProgramByIdAPI =
   :<|> "deploy"   :> Post '[JSON] Program
   :<|> "pause"    :> Post '[JSON] Program
   :<|> "resume"   :> Post '[JSON] Program
+  :<|> "runs"     :> ProgramRunsAPI
+
+-- | Endpoints under /api/programs/:id/runs
+type ProgramRunsAPI =
+       QueryParam "limit" Int :> QueryParam "offset" Int :> Get '[JSON] [Run]
+  :<|> ReqBody '[JSON] CreateRunReq :> PostCreated '[JSON] Run
+
+-- | Top-level /api/runs/:id endpoints (not scoped to a program)
+type RunsAPI =
+  "api" :> "runs" :> Capture "id" Text :>
+    (    Get '[JSON] RunDetail
+    :<|> "cancel" :> Post '[JSON] Run
+    )
 
 -- ---------------------------------------------------------------------------
 -- Application entry point
@@ -90,7 +108,7 @@ addCors app req sendResponse
 -- ---------------------------------------------------------------------------
 
 evaHandlers :: AppEnv -> Server EvaAPI
-evaHandlers env = healthHandler :<|> programsHandlers env
+evaHandlers env = healthHandler :<|> programsHandlers env :<|> runsHandlers env
 
 healthHandler :: Handler HealthResponse
 healthHandler = pure (HealthResponse "ok")
@@ -135,6 +153,8 @@ programsHandlers env =
       :<|> deployH
       :<|> pauseH
       :<|> resumeH
+      :<|> listRunsH
+      :<|> createRunH
       where
         pid :: ProgramId
         pid = ProgramId rawId
@@ -212,6 +232,63 @@ programsHandlers env =
               let p' = p { programState = newState, programUpdatedAt = now }
               run (updateProgram p')
               pure p'
+
+        -- GET /api/programs/:id/runs?limit=N&offset=M
+        listRunsH :: Maybe Int -> Maybe Int -> Handler [Run]
+        listRunsH mLimit mOffset = do
+          _ <- requireProgram
+          run (listRunsForProgram pid (fromMaybe 20 mLimit) (fromMaybe 0 mOffset))
+
+        -- POST /api/programs/:id/runs
+        createRunH :: CreateRunReq -> Handler Run
+        createRunH req = do
+          p <- requireProgram
+          let errs = validateGraph (programGraph p)
+          unless (null errs) $
+            throwError err400 { errBody = encode (ValidateResult False errs) }
+          ctx <- run (startRun p (crrTriggerPayload req))
+          liftIO $ readTVarIO (rcRun ctx)
+
+-- ---------------------------------------------------------------------------
+-- Top-level run handlers (/api/runs/:id)
+-- ---------------------------------------------------------------------------
+
+runsHandlers :: AppEnv -> Server RunsAPI
+runsHandlers env rawId = getRunDetailH :<|> cancelRunH
+  where
+    run :: AppM a -> Handler a
+    run = liftIO . runAppM env
+
+    rid :: RunId
+    rid = RunId rawId
+
+    requireRun :: Handler Run
+    requireRun = do
+      mRun <- run (getRun rid)
+      case mRun of
+        Nothing -> throwError err404 { errBody = encode (ApiError "Run not found") }
+        Just r  -> pure r
+
+    -- GET /api/runs/:id
+    getRunDetailH :: Handler RunDetail
+    getRunDetailH = do
+      r     <- requireRun
+      steps <- run (listStepsForRun rid)
+      pure (RunDetail r steps)
+
+    -- POST /api/runs/:id/cancel
+    cancelRunH :: Handler Run
+    cancelRunH = do
+      r   <- requireRun
+      now <- liftIO getCurrentTime
+      case runState r of
+        s | s `elem` [RunRunning, RunWaiting] -> do
+              let r' = r { runState = RunCanceled, runFinishedAt = Just now }
+              run (updateRun rid RunCanceled (runStartedAt r) (Just now))
+              pure r'
+        _ ->
+          throwError err409
+            { errBody = encode (ApiError ("Cannot cancel a " <> T.toLower (T.pack (show (runState r))) <> " run")) }
 
 -- ---------------------------------------------------------------------------
 -- State transition logic

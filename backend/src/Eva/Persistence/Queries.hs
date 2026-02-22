@@ -349,9 +349,11 @@ getRun rid = runDb $ do
         Left err -> fail $ "getRun: " <> err
         Right r  -> pure (Just r)
 
-listRunsForProgram :: ProgramId -> AppM [Run]
-listRunsForProgram pid = runDb $ do
-  entities <- selectList [RunRowProgramId ==. toProgramRowId pid] [Asc RunRowId]
+listRunsForProgram :: ProgramId -> Int -> Int -> AppM [Run]
+listRunsForProgram pid limit offset = runDb $ do
+  entities <- selectList
+    [RunRowProgramId ==. toProgramRowId pid]
+    [Desc RunRowStartedAt, LimitTo limit, OffsetBy offset]
   traverse decodeRun entities
   where
     decodeRun e = case runFromRow e of
