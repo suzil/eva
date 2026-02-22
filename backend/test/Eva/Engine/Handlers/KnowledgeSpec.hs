@@ -91,6 +91,7 @@ withTestEnv action = do
         , configAnthropicApiKey = Nothing
         , configLogLevel        = LogError
         , configCredentialKey   = "test-key"
+        , configStaticDir       = Nothing
         }
       dummyLLM = LLMClient
         { clientCall   = \_ -> error "LLM not used in Knowledge handler tests"

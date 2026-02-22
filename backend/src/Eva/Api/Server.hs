@@ -13,6 +13,7 @@ import Control.Concurrent.STM (readTVarIO)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (encode)
+import qualified Data.ByteString as BS
 import Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
@@ -20,22 +21,32 @@ import qualified Data.Text as T
 import Data.Time (getCurrentTime)
 import qualified Data.UUID as UUID
 import Data.UUID.V4 (nextRandom)
-import Network.HTTP.Types (ResponseHeaders, methodOptions, status204)
+import Network.HTTP.Types (ResponseHeaders, methodOptions, status200, status204)
 import Network.Wai
-  ( Middleware
+  ( Application
+  , Middleware
   , mapResponseHeaders
+  , rawPathInfo
   , requestMethod
   , responseLBS
+  , responseFile
+  )
+import Network.Wai.Application.Static
+  ( defaultFileServerSettings
+  , staticApp
+  , ss404Handler
   )
 import Network.Wai.Handler.WebSockets (websocketsOr)
 import qualified Network.WebSockets as WS
 import Servant
+import System.FilePath ((</>))
 
 import qualified Data.Text.Encoding as TE
 
 import Eva.Api.Types
 import Eva.Api.WebSocket (wsServerApp)
 import Eva.App (AppEnv (..), AppM, runAppM)
+import Eva.Config (configStaticDir)
 import Eva.Core.Types
 import Eva.Core.Validation (validateGraph)
 import qualified Eva.Crypto as Crypto
@@ -96,10 +107,32 @@ type CredentialsAPI =
 -- | Build the WAI 'Application'.
 -- WebSocket upgrade requests (to any path) are routed to 'wsServerApp';
 -- all other requests go to the Servant REST API with CORS middleware.
+-- When 'EVA_STATIC_DIR' is set, non-API paths are served from that directory
+-- (React SPA with index.html fallback for client-side routing).
 makeApp :: AppEnv -> Application
 makeApp env =
   websocketsOr WS.defaultConnectionOptions (wsServerApp env) $
-    addCors $ serve (Proxy :: Proxy EvaAPI) (evaHandlers env)
+    case configStaticDir (envConfig env) of
+      Nothing      -> addCors apiApp
+      Just dir     -> withStaticFiles dir (addCors apiApp)
+  where
+    apiApp = serve (Proxy :: Proxy EvaAPI) (evaHandlers env)
+
+-- | Serve static files from @dir@ for non-API paths, with an @index.html@
+-- fallback for unmatched routes (SPA client-side routing). API paths
+-- (starting with @/api@) are forwarded to the inner application.
+withStaticFiles :: FilePath -> Application -> Application
+withStaticFiles dir apiApp req respond
+  | "/api" `BS.isPrefixOf` rawPathInfo req = apiApp req respond
+  | otherwise =
+      let spaFallback _ res =
+            res $ responseFile status200
+              [("Content-Type", "text/html; charset=utf-8")]
+              (dir </> "index.html")
+              Nothing
+          settings = (defaultFileServerSettings dir)
+            { ss404Handler = Just spaFallback }
+      in staticApp settings req respond
 
 -- ---------------------------------------------------------------------------
 -- CORS middleware (inline — no extra dependency)

@@ -1,0 +1,17 @@
+services:
+  eva:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - eva-data:/data
+    environment:
+      # Required: generate with `openssl rand -hex 32`
+      EVA_CREDENTIAL_KEY: "${EVA_CREDENTIAL_KEY}"
+      # Optional: LLM provider keys
+      EVA_LLM_API_KEY: "${EVA_LLM_API_KEY:-}"
+      EVA_ANTHROPIC_API_KEY: "${EVA_ANTHROPIC_API_KEY:-}"
+    restart: unless-stopped
+
+volumes:
+  eva-data:

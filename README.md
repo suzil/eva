@@ -40,7 +40,41 @@ graph TB
 
 The backend is a single Haskell process (Warp + Servant) that serves the REST API, manages WebSocket connections, runs the execution engine, and hosts the in-process cron scheduler. The frontend is a React SPA (Vite) that communicates with the backend over REST for all CRUD operations and WebSocket for streaming execution events.
 
-## Prerequisites
+## Quickstart (Docker)
+
+The fastest way to run Eva locally is with Docker. No Haskell or Node toolchain required.
+
+**Prerequisites:** Docker with Compose (Docker Desktop ≥ 4.x or Docker Engine + the `compose` plugin).
+
+```bash
+git clone https://github.com/suzil/eva
+cd eva
+
+# Generate a credential master key (required for storing connector secrets)
+export EVA_CREDENTIAL_KEY=$(openssl rand -hex 32)
+
+# Optional: add LLM API keys
+export EVA_LLM_API_KEY=sk-...           # OpenAI key for GPT models
+export EVA_ANTHROPIC_API_KEY=sk-ant-... # Anthropic key for Claude models
+
+# Build and start
+docker compose up
+```
+
+Open **http://localhost:8080**.
+
+The SQLite database is persisted in a named Docker volume (`eva-data`) and survives container restarts.
+
+> The first `docker compose up` builds the image from scratch — the GHC compile step takes several minutes. Subsequent builds reuse the dependency layer and are much faster.
+
+### Build the image separately
+
+```bash
+make docker-build   # docker build -t eva .
+make docker-run     # docker compose up
+```
+
+## Prerequisites (Development)
 
 | Tool  | Version | Install |
 |-------|---------|---------|
@@ -49,7 +83,7 @@ The backend is a single Haskell process (Warp + Servant) that serves the REST AP
 | Node  | 22+     | [nodejs.org](https://nodejs.org) |
 | ghcid | latest  | `make install-ghcid` |
 
-## Getting Started
+## Development Setup
 
 ```bash
 git clone https://github.com/suzil/eva

@@ -40,6 +40,7 @@ withTestEnv action = do
         , configAnthropicApiKey = Nothing
         , configLogLevel        = LogError
         , configCredentialKey   = "test-key"
+        , configStaticDir       = Nothing
         }
   broadcasts <- newTVarIO Map.empty
   let env = AppEnv

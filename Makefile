@@ -1,4 +1,4 @@
-.PHONY: dev build test install install-ghcid
+.PHONY: dev build test install install-ghcid docker-build docker-run
 
 # Start backend (ghcid hot-reload) and frontend (Vite) concurrently.
 # Ctrl+C kills both.
@@ -28,3 +28,12 @@ test:
 # Usage: make seed  OR  make seed BASE_URL=http://localhost:8080
 seed:
 	@./scripts/seed-demo.sh $(BASE_URL)
+
+# Build the Docker image (multi-stage: GHC + Node + runtime).
+docker-build:
+	docker build -t eva .
+
+# Start Eva via Docker Compose (requires EVA_CREDENTIAL_KEY to be set).
+# Example: EVA_CREDENTIAL_KEY=$(openssl rand -hex 32) make docker-run
+docker-run:
+	docker compose up

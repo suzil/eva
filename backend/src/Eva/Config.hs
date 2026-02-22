@@ -46,6 +46,7 @@ data AppConfig = AppConfig
   , configAnthropicApiKey :: Maybe Text
   , configLogLevel        :: LogLevel
   , configCredentialKey   :: Text
+  , configStaticDir       :: Maybe FilePath
   }
   deriving stock (Show)
 
@@ -62,6 +63,7 @@ configParser =
     <*> optional (var Env.str "EVA_ANTHROPIC_API_KEY" (help "Anthropic API key"))
     <*> var readLogLevel "EVA_LOG_LEVEL"         (def LogInfo <> help "Log level: debug, info, warn, error")
     <*> var Env.str      "EVA_CREDENTIAL_KEY"    (help "Master key for credential encryption (required)")
+    <*> optional (var Env.str "EVA_STATIC_DIR"   (help "Directory of compiled frontend static files (enables static serving)"))
 
 -- ---------------------------------------------------------------------------
 -- YAML fallback

@@ -47,7 +47,9 @@ library
     , warp                ^>=3.4
     , wai                 ^>=3.2
     , wai-extra           ^>=3.1
+    , wai-app-static      ^>=3.1
     , wai-websockets      ^>=3.0
+    , filepath            ^>=1.5
     , websockets          ^>=0.13
     , aeson               ^>=2.2
     , persistent          ^>=2.14
