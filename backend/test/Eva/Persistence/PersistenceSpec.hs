@@ -13,6 +13,7 @@ import Test.Hspec
 
 import Eva.App (AppEnv (..), AppM, runAppM)
 import Eva.Config (AppConfig (..), LogLevel (..))
+import qualified Eva.Crypto as Crypto
 import Eva.Core.Types
 import Eva.Engine.Dispatch (execute)
 import Eva.Engine.LLM (dummyLLMClient)
@@ -32,10 +33,11 @@ withTestEnv action = do
   runMigrations pool
   broadcasts <- newTVarIO Map.empty
   let cfg = AppConfig
-        { configDbPath    = ":memory:"
-        , configPort      = 8080
-        , configLlmApiKey = Nothing
-        , configLogLevel  = LogError
+        { configDbPath        = ":memory:"
+        , configPort          = 8080
+        , configLlmApiKey     = Nothing
+        , configLogLevel      = LogError
+        , configCredentialKey = "test-key"
         }
   let env = AppEnv
         { envConfig     = cfg
@@ -43,7 +45,8 @@ withTestEnv action = do
         , envLogger     = \_ -> pure ()
         , envDispatch   = execute
         , envLLMClient  = dummyLLMClient
-        , envBroadcasts = broadcasts
+        , envBroadcasts    = broadcasts
+        , envCredentialKey = Crypto.deriveKey "test-key"
         }
   action env
 

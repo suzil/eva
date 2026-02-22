@@ -102,6 +102,27 @@ data Message = Message { msgType :: Text, payload :: Value, meta :: MessageMeta 
 Run/Step types mirror the concept model state machines. `TVar` during execution,
 persisted to DB on transitions.
 
+### AppEnv / AppM (implemented)
+
+```haskell
+type AppM = ReaderT AppEnv IO
+
+type DispatchFn =
+  RunId -> Node -> Map PortName Message -> ResourceBindings -> AppM Message
+
+data AppEnv = AppEnv
+  { envConfig     :: AppConfig
+  , envDbPool     :: ConnectionPool
+  , envLogger     :: LogEntry -> IO ()
+  , envDispatch   :: DispatchFn          -- injectable; swap in tests
+  , envLLMClient  :: LLMClient           -- injectable; dummyLLMClient for tests
+  , envBroadcasts :: TVar (Map RunId (TChan Value))
+  }
+```
+
+See `eva-implementation-patterns.mdc` for `LLMClient` record-of-functions,
+`RunContext` fields, retry conventions, and test setup boilerplate.
+
 ### Execution Engine
 
 Push-based concurrent graph walker using STM + async:

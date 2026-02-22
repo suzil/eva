@@ -235,6 +235,39 @@ export interface Program {
 }
 
 // ---------------------------------------------------------------------------
+// Credentials (EVA-32)
+// ---------------------------------------------------------------------------
+
+export type CredentialId = string
+export type CredentialType = 'api_key' | 'oauth_token'
+export type SystemTypeCredential = SystemType  // alias for clarity
+
+// Safe credential view — never includes the encrypted secret.
+// Mirrors Haskell Credential with dropPrefix "credential":
+//   credentialId        -> "id"
+//   credentialName      -> "name"
+//   credentialSystem    -> "system"
+//   credentialType      -> "type"
+//   credentialCreatedAt -> "createdAt"
+export interface Credential {
+  id: CredentialId
+  name: string
+  system: SystemType
+  type: CredentialType
+  createdAt: string
+}
+
+// Request body for POST /api/credentials.
+// Mirrors Haskell CreateCredentialReq with manual JSON keys:
+//   "name", "system", "type", "secret"
+export interface CreateCredentialReq {
+  name: string
+  system: SystemType
+  type: CredentialType
+  secret: string
+}
+
+// ---------------------------------------------------------------------------
 // API request / response types (mirroring Eva.Api.Types)
 // ---------------------------------------------------------------------------
 

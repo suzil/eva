@@ -31,11 +31,14 @@ import Network.Wai.Handler.WebSockets (websocketsOr)
 import qualified Network.WebSockets as WS
 import Servant
 
+import qualified Data.Text.Encoding as TE
+
 import Eva.Api.Types
 import Eva.Api.WebSocket (wsServerApp)
-import Eva.App (AppEnv, AppM, runAppM)
+import Eva.App (AppEnv (..), AppM, runAppM)
 import Eva.Core.Types
 import Eva.Core.Validation (validateGraph)
+import qualified Eva.Crypto as Crypto
 import Eva.Engine.Runner (startRun)
 import Eva.Engine.StateMachine (RunContext (..))
 import Eva.Persistence.Queries
@@ -44,7 +47,7 @@ import Eva.Persistence.Queries
 -- API type
 -- ---------------------------------------------------------------------------
 
-type EvaAPI = HealthAPI :<|> ProgramsAPI :<|> RunsAPI
+type EvaAPI = HealthAPI :<|> ProgramsAPI :<|> RunsAPI :<|> CredentialsAPI
 
 type HealthAPI =
   "api" :> "health" :> Get '[JSON] HealthResponse
@@ -77,6 +80,13 @@ type RunsAPI =
   "api" :> "runs" :> Capture "id" Text :>
     (    Get '[JSON] RunDetail
     :<|> "cancel" :> Post '[JSON] Run
+    )
+
+type CredentialsAPI =
+  "api" :> "credentials" :>
+    (    Get '[JSON] [Credential]
+    :<|> ReqBody '[JSON] CreateCredentialReq :> PostCreated '[JSON] Credential
+    :<|> Capture "id" Text :> DeleteNoContent
     )
 
 -- ---------------------------------------------------------------------------
@@ -115,7 +125,11 @@ addCors app req sendResponse
 -- ---------------------------------------------------------------------------
 
 evaHandlers :: AppEnv -> Server EvaAPI
-evaHandlers env = healthHandler :<|> programsHandlers env :<|> runsHandlers env
+evaHandlers env =
+       healthHandler
+  :<|> programsHandlers env
+  :<|> runsHandlers env
+  :<|> credentialsHandlers env
 
 healthHandler :: Handler HealthResponse
 healthHandler = pure (HealthResponse "ok")
@@ -296,6 +310,44 @@ runsHandlers env rawId = getRunDetailH :<|> cancelRunH
         _ ->
           throwError err409
             { errBody = encode (ApiError ("Cannot cancel a " <> T.toLower (T.pack (show (runState r))) <> " run")) }
+
+-- ---------------------------------------------------------------------------
+-- Credentials handlers (/api/credentials)
+-- ---------------------------------------------------------------------------
+
+credentialsHandlers :: AppEnv -> Server CredentialsAPI
+credentialsHandlers env = listH :<|> createH :<|> deleteH
+  where
+    run :: AppM a -> Handler a
+    run = liftIO . runAppM env
+
+    -- GET /api/credentials
+    listH :: Handler [Credential]
+    listH = run listCredentials
+
+    -- POST /api/credentials
+    createH :: CreateCredentialReq -> Handler Credential
+    createH req = do
+      cid     <- liftIO (CredentialId . UUID.toText <$> nextRandom)
+      now     <- liftIO getCurrentTime
+      let key     = envCredentialKey env
+          secret  = TE.encodeUtf8 (ccrSecret req)
+      encBytes <- liftIO (Crypto.encrypt key secret)
+      let cred = Credential
+            { credentialId        = cid
+            , credentialName      = ccrName req
+            , credentialSystem    = ccrSystem req
+            , credentialType      = ccrType req
+            , credentialCreatedAt = now
+            }
+      run (insertCredential cred encBytes)
+      pure cred
+
+    -- DELETE /api/credentials/:id
+    deleteH :: Text -> Handler NoContent
+    deleteH rawId = do
+      run (deleteCredential (CredentialId rawId))
+      pure NoContent
 
 -- ---------------------------------------------------------------------------
 -- State transition logic

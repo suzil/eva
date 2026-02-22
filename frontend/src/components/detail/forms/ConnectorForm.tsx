@@ -1,5 +1,6 @@
 import { Settings } from 'lucide-react'
 import type { ConnectorConfig, SystemType } from '../../../types'
+import { useCredentials } from '../../../api/hooks'
 
 interface Props {
   config: ConnectorConfig
@@ -15,6 +16,8 @@ const SYSTEMS: { value: SystemType; label: string }[] = [
 
 export function ConnectorForm({ config, onChange }: Props) {
   const update = (patch: Partial<ConnectorConfig>) => onChange({ ...config, ...patch })
+  const { data: allCredentials = [] } = useCredentials()
+  const systemCredentials = allCredentials.filter((c) => c.system === config.system)
 
   return (
     <div className="space-y-4">
@@ -25,7 +28,9 @@ export function ConnectorForm({ config, onChange }: Props) {
         <FieldLabel>System</FieldLabel>
         <select
           value={config.system}
-          onChange={(e) => update({ system: e.target.value as SystemType })}
+          onChange={(e) => {
+            update({ system: e.target.value as SystemType, credentialId: undefined })
+          }}
           className={selectClass}
         >
           {SYSTEMS.map((s) => (
@@ -34,21 +39,28 @@ export function ConnectorForm({ config, onChange }: Props) {
         </select>
       </div>
 
-      {/* Credential picker — placeholder until EVA-32 */}
+      {/* Credential picker */}
       <div>
         <FieldLabel>Credential</FieldLabel>
-        <div className="flex items-center gap-2 rounded border border-gray-700 bg-gray-800/50 px-2 py-2">
-          <Settings size={11} className="shrink-0 text-gray-600" />
-          <span className="text-[11px] text-gray-500">
-            Configure credentials in{' '}
-            <span className="font-medium text-gray-400">Settings → Credentials</span>
-            {' '}(EVA-32)
-          </span>
-        </div>
-        {config.credentialId && (
-          <p className="mt-1 text-[10px] text-green-500">
-            Credential set: {config.credentialId}
-          </p>
+        {systemCredentials.length === 0 ? (
+          <div className="flex items-center gap-2 rounded border border-gray-700 bg-gray-800/50 px-2 py-2">
+            <Settings size={11} className="shrink-0 text-gray-600" />
+            <span className="text-[11px] text-gray-500">
+              No credentials for this system.{' '}
+              <span className="font-medium text-gray-400">Add one in Settings → Credentials.</span>
+            </span>
+          </div>
+        ) : (
+          <select
+            value={config.credentialId ?? ''}
+            onChange={(e) => update({ credentialId: e.target.value || undefined })}
+            className={selectClass}
+          >
+            <option value="">— select credential —</option>
+            {systemCredentials.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
         )}
       </div>
 

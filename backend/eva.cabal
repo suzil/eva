@@ -16,6 +16,7 @@ library
   exposed-modules:
     Eva.App
     Eva.Config
+    Eva.Crypto
     Eva.Core.Types
     Eva.Core.Graph
     Eva.Core.Validation

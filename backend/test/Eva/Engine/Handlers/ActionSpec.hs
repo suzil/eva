@@ -16,6 +16,7 @@ import Test.Hspec
 
 import Eva.App (AppEnv (..), runAppM)
 import Eva.Config (AppConfig (..), LogLevel (..))
+import qualified Eva.Crypto as Crypto
 import Eva.Core.Types
 import Eva.Engine.Handlers.Action (handleAction)
 import Eva.Engine.LLM
@@ -72,10 +73,11 @@ withTestEnv action = do
   runMigrations pool
   broadcasts <- newTVarIO Map.empty
   let cfg = AppConfig
-        { configDbPath    = ":memory:"
-        , configPort      = 8080
-        , configLlmApiKey = Nothing
-        , configLogLevel  = LogError
+        { configDbPath        = ":memory:"
+        , configPort          = 8080
+        , configLlmApiKey     = Nothing
+        , configLogLevel      = LogError
+        , configCredentialKey = "test-key"
         }
       dummyLLMClient = LLMClient
         { clientCall   = \_ -> pure (Right (LLMResponse "unused" (TokenUsage 0 0 0)))
@@ -87,7 +89,8 @@ withTestEnv action = do
         , envLogger     = \_ -> pure ()
         , envDispatch   = \_ _ _ _ -> error "dispatch not used in handler unit tests"
         , envLLMClient  = dummyLLMClient
-        , envBroadcasts = broadcasts
+        , envBroadcasts    = broadcasts
+        , envCredentialKey = Crypto.deriveKey "test-key"
         }
   action env
 

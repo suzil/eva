@@ -88,6 +88,7 @@ CredentialRow sql=credentials
   Id Text sqltype=text
   name Text
   systemType Text sql=system_type
+  credType Text Maybe sql=cred_type
   encryptedData ByteString sql=encrypted_data
   createdAt UTCTime sql=created_at
   deriving Show Eq

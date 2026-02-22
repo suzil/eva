@@ -1,0 +1,227 @@
+---
+description: Eva implementation patterns — coding conventions that have crystallized during M1–M4 implementation. Covers AppEnv/AppM, LLMClient injection, WebSocket broadcast lifecycle, retry/dispatch, frontend store, and test setup.
+globs: ["backend/**/*.hs", "frontend/src/**/*.ts", "frontend/src/**/*.tsx"]
+---
+
+# Eva Implementation Patterns
+
+Practical conventions from M1–M4 (Foundation → Agent Runtime). Read
+alongside `eva-architecture.mdc` (design intent) and `eva-concepts.mdc`
+(domain vocabulary).
+
+## AppEnv / AppM
+
+`AppM = ReaderT AppEnv IO`. All backend handlers live in `AppM`.
+
+```haskell
+-- Eva.App
+type DispatchFn =
+  RunId -> Node -> Map PortName Message -> ResourceBindings -> AppM Message
+
+data AppEnv = AppEnv
+  { envConfig     :: AppConfig
+  , envDbPool     :: ConnectionPool
+  , envLogger     :: LogEntry -> IO ()
+  , envDispatch   :: DispatchFn          -- injectable; tests swap this
+  , envLLMClient  :: LLMClient           -- injectable; tests use dummyLLMClient
+  , envBroadcasts :: TVar (Map RunId (TChan Value))
+  }
+```
+
+`makeAppEnv` takes `AppConfig` + a `DispatchFn`, creates the SQLite pool,
+runs auto-migration, and wires up the LLM client from `configLlmApiKey`.
+Pass `Eva.Engine.Dispatch.execute` in production; inject a stub in tests.
+
+## LLMClient — Record of Functions
+
+`LLMClient` is a record-of-functions (not a typeclass) to avoid
+type-parameter complexity and allow easy injection.
+
+```haskell
+data LLMClient = LLMClient
+  { clientCall   :: LLMRequest -> IO (Either LLMError LLMResponse)
+  , clientStream :: LLMRequest -> (Text -> IO ()) -> IO (Either LLMError LLMResponse)
+  }
+```
+
+- **Production:** `mkOpenAIClient apiKey` — creates a TLS manager, returns
+  a client backed by the OpenAI chat completions endpoint.
+- **Tests/unconfigured:** `dummyLLMClient` — every call returns
+  `Left (LLMAuthError "no LLM client configured")`.
+- **Streaming:** `clientStream` fires the `onToken :: Text -> IO ()` callback
+  for each SSE delta token, then returns the complete `LLMResponse` with
+  total token usage.
+
+### SSE streaming internals (LLM.hs)
+
+- Uses `withResponse` (streaming body) rather than `httpLbs`.
+- Maintains a `leftoverRef :: IORef ByteString` for line fragments that span
+  chunks — splits on `\n`, processes complete lines, keeps the remainder.
+- Requests `stream_options: { include_usage: true }` so the final SSE chunk
+  carries `TokenUsage`; intermediate chunks may have `null` usage.
+- `parseSseLine` returns `Nothing` for blank lines, non-`data:` lines, and
+  `[DONE]`. Both functions are exported for unit testing.
+
+### LLM error taxonomy
+
+```haskell
+data LLMError
+  = LLMAuthError Text       -- 401 / 403
+  | LLMRateLimitError Text  -- 429
+  | LLMApiError Int Text    -- other HTTP errors
+  | LLMTimeoutError
+  | LLMParseError Text
+```
+
+## WebSocket Broadcast — Channel Lifecycle
+
+Each active run gets a `TChan Value` stored in `envBroadcasts`.
+
+```
+startRun:        registerRun rid channel   -- before walker starts
+                                            -- so WS clients can subscribe immediately
+walker/handlers: broadcastEvent rid event  -- write to channel
+finishRun:       unregisterRun rid         -- remove from registry after terminal state
+```
+
+WebSocket clients call `dupTChan` to get their own read position (fanout).
+`forwardEvents` reads from the dup'd channel and closes cleanly when it sees
+a terminal `run_state` event (completed / failed / canceled).
+
+`broadcastEvent` is a no-op if the run isn't in the registry (already
+finished or never started) — safe to call unconditionally.
+
+## RunContext (StateMachine.hs)
+
+Created by `newRunContext` in `startRun`. Fields used throughout the engine:
+
+```haskell
+data RunContext = RunContext
+  { rcRun              :: TVar Run
+  , rcRunId            :: RunId
+  , rcMailboxes        :: Map (NodeId, PortName) (TMVar Message)
+  , rcSteps            :: TVar (Map NodeId (TVar Step))
+  , rcDispatched       :: TVar (Set NodeId)
+  , rcAllDone          :: TVar Bool
+  , rcHasUnhandledError :: TVar Bool
+  , rcBroadcast        :: TChan Value
+  }
+```
+
+- `rcMailboxes`: one `TMVar` per required data-input port. Resource ports
+  get no mailbox and do not gate readiness.
+- `rcDispatched`: nodes whose step has been forked (prevents double-dispatch).
+- `rcAllDone`: signaled by `checkAndSignalDone` when all terminal nodes
+  reach a terminal step state; unblocks `waitForRun`.
+- `rcHasUnhandledError`: set by `markUnhandledError` when a node fails with
+  no wired error port; causes `finishRun` to use `RunFailed`.
+
+## Retry / Dispatch
+
+`dispatchWithRetry` wraps any `DispatchFn` call with:
+- Optional `System.Timeout.timeout` (microseconds = `retryTimeoutMs * 1000`).
+- Retry loop: up to `retryMaxAttempts` additional attempts.
+- Each failed attempt logs a `warn` entry to `log_entries` + broadcasts a
+  `log_entry` WS event + increments `stepRetryCount` in DB + in-memory TVar.
+- Backoff: `BackoffFixed ms` (constant) or `BackoffExponential baseMs capMs`
+  (`baseMs * 2^n` ms, capped).
+
+`withRetry :: RetryPolicy -> IO a -> IO (Either SomeException a)` is exported
+for standalone testing (no logging/DB).
+
+### NodeStepFailure exception
+
+Thrown by `executeNodeStep` when dispatch fails and the node has no wired
+`"error"` output edge. Caught by the graph walker, which then calls
+`skipDescendants` and sets `rcHasUnhandledError`.
+
+If a wired error edge exists, dispatch failure instead produces an
+`"error"` `Message` that propagates downstream — step state = `Failed`,
+but Run continues.
+
+## Agent Handler Pattern
+
+`handleAgent` is called with pre-resolved `ResourceBindings` (populated by
+`resolveResourceBindings` in the Runner before dispatch):
+
+1. Extract `"instruction"` data input from mailbox map.
+2. Build context section from `rbKnowledge` (M4: inline text only; M5: file/URL).
+3. Assemble `[ChatMessage "system" systemPrompt, ChatMessage "user" (instruction <> contextSection)]`.
+4. Call `clientStream` with `onToken` that broadcasts `llm_token` WS events.
+5. Wrap response in `Message "agent_output" (toJSON content) meta`.
+
+Tool use (`rbConnectors`) is stubbed in M4 — real loop is EVA-33.
+
+## Frontend: Canvas Store
+
+`useCanvasStore` (Zustand) owns all in-editor graph state:
+
+- `isDirty` — set on any node/edge change; cleared by `markClean()` after
+  successful save.
+- `buildGraph() → Graph` — converts react-flow `Node<EvaNodeData>[]` +
+  `Edge[]` back to the API `Graph` shape for `PUT /api/programs/:id/graph`.
+- `loadGraph(graph, programId)` — replaces store state from a server `Graph`.
+- Edge `type` field maps directly to `PortCategory` (`"data"` | `"resource"`).
+
+`EvaNodeData = { label: string; nodeType: NodeType }` — the data bag on
+every react-flow node. `nodeType` is the full discriminated union variant
+including config.
+
+## Frontend: Query Key Factory
+
+```typescript
+export const programKeys = {
+  all: ['programs'] as const,
+  detail: (id: string) => ['programs', id] as const,
+}
+```
+
+All mutations invalidate via these keys. `useSaveGraph` invalidates
+`detail(programId)`. `useGraphInvalidation` provides an `invalidateGraph()`
+callback for WS events (EVA-27 hook point).
+
+## Haskell Test Setup Boilerplate
+
+Tests in `Eva.Engine.Handlers.*Spec` and `Eva.Engine.RunnerSpec` share this
+setup pattern:
+
+```haskell
+-- In-memory SQLite pool (isolated per test file):
+pool <- runNoLoggingT $ createSqlitePool ":memory:" 1
+runMigrations pool
+
+-- Minimal AppEnv for handler tests (no real dispatch needed):
+broadcasts <- newTVarIO Map.empty
+let env = AppEnv
+      { envConfig    = AppConfig { configDbPath = ":memory:", configLlmApiKey = Nothing
+                                 , configPort = 8080, configLogLevel = LogError }
+      , envDbPool    = pool
+      , envLogger    = \_ -> pure ()
+      , envDispatch  = error "dispatch not needed in handler tests"
+      , envLLMClient = mockLLMClient  -- see below
+      , envBroadcasts = broadcasts
+      }
+```
+
+**Mock LLM client with captured tokens:**
+
+```haskell
+tokensRef <- newIORef ([] :: [Text])
+let mockClient = LLMClient
+      { clientCall   = \_ -> pure (Right (LLMResponse "mock output" (TokenUsage 1 1 2)))
+      , clientStream = \_ onToken -> do
+          onToken "hello "; onToken "world"
+          modifyIORef' tokensRef ("hello " :)
+          modifyIORef' tokensRef ("world" :)
+          pure (Right (LLMResponse "hello world" (TokenUsage 1 2 3)))
+      }
+```
+
+Handlers are invoked **directly** (bypassing the graph walker):
+
+```haskell
+result <- runAppM env $ handleAgent testRunId node inputs bindings
+```
+
+Runner tests that need the full walker use `startRun`/`waitForRun` with
+an injectable dispatch that controls success/failure per node.

@@ -1,6 +1,7 @@
 import { useRef } from 'react'
-import { BookOpen, History, Settings } from 'lucide-react'
+import { BookOpen, History } from 'lucide-react'
 import { useUiStore } from '../../store/uiStore'
+import { CredentialsPanel } from './CredentialsPanel'
 import { ProgramsPanel } from './ProgramsList'
 import { NodePalette } from './NodePalette'
 
@@ -86,13 +87,7 @@ export function SidePanel() {
           note="Execution history and active run indicators. Available in M6."
         />
       )}
-      {activeActivity === 'settings' && (
-        <StubPanel
-          icon={Settings}
-          label="Settings"
-          note="Credentials, integrations, preferences. Available in M5."
-        />
-      )}
+      {activeActivity === 'settings' && <CredentialsPanel />}
 
       {/* Drag handle */}
       <div

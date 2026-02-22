@@ -28,6 +28,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Logger (runNoLoggingT)
 import Control.Monad.Reader (ReaderT, asks, runReaderT)
 import Data.Aeson (ToJSON (..), Value (..), encode, object, (.=))
+import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as BLC
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -37,6 +38,7 @@ import qualified Data.Text as T
 import Data.Time (UTCTime, getCurrentTime)
 import Database.Persist.Sql (ConnectionPool)
 import Database.Persist.Sqlite (createSqlitePool)
+import qualified Data.Text.Encoding as TE
 import Eva.Config (AppConfig (..), LogLevel (..))
 import Eva.Core.Types
   ( Message
@@ -45,6 +47,7 @@ import Eva.Core.Types
   , ResourceBindings
   , RunId
   )
+import qualified Eva.Crypto as Crypto
 import Eva.Engine.LLM (LLMClient, dummyLLMClient, mkOpenAIClient)
 import Eva.Persistence.Migration (runMigrations)
 
@@ -84,14 +87,16 @@ type DispatchFn =
   RunId -> Node -> Map PortName Message -> ResourceBindings -> AppM Message
 
 data AppEnv = AppEnv
-  { envConfig     :: AppConfig
-  , envDbPool     :: ConnectionPool
-  , envLogger     :: LogEntry -> IO ()
-  , envDispatch   :: DispatchFn
-  , envLLMClient  :: LLMClient
-  , envBroadcasts :: TVar (Map RunId (TChan Value))
+  { envConfig        :: AppConfig
+  , envDbPool        :: ConnectionPool
+  , envLogger        :: LogEntry -> IO ()
+  , envDispatch      :: DispatchFn
+  , envLLMClient     :: LLMClient
+  , envBroadcasts    :: TVar (Map RunId (TChan Value))
     -- ^ Registry of active run broadcast channels. Keyed by RunId.
     -- Engine writes events; WebSocket clients dupTChan and read.
+  , envCredentialKey :: ByteString
+    -- ^ 32-byte AES-256 key derived from EVA_CREDENTIAL_KEY at startup.
   }
 
 -- ---------------------------------------------------------------------------
@@ -122,16 +127,18 @@ makeAppEnv cfg dispatch = do
     Nothing  -> pure dummyLLMClient
   broadcasts <- newTVarIO Map.empty
   let minLevel = configLogLevel cfg
+      credKey    = Crypto.deriveKey (TE.encodeUtf8 (configCredentialKey cfg))
       logger entry
         | leLevel entry < minLevel = pure ()
         | otherwise = BLC.putStrLn (encode entry) >> hFlush stdout
   pure AppEnv
-    { envConfig     = cfg
-    , envDbPool     = pool
-    , envLogger     = logger
-    , envDispatch   = dispatch
-    , envLLMClient  = llmClient
-    , envBroadcasts = broadcasts
+    { envConfig        = cfg
+    , envDbPool        = pool
+    , envLogger        = logger
+    , envDispatch      = dispatch
+    , envLLMClient     = llmClient
+    , envBroadcasts    = broadcasts
+    , envCredentialKey = credKey
     }
 
 -- ---------------------------------------------------------------------------
