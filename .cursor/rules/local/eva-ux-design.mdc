@@ -1,0 +1,196 @@
+---
+description: Eva UX design — application layout, interaction model, authoring and operating workflows, node configuration, visual language. The blueprint for all Eva frontend implementation.
+globs: []
+---
+
+# Eva UX Design
+
+Two modes share one layout: **Author** (build the graph) and **Operate**
+(monitor execution). Mode toggle in toolbar switches canvas behavior and
+detail panel content. The graph is always the primary surface.
+
+## Application Layout
+
+```
+┌─────┬────────────────────────────────┬──────────────┐
+│ Act │  Toolbar                       │              │
+│ Bar │  [breadcrumb] [Author|Operate] │   Detail     │
+│     │  [Run] [Deploy] [Cmd+K]       │   Panel      │
+│     │────────────────────────────────│   350-400px  │
+│  P  │                                │              │
+│  N  │        Canvas                  │  (adapts to  │
+│  K  │        (react-flow graph)      │   selection)  │
+│  R  │                                │              │
+│  S  │────────────────────────────────│              │
+│     │  Bottom Panel (collapsible)    │              │
+│     │  [Logs] [Output] [Timeline]    │              │
+└─────┴────────────────────────────────┴──────────────┘
+```
+
+### Activity Bar (left icon column)
+
+| Key | Section | Content |
+|-----|---------|---------|
+| P | Programs | List of prompt programs with lifecycle badges |
+| N | Node Palette | Draggable node types grouped by category |
+| K | Knowledge Library | Shared knowledge sources across programs |
+| R | Runs | Execution history, active runs with live indicators |
+| S | Settings | Credentials, integrations, preferences |
+
+### Toolbar
+
+- Breadcrumb: `Programs > Tech Debt Monitor [Draft]`
+- Mode toggle: **Author** / **Operate**
+- Actions: Run, Deploy, Pause/Resume (context-dependent)
+- Zoom controls, auto-layout button, minimap toggle
+- Command palette (Cmd+K)
+
+### Detail Panel (right, collapsible)
+
+Adapts to selection (Figma model):
+- Nothing selected: program summary / tips
+- Node selected (Author): configuration form
+- Edge selected: source/target info, port types
+- Step selected (Operate): inputs, outputs, logs, duration
+
+### Bottom Panel (collapsible)
+
+- **Logs**: streaming log output, filterable by run/node
+- **Output**: test execution results
+- **Timeline**: Gantt bar chart of step durations and parallelism
+
+### Information Hierarchy
+
+1. **Primary** — Canvas (the graph IS the program)
+2. **Secondary** — Detail Panel (configure what you selected)
+3. **Contextual** — Bottom Panel (execution output, only when relevant)
+
+## Node Visual Language
+
+### Ports and edges
+
+- **Data ports**: filled circles. **Resource ports**: filled diamonds.
+- Color: unconnected = gray, connected = accent, error = red.
+- **Data edges**: solid Bezier curves. Animated flow dots during execution.
+- **Resource edges**: dashed, muted color. Static bindings, no animation.
+- Invalid connections prevented: red snap-back on incompatible port drag.
+
+### Execution overlay (Operate mode)
+
+| Step state | Node style |
+|------------|------------|
+| completed | Green border + checkmark badge |
+| running | Blue border + animated pulse |
+| waiting | Amber border + pause icon |
+| failed | Red border + "!" badge |
+| pending | Dimmed, gray |
+| skipped | Very dim, dashed border |
+
+### Node sizing
+
+Adaptive with min/max constraints. Type icon + label + port indicators.
+Width adapts to label length within bounds. Not user-resizable in MLP.
+
+## Node Configuration (Side Panel)
+
+Side panel (n8n model), not modals (NiFi) or inline. Graph stays visible;
+click node to open config; edit prompt, glance at connections, adjust.
+
+### Per-node configuration
+
+| Node | Primary config | Secondary config |
+|------|---------------|-----------------|
+| Agent | Model picker, Monaco prompt editor (tall, markdown+template vars), response format | Temperature, max tokens, iterations, cost budget. Read-only Access Summary. |
+| Knowledge | Source tabs (Inline/File/URL), Monaco content editor, refresh policy | Format (text/JSON/embedded) |
+| Connector | System type dropdown, credential picker, endpoint/scope | Action filter checkboxes |
+| Action | Operation type, dynamic parameter form, Monaco code editor | Error handling mode |
+| Trigger | Type picker (Manual/Cron/Webhook/Event), type-specific config | Payload template editor |
+| Gate | Condition expression editor, routing mode, branch names | — |
+| Collector | Strategy picker (Wait-All/First-Wins/Accumulate), timeout | Combination template |
+| Checkpoint | Reviewer instructions, notification channel | Timeout, required reviewers |
+
+### Prompt editing
+
+Monaco editor with markdown highlighting. Template variables (`{{input}}`
+or `{{context.field}}`) get distinct syntax coloring. "Expand" button opens
+a larger overlay for focused editing of long prompts.
+
+### Constraint visualization
+
+Graph topology IS the permission model. Agent Access Summary (read-only,
+bottom of config panel) shows: "Knowledge: Company FAQ | Tools: Linear".
+Unwired resource ports appear gray. No separate permission UI needed —
+if it is not wired, the agent cannot access it.
+
+## Authoring Workflows
+
+### 1. Create program
+Programs sidebar "+" or Cmd+K. Inline rename, no dialog. Empty canvas
+with hint: "Drag a Trigger from the palette to start." State = Draft.
+
+### 2. Add and configure an agent
+Drag from palette (or Cmd+K "Add Agent"). Node appears with ports.
+Click to open Detail Panel: name, model, prompt (Monaco), format,
+advanced settings. Changes auto-save on blur.
+
+### 3. Wire knowledge and tools
+Drag Knowledge/Connector onto canvas. Configure content/credentials.
+Drag resource port to agent resource port (diamond-to-diamond). Agent
+Access Summary updates to reflect wired capabilities.
+
+### 4. Test a subgraph
+Select nodes → right-click "Test Selection". Bottom panel shows input
+fields for unwired ports. Click "Run Test" — nodes get spinner borders,
+output streams in real-time. Green/red on completion. Click node to
+inspect full results. Edit prompt, re-run. No context switch needed.
+
+### 5. Add a schedule trigger
+Drag Trigger → configure type = Cron with visual schedule builder.
+Connect `event` output to downstream data input. Node face shows
+human-readable schedule ("Mon 9:00 AM").
+
+### 6. Deploy
+Toolbar "Deploy" → validation pass (ports connected? configs complete?
+trigger present?). Errors: clickable toast listing problems. Valid:
+confirmation banner → state = Active → auto-switch to Operate mode.
+
+## Operating Workflows
+
+### 1. View running state
+Switch to Operate. Canvas shows execution overlay on nodes (colors per
+step-state table above). Detail Panel shows run summary. Click nodes
+to inspect step data.
+
+### 2. Execution history
+Runs sidebar lists runs chronologically. Click run to replay its
+execution state on canvas. Click nodes to see Step detail: input/output
+Messages, duration, LLM conversations (for Agents), branch taken
+(for Gates). Timeline tab shows Gantt chart.
+
+### 3. Checkpoint intervention
+Waiting run appears with amber indicator. Click Checkpoint node →
+Detail Panel shows reviewer instructions + data under review.
+Actions: Approve / Reject / Modify. Modify opens editor to alter
+data before it passes downstream.
+
+### 4. Debug failure
+Failed run shows red node. Click for error details, input that
+caused failure, retry log. "Trace Path" toolbar button highlights
+full path from Trigger to failure, dimming uninvolved nodes.
+Walk path node-by-node to inspect each step.
+
+### 5. Pause and resume
+Pause: toolbar button → triggers disabled, in-flight runs complete.
+Resume: toolbar button → triggers re-enabled.
+
+## Key UX Decisions
+
+| Decision | Chosen | Alternatives considered | Rationale |
+|----------|--------|------------------------|-----------|
+| Canvas model | Free-form + snap-to-grid | Structured grid, auto-only | Industry standard (NiFi, n8n, Figma). Auto-layout via toolbar for cleanup. |
+| Node config | Side panel | Modal (NiFi), inline on-node | Keeps graph context; supports complex forms and prompt iteration |
+| Edge routing | Bezier curves | Straight, orthogonal | react-flow default; smooth, handles crossings well. Orthogonal as future option. |
+| Port language | Circles (data) / diamonds (resource) | Uniform shapes, color-only | Shape distinction is accessible and unambiguous at any zoom level |
+| Minimap | On by default (>8 nodes) | Always on, off | react-flow built-in. Essential for large programs, unnecessary for small ones. |
+| Command palette | Cmd+K | Menu-only, no palette | Power-user accelerator. Also "/" on empty canvas for quick node add (Notion-style). |
+| Templates | Post-MLP (hook in New Program flow) | Ship with MLP | Not critical for MLP; design the entry point now, fill later. |

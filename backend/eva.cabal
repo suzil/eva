@@ -1,0 +1,90 @@
+cabal-version: 3.0
+name:          eva
+version:       0.1.0.0
+synopsis:      Eva — prompt programming IDE
+description:   Visual node-graph IDE for composing and running LLM-backed prompt programs.
+license:       MIT
+build-type:    Simple
+
+common shared
+  default-language: GHC2021
+  ghc-options:      -Wall -Wno-unused-top-binds
+
+library
+  import:           shared
+  hs-source-dirs:   src
+  exposed-modules:
+    Eva.App
+    Eva.Config
+    Eva.Core.Types
+    Eva.Core.Graph
+    Eva.Core.Validation
+    Eva.Engine.Runner
+    Eva.Engine.Dispatch
+    Eva.Engine.Handlers.Agent
+    Eva.Engine.LLM
+    Eva.Engine.Scheduler
+    Eva.Api.Server
+    Eva.Api.Types
+    Eva.Api.WebSocket
+    Eva.Integration.Types
+    Eva.Integration.Linear
+    Eva.Integration.GitHub
+    Eva.Integration.Http
+    Eva.Persistence.Schema
+    Eva.Persistence.Queries
+    Eva.Persistence.Migration
+  build-depends:
+      base                ^>=4.20
+    , servant             ^>=0.20
+    , servant-server      ^>=0.20
+    , warp                ^>=3.4
+    , wai                 ^>=3.2
+    , wai-extra           ^>=3.1
+    , wai-websockets      ^>=3.0
+    , websockets          ^>=0.13
+    , aeson               ^>=2.2
+    , persistent          ^>=2.14
+    , persistent-sqlite   ^>=2.13
+    , persistent-template ^>=2.12
+    , esqueleto           ^>=3.5
+    , stm                 ^>=2.5
+    , async               ^>=2.2
+    , conduit             ^>=1.3
+    , conduit-extra       ^>=1.3
+    , http-client         ^>=0.7
+    , http-client-tls     ^>=0.3
+    , crypton             ^>=1.0
+    , memory              ^>=0.18
+    , envparse            ^>=0.5
+    , text                ^>=2.1
+    , bytestring          ^>=0.12
+    , containers          ^>=0.7
+    , mtl                 ^>=2.3
+    , transformers        ^>=0.6
+    , uuid                ^>=1.3
+    , time                ^>=1.12
+
+executable eva
+  import:           shared
+  main-is:          Main.hs
+  hs-source-dirs:   app
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base           ^>=4.20
+    , eva
+    , aeson          ^>=2.2
+    , warp           ^>=3.4
+    , servant-server ^>=0.20
+    , text           ^>=2.1
+
+test-suite eva-test
+  import:           shared
+  type:             exitcode-stdio-1.0
+  main-is:          Spec.hs
+  hs-source-dirs:   test
+  build-depends:
+      base       ^>=4.20
+    , eva
+    , hspec      ^>=2.11
+    , QuickCheck ^>=2.14

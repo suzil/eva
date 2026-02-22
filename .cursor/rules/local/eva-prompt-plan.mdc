@@ -1,0 +1,855 @@
+---
+description: Prompt plan for building Eva's project plan. Run each session as a separate Cursor conversation.
+globs: []
+---
+
+# Eva Prompt Plan
+
+10 design & planning sessions + 2 reusable periodic prompts. Each session is
+a separate Cursor conversation that produces or refines cursor rule files as
+design artifacts. Later sessions create and refine Linear tickets.
+
+**Key difference from codebase-driven planning:** Eva is greenfield. The
+"research phase" in early sessions is design thinking + competitive analysis
+rather than codebase reading. Each session produces a cursor rule that
+becomes research input for subsequent sessions.
+
+**Artifact chain:**
+
+```
+Session 1 → .cursor/rules/local/eva-concepts.mdc
+Session 2 → .cursor/rules/local/eva-ux-design.mdc
+Session 3 → .cursor/rules/local/eva-architecture.mdc
+Session 4 → ~/.cursor/rules/personal/eva-project.md
+Sessions 5-8 → Linear tickets (created, refined, estimated)
+Sessions 9-10 → Cleanup + cycle planning
+Periodic → Health Check, Cycle Planning
+```
+
+---
+
+## Session 1: Conceptual Model & Terminology
+
+**Goal:** Establish Eva's domain model — the primitives, their semantics, and
+naming. This is the vocabulary everything else builds on.
+
+```
+Start in plan mode.
+
+I'm designing Eva, a prompt programming IDE. Users compose "prompt programs"
+— visual node graphs of connected primitives that define agent behaviors,
+knowledge, constraints, integrations, and schedules.
+
+The core idea: prompt programs are both a DEVELOPMENT tool (build a solution
+to a problem) and an OPERATIONAL tool (run ongoing processes — e.g., manage
+tech debt on a repo, operate a project plan via Linear).
+
+I have brainstorming notes but need a rigorous conceptual model. Keep the
+terms "prompt program" and "Eva" — everything else is open for renaming.
+
+## Research phase
+
+Study the design space by thinking through these comparable tools, focusing
+on what concepts they expose and how they name them:
+- Apache NiFi (data flow processors + connections)
+- Node-RED (nodes + wires + flows)
+- Langflow / Flowise (LLM chain components)
+- n8n (workflow nodes + triggers + credentials)
+- ComfyUI (node graph for generative AI)
+- Unreal Blueprints (visual scripting)
+- Temporal.io (workflows + activities + schedules)
+
+For each, note: what are the primitive types? How do they compose? What's
+the execution model? What works well and what doesn't?
+
+Also think through Eva's specific needs:
+- Agents need capability constraints (e.g., "can only access Linear")
+- Knowledge needs to be a first-class concept (not just "input data")
+- Schedules and triggers need to support operational programs
+- External integrations (codebases, Linear, APIs) need a clean abstraction
+- The graph needs to express both dataflow AND control flow
+
+## Then create a plan that proposes:
+
+### A. Primitive taxonomy
+For each primitive type:
+- Name (with rationale — why this word over alternatives)
+- Semantics (what it represents, what it does)
+- Configuration surface (what the user sets on this node)
+- Ports / connection points (what flows in, what flows out)
+
+Expected primitives to cover (rename as appropriate):
+- Agent (LLM-backed reasoning node)
+- Knowledge / Facts (structured information the program can reference)
+- External connector / integration (Linear, GitHub, codebases, APIs)
+- Command / Action (discrete operations)
+- Schedule / Trigger (time-based or event-based activation)
+- Constraint / Permission (capability boundaries on agents)
+- Router / Conditional (control flow)
+- Aggregator / Collector (combine multiple inputs)
+- Human-in-the-loop checkpoint
+
+### B. Connection semantics
+- What flows along edges? (data, control signals, both?)
+- Are connections typed? How?
+- Can connections be conditional?
+- Synchronous vs. asynchronous edges?
+
+### C. Execution model
+- How does a prompt program "run"? (push vs. pull, streaming, batch)
+- What's the lifecycle? (draft → deployed → running → paused)
+- How do operational programs differ from one-shot programs?
+- Error handling and retry semantics
+
+### D. Terminology glossary
+A table of every term with definition, ensuring internal consistency.
+
+## After I approve the plan:
+
+Write the conceptual model to `.cursor/rules/local/eva-concepts.mdc` with
+appropriate frontmatter. Keep it under 200 lines — use tables and bullets,
+not prose. This becomes the vocabulary for all subsequent sessions.
+
+Also update `~/.cursor/rules-meta.md` with the new rule entry.
+```
+
+---
+
+## Session 2: UX & Interaction Design
+
+**Goal:** Design the core user experience — how users author, test, and
+operate prompt programs. Produce wireframe-level interaction flows.
+
+```
+Start in plan mode.
+
+I'm designing the UX for Eva, a prompt programming IDE. The conceptual
+model is defined in `.cursor/rules/local/eva-concepts.mdc` — read it first.
+
+## Research phase
+
+1. Read `.cursor/rules/local/eva-concepts.mdc` for the full domain model
+
+2. Think through these UX precedents for what works and what doesn't:
+   - VS Code (editor chrome, panels, command palette, extensions)
+   - react-flow / xyflow (node graph interaction patterns)
+   - Apache NiFi (processor configuration, provenance, monitoring)
+   - Figma (canvas interaction, multi-select, contextual menus)
+   - n8n (node configuration panels, execution visualization)
+   - Notion (structured content, databases, templates)
+
+3. Think through Eva's two modes of use:
+   a. AUTHORING: Building a prompt program to solve a problem
+      - User drags nodes, connects them, configures each node
+      - User tests parts of the graph (run a subgraph)
+      - User iterates on prompts using results
+   b. OPERATING: Running a deployed prompt program
+      - User monitors execution (which nodes fired, what happened)
+      - User sees logs, outputs, and results
+      - User intervenes at checkpoints
+      - User views history / audit trail
+
+4. Think through the knowledge authoring experience:
+   - How do users create and organize knowledge?
+   - How is knowledge surfaced to agents during execution?
+   - How does knowledge update over time (connected to live sources)?
+
+5. Think through the constraint/permission UX:
+   - How does a user say "this agent can only talk to Linear"?
+   - How are constraints visualized on the graph?
+   - How does the user understand what an agent CAN vs. CANNOT do?
+
+## Then create a plan that defines:
+
+### A. Application layout
+- Overall chrome (sidebar, canvas, panels, toolbar)
+- Information hierarchy (what's primary, secondary, contextual)
+- Navigation between programs, between authoring and operating
+
+### B. Authoring workflows (step-by-step)
+Walk through these concrete scenarios:
+1. Create a new prompt program from scratch
+2. Add an agent node and configure its prompt + constraints
+3. Connect an agent to a knowledge source and an external tool
+4. Test a subset of the graph with sample inputs
+5. Add a schedule trigger for recurring execution
+6. Deploy a prompt program for operation
+
+### C. Operating workflows (step-by-step)
+Walk through:
+1. View a running program's current state
+2. See execution history (which nodes ran, when, what they produced)
+3. Intervene at a human-in-the-loop checkpoint
+4. Debug a failed execution (trace the path, see inputs/outputs)
+5. Pause and resume a program
+
+### D. Node configuration UX
+- How does the user configure each primitive type?
+- Should configuration be inline (on the node), in a side panel, or
+  a modal? (Consider the tradeoffs — NiFi uses modals, n8n uses panels)
+- How are prompts edited? (Monaco editor integration? Rich text?)
+
+### E. Key UX decisions
+For each decision, state the options considered and the recommendation:
+- Canvas interaction model (free-form vs. structured layout)
+- Node sizing (fixed vs. adaptive vs. user-resizable)
+- Edge routing (straight, orthogonal, curved)
+- Minimap / overview for large programs
+- Keyboard shortcuts and command palette
+- Template / starter programs
+
+## After I approve the plan:
+
+Write the UX design to `.cursor/rules/local/eva-ux-design.mdc`. Keep under
+200 lines. Include ASCII wireframes or layout diagrams where helpful.
+
+Update `~/.cursor/rules-meta.md`.
+```
+
+---
+
+## Session 3: System Architecture
+
+**Goal:** Define the technical architecture — Haskell backend, React frontend,
+communication layer, data model, extension system.
+
+```
+Start in plan mode.
+
+I'm designing the system architecture for Eva. Read these rules first:
+- `.cursor/rules/local/eva-concepts.mdc` (domain model)
+- `.cursor/rules/local/eva-ux-design.mdc` (UX design)
+
+The stack constraints:
+- Backend: Haskell (core logic, execution engine, persistence)
+- Frontend: React + TypeScript (react-flow for graph, Monaco for editing)
+- The system must support both local development and deployed operation
+
+## Research phase
+
+1. Read the concept and UX rules to understand what the architecture serves
+
+2. Think through the Haskell backend:
+   - What are the core modules? (graph engine, execution runtime,
+     persistence, integration layer, scheduling)
+   - How are prompt programs represented in Haskell's type system?
+   - What's the execution engine? (How does it walk the graph, invoke
+     LLMs, call external tools, handle async/streaming?)
+   - What database? (SQLite for local? Postgres for deployed?)
+   - How does the scheduler work? (cron-like? event-driven? both?)
+   - How are integrations implemented? (Plugin architecture? Built-in?)
+
+3. Think through the frontend:
+   - react-flow for the graph canvas (custom node types, edge types)
+   - Monaco for prompt/code editing in configuration panels
+   - State management (what lives client-side vs. server-side?)
+   - Real-time updates during execution (WebSocket? SSE?)
+
+4. Think through the API boundary:
+   - What's the API between frontend and backend?
+   - REST? GraphQL? gRPC? WebSocket for streaming?
+   - What operations does the frontend need?
+
+5. Think through the data model:
+   - How are prompt programs persisted? (JSON? Haskell ADT serialized?)
+   - How are execution results stored?
+   - How is knowledge persisted and indexed?
+   - Version control for prompt programs?
+
+6. Think through the extension/integration model:
+   - How does an integration (Linear, GitHub, etc.) get added?
+   - Is there a plugin API? Or are integrations compiled in?
+   - How are credentials managed?
+
+## Then create a plan covering:
+
+### A. System component diagram
+Backend services/modules, frontend layers, data stores, external
+integrations, and how they communicate.
+
+### B. Haskell backend design
+- Module hierarchy (top-level package structure)
+- Core data types (prompt program graph, nodes, edges, execution state)
+- Execution engine design (graph walker, LLM caller, tool dispatcher)
+- Persistence layer (what ORM/library, schema overview)
+- Scheduling system (approach, library choices)
+- Integration framework (how connectors are defined)
+
+### C. Frontend design
+- React component hierarchy (app shell, canvas, panels, toolbar)
+- Custom react-flow node types (one per primitive)
+- State management approach
+- Real-time communication with backend
+
+### D. API design
+- Key endpoints / operations
+- Real-time protocol for execution streaming
+- Authentication model (local vs. deployed)
+
+### E. Data model
+- Core entities and relationships
+- Serialization format for prompt programs
+- Execution log schema
+
+### F. Technology choices
+For each choice (libraries, databases, protocols), state:
+- What was chosen
+- What alternatives were considered
+- Why this choice for the MLP
+
+## After I approve the plan:
+
+Write the architecture to `.cursor/rules/local/eva-architecture.mdc`. Keep
+under 250 lines. Use tables for technology choices, ASCII diagrams for
+component relationships.
+
+Update `~/.cursor/rules-meta.md`.
+```
+
+---
+
+## Session 4: MLP Scope & Milestone Structure
+
+**Goal:** Define what's in the Minimum Lovable Product, carve milestones
+with dependency order, and create the project context rule.
+
+```
+Start in plan mode.
+
+I'm scoping the MLP for Eva and structuring it into milestones. Read these
+rules first:
+- `.cursor/rules/local/eva-concepts.mdc` (domain model)
+- `.cursor/rules/local/eva-ux-design.mdc` (UX design)
+- `.cursor/rules/local/eva-architecture.mdc` (system architecture)
+- `~/.cursor/rules/personal/llm-project-planning.md` (planning methodology)
+
+## Research phase
+
+1. Read all three design rules to understand the full system
+
+2. Identify the MLP boundary by asking: what is the smallest version of
+   Eva that is genuinely useful for building and running a prompt program?
+
+   The MLP should be able to:
+   - Author a prompt program on a visual canvas
+   - Include at least 2-3 primitive types (likely: agents, knowledge,
+     and one external connector)
+   - Execute the program and see results
+   - Save and reload programs
+
+   The MLP should NOT need:
+   - Every primitive type
+   - Every integration
+   - Multi-user / deployment infrastructure
+   - Polish (advanced UX features, templates, marketplace)
+
+3. Think through the build order — what must exist before what?
+   - You can't test execution without a graph engine
+   - You can't build the graph engine without the data model
+   - You can't do meaningful demos without at least one integration
+   - The frontend needs API endpoints to talk to
+
+4. Think about what makes Eva "lovable" even at MLP:
+   - What's the "wow" moment?
+   - What would make someone want to use this over just writing code?
+   - What operational use case could we demo end-to-end?
+
+## Then create a plan with:
+
+### A. MLP feature set
+Concrete list of what's IN and what's OUT, organized by:
+- Must have (MLP ships without these = not useful)
+- Should have (MLP is lovable with these)
+- Won't have yet (post-MLP, explicitly deferred)
+
+### B. Milestone structure
+For each milestone:
+- Name and description (1-2 sentences)
+- What it delivers (concrete capabilities)
+- Estimated size (S/M/L — we'll refine to days in Session 8)
+- Dependencies on other milestones
+- Key technical risks
+
+Expected milestones (adjust based on architecture):
+- M1: Foundation (data model, persistence, project scaffolding)
+- M2: Graph engine (core execution, node types)
+- M3: Canvas UI (react-flow integration, node rendering, wiring)
+- M4: Agent runtime (LLM integration, prompt execution)
+- M5: Knowledge & connectors (first integration, knowledge system)
+- M6: Operational mode (scheduling, monitoring, history)
+- M7: Polish & demo (end-to-end scenario, UX refinement)
+
+### C. Dependency diagram
+```
+M1 → M2 → M4 → ...
+  ↘   ↘
+  M3    M5 → ...
+```
+
+### D. Risk assessment
+Top 5 technical risks and mitigation strategies.
+
+### E. Demo scenario
+One concrete end-to-end prompt program we'll build to validate the MLP.
+Something that exercises authoring + operation. Example candidates:
+- "Tech debt operator" — monitors a repo, creates Linear tickets
+- "Weekly project summarizer" — reads Linear, produces a report
+- "Code review assistant" — reviews PRs with constrained capabilities
+
+## After I approve the plan:
+
+Write the project context to `~/.cursor/rules/personal/eva-project.md`.
+This is the single source of truth for the Eva project plan. Include:
+- Milestone structure with dependency diagram
+- MLP feature set (in/out)
+- Demo scenario
+- Risk assessment
+- Refinement log (start with "Session 4: Initial MLP scoping")
+
+Update `~/.cursor/rules-meta.md`.
+```
+
+---
+
+## Session 5: Ticket Creation
+
+**Goal:** Create the Linear project, milestones, label, and initial tickets
+from the milestone plan.
+
+```
+Start in plan mode.
+
+I'm creating the Linear project and tickets for Eva. Read these rules first:
+- `~/.cursor/rules/personal/eva-project.md` (project plan — milestones,
+  features, dependencies)
+- `.cursor/rules/local/eva-concepts.mdc` (domain model)
+- `.cursor/rules/local/eva-architecture.mdc` (architecture)
+- `~/.cursor/rules/personal/linear-cli.md` (Linear CLI reference)
+
+## Research phase
+
+1. Read the project plan to understand milestones and scope
+
+2. Read the architecture rule to understand technical components
+
+3. For each milestone, break down the work into discrete tickets.
+   Each ticket should be:
+   - One coherent unit of work (1-5 days for one person)
+   - Independently testable / demonstrable
+   - Clear about WHAT to build, not HOW
+
+4. Determine the correct Linear team. Check what teams exist:
+     linear team list
+
+## Then create a plan listing:
+
+### A. Linear project setup
+- Project name, description
+- Label name (e.g., "Eva-Plan")
+
+### B. Milestones to create
+For each: name, description
+
+### C. Tickets to create
+For each ticket:
+- Title
+- Milestone
+- Description (following the formatting standard from
+  llm-project-planning.md):
+  - "What to Build": 3-5 bullets, WHAT not HOW
+  - "Acceptance Criteria": ticket-specific verifiable outcomes
+  - "Dependencies": other tickets this blocks or is blocked by
+  - "Pattern to Follow": reference files if applicable (N/A for
+    greenfield, but can reference architecture rule decisions)
+
+Organize tickets by milestone.
+
+## After I approve the plan, execute:
+
+1. Create the Linear project:
+     linear project create --name "Eva" --description "Prompt programming IDE"
+
+2. Get the project ID from the output
+
+3. Create milestones (one at a time):
+     linear milestone create --name "M1: ..." --project <project-id>
+
+4. Create the label:
+     linear label create --name "Eva-Plan" --team <team>
+
+5. Create tickets in batches of 3-4:
+     linear issue create --team <team> --title "..." \
+       --description "$(cat /tmp/eva-XXX.md)" \
+       --label "Eva-Plan" --project "Eva" --state backlog
+
+6. Update `~/.cursor/rules/personal/eva-project.md` with:
+   - Linear project ID
+   - Milestone IDs
+   - Ticket ID mapping table (milestone → ticket ranges)
+   - Label name
+```
+
+---
+
+## Session 6: Ticket Deep Dive — Foundation & Engine (M1-M2)
+
+**Goal:** Validate and refine ticket descriptions for the foundational
+milestones against the architecture and concept rules.
+
+```
+Start in plan mode.
+
+I'm refining Eva tickets for the foundation and engine milestones.
+
+IMPORTANT: Only touch tickets with label `Eva-Plan`. Do not modify any
+ticket without this label. When creating new tickets, always include
+--label "Eva-Plan".
+
+## Research phase
+
+1. Read `~/.cursor/rules/personal/eva-project.md` for ticket ID mapping
+2. Read `.cursor/rules/local/eva-architecture.mdc` for technical decisions
+3. Read `.cursor/rules/local/eva-concepts.mdc` for domain model
+4. Read every Eva-Plan ticket in M1 and M2 via `linear issue view`
+
+For each ticket, validate:
+- Does it align with the architecture decisions?
+- Is the scope right? (Not too big, not too thin)
+- Are dependencies correctly stated?
+- Are acceptance criteria specific and testable?
+- Is there enough context for someone to start working?
+
+## Then create a plan listing per-ticket changes:
+
+For each ticket, state:
+- What's being changed (and why)
+- What's being added (missing edge cases, missing context)
+- What's staying as-is
+
+Also identify:
+- Missing tickets (work implied by the architecture that has no ticket)
+- Tickets that should be split (too large or covering two concerns)
+- Tickets that should be merged (too thin to be standalone)
+
+Formatting standard:
+- "What to Build": 3-5 bullets, WHAT not HOW
+- No speculative file paths or type signatures
+- Keep: Acceptance Criteria, Dependencies
+- Acceptance criteria = ticket-specific verifiable outcomes only
+
+## After I approve the plan, execute:
+
+- `linear issue update` for revised tickets (write descriptions to
+  /tmp/ files first)
+- `linear issue create` for new tickets (with --label "Eva-Plan")
+- `linear issue update --state canceled` for merged-away tickets
+- Update `~/.cursor/rules/personal/eva-project.md` if ticket counts
+  or milestone structure changed
+
+Process in batches of 3-4.
+```
+
+---
+
+## Session 7: Ticket Deep Dive — UI, Runtime & Operations (M3+)
+
+**Goal:** Validate and refine tickets for frontend, runtime, and operational
+milestones.
+
+```
+Start in plan mode.
+
+I'm refining Eva tickets for the UI, runtime, and operational milestones.
+
+IMPORTANT: Only touch tickets with label `Eva-Plan`. When creating new
+tickets, always include --label "Eva-Plan".
+
+## Research phase
+
+1. Read `~/.cursor/rules/personal/eva-project.md` for ticket ID mapping
+2. Read `.cursor/rules/local/eva-ux-design.mdc` for UX decisions
+3. Read `.cursor/rules/local/eva-architecture.mdc` for technical decisions
+4. Read `.cursor/rules/local/eva-concepts.mdc` for domain model
+5. Read every Eva-Plan ticket in M3 and beyond via `linear issue view`
+
+For each ticket, validate:
+- Does it match the UX design decisions?
+- For execution/runtime tickets: does it match the execution model
+  from the concepts rule?
+- For integration tickets: does it match the connector architecture?
+- Scope, dependencies, acceptance criteria — same checks as Session 6
+
+## Then create a plan with the same structure as Session 6.
+
+## After I approve the plan, execute with the same pattern as Session 6.
+```
+
+---
+
+## Session 8: Cross-cutting Concerns & Gap Analysis
+
+**Goal:** Find gaps in the ticket set — testing, developer experience,
+deployment, documentation, error handling.
+
+```
+Start in plan mode.
+
+Final review of the Eva project ticket set for cross-cutting gaps.
+
+IMPORTANT: Only touch tickets with label `Eva-Plan`. When creating new
+tickets, always include --label "Eva-Plan".
+
+## Research phase
+
+1. Read `~/.cursor/rules/personal/eva-project.md` for full project context
+2. Spot-check 2-3 Eva-Plan tickets per milestone via `linear issue view`
+3. Read `.cursor/rules/local/eva-architecture.mdc` for technical decisions
+
+Check for gaps in:
+- **Developer experience**: Project setup, local dev workflow, hot reload,
+  debugging tools. Is there a ticket for project scaffolding (cabal/stack
+  config, package.json, build scripts)?
+- **Testing strategy**: Unit tests for the graph engine, integration tests
+  for connectors, E2E tests for the full flow. Are there tickets for
+  setting up the test framework?
+- **Error handling**: What happens when an LLM call fails? When a
+  connector times out? When a prompt program has a cycle? Are error
+  cases covered in tickets?
+- **Persistence & migration**: Database setup, schema migrations, data
+  format versioning. Covered?
+- **Security**: Credential storage for integrations, LLM API key
+  management, agent sandboxing. Covered?
+- **Deployment**: How does Eva run? Docker? Binary? Is there a ticket
+  for packaging?
+- **Documentation**: README, getting started guide. Minimal but needed
+  for MLP.
+- **Demo scenario**: Is the end-to-end demo from the project plan
+  covered by tickets?
+
+## Then create a plan with:
+
+### A. Gaps in existing tickets
+For each: which ticket, what's missing, proposed addition.
+
+### B. New tickets needed
+For each: title, milestone, description outline.
+
+### C. Updated project context
+Any changes to milestones, dependencies, or risk assessment.
+
+## After I approve the plan, execute:
+
+- `linear issue update` for existing ticket additions
+- `linear issue create` for new gap tickets (with --label "Eva-Plan")
+- Update `~/.cursor/rules/personal/eva-project.md`
+```
+
+---
+
+## Session 9: Dependency Graph & Estimates
+
+**Goal:** Create blocking relations in Linear, set estimates, calculate
+the project timeline.
+
+```
+Start in plan mode.
+
+I'm building the dependency graph and setting estimates for the Eva project.
+
+IMPORTANT: Only touch tickets with label `Eva-Plan`.
+
+## Research phase
+
+1. Read `~/.cursor/rules/personal/eva-project.md` for milestone structure
+   and dependency diagram
+2. Read every active Eva-Plan ticket via `linear issue view` to understand
+   dependencies stated in descriptions
+3. Read `~/.cursor/rules/personal/linear-cli.md` for GraphQL relation API
+
+## Part 1: Dependency graph
+
+For each ticket, determine blocking relations:
+- Intra-milestone: which tickets within a milestone must complete first?
+- Cross-milestone: which milestone boundary tickets are critical path?
+
+Build the full edge list as: TICKET-A blocks TICKET-B (with rationale).
+
+Verify:
+- No cycles (must be a DAG)
+- Every ticket has at least one relation OR is explicitly independent
+- Critical path is identified (longest chain through the graph)
+
+## Part 2: Estimates
+
+For each active ticket, set an estimate in days. Consider:
+- Complexity (new pattern vs. following established pattern)
+- Dependencies (blocked work may need less ramp-up)
+- Uncertainty (add buffer for research-heavy tickets)
+- Scale: 0.5, 1, 2, 3, 5 days
+
+Calculate per-milestone totals and project total.
+Project the timeline based on a 1-person team (adjust later for actual
+team size).
+
+## Then create a plan listing:
+
+### A. Blocking relations to create
+| Source | Blocks | Rationale |
+| --- | --- | --- |
+
+### B. Estimates
+| Ticket | Title | Est. (days) | Rationale |
+| --- | --- | --- | --- |
+
+### C. Milestone totals
+| Milestone | Tickets | Total Days |
+
+### D. Critical path
+The longest dependency chain and its total duration.
+
+### E. Projected timeline
+Based on 1 developer, when does each milestone complete?
+
+## After I approve the plan, execute:
+
+1. Create blocking relations via GraphQL API:
+     curl -s -X POST https://api.linear.app/graphql ...
+   Process in batches of 5-6.
+
+2. Set estimates:
+     linear issue update TICKET-XXX --estimate N
+   Process in batches of 5-6.
+
+3. Update `~/.cursor/rules/personal/eva-project.md`:
+   - Add schedule plan table
+   - Add critical path
+   - Record estimates by milestone
+   - Update refinement log
+```
+
+---
+
+## Session 10: Cleanup & Launch Readiness
+
+**Goal:** Final cleanup pass — strip any refinement artifacts, verify
+ticket consistency, prepare for implementation.
+
+```
+Start in plan mode.
+
+Final cleanup pass for the Eva project before starting implementation.
+
+IMPORTANT: Only touch tickets with label `Eva-Plan`.
+
+## Research phase
+
+1. Read `~/.cursor/rules/personal/eva-project.md`
+2. Read every active Eva-Plan ticket via `linear issue view`
+3. Check for:
+   - Refinement breadcrumbs (session references, "previously...", etc.)
+   - Inconsistent terminology (verify against eva-concepts.mdc)
+   - Stale dependency references (tickets that were canceled/merged)
+   - Acceptance criteria that are too vague or duplicated
+
+## Then create a plan listing per-ticket fixes.
+
+## After I approve the plan, execute:
+
+- Fix ticket descriptions in batches of 5-6
+- Write the final version of `~/.cursor/rules/personal/eva-project.md`
+  with a clean "Current State" summary
+- Verify the Linear project is navigable:
+  - Milestones have correct tickets
+  - Blocking relations form a valid DAG
+  - Estimates are set on all tickets
+```
+
+---
+---
+
+# Periodic: Project Health Check
+
+**When to run:** At the end of each work cycle, or when a batch of tickets
+completes. Same pattern as the Ascend health check but scoped to Eva.
+
+```
+Start in plan mode.
+
+Periodic health check for the Eva project. This audits non-Done tickets
+against the current code, recalibrates estimates, and updates the schedule.
+
+IMPORTANT: Only touch tickets with label `Eva-Plan`.
+
+## Phase 1: Gather state
+
+1. Read `~/.cursor/rules/personal/eva-project.md`
+2. List all project tickets with current states:
+     linear issue list --team <team> --project "Eva" --all-states --all-assignees --sort manual --limit 0
+3. Categorize: Done, In Progress, Backlog, Canceled
+
+## Phase 2: Code accuracy audit
+
+For each In Progress and Backlog ticket in the current milestone:
+1. Read the ticket description
+2. Check referenced code against the actual codebase:
+   - Modules that now exist but ticket says "create"
+   - Types/functions that moved or were renamed
+   - Acceptance criteria already satisfied
+   - Dependencies that are now Done
+3. Flag stale tickets for update
+
+## Phase 3: Estimate recalibration
+
+1. For completed tickets, record estimated vs. actual days
+2. Calculate velocity ratio
+3. Adjust remaining estimates if systematically off
+
+## Phase 4: Schedule update
+
+1. Update milestone completion projections
+2. Flag at-risk milestones
+3. Update the schedule plan in eva-project.md
+
+## Then create a plan listing fixes. After approval, execute in batches.
+```
+
+---
+
+# Periodic: Cycle Planning & Work Allocation
+
+**When to run:** Start of each work cycle, AFTER the health check.
+
+```
+Start in plan mode.
+
+Cycle planning for the Eva project.
+
+IMPORTANT: Only touch tickets with label `Eva-Plan`.
+
+## Phase 1: Assess current state
+
+1. Read `~/.cursor/rules/personal/eva-project.md`
+2. List completed and in-progress tickets
+3. Identify what's carrying over vs. newly available
+
+## Phase 2: Determine scope
+
+1. Follow milestone dependency order from the project plan
+2. Check blocking relations via GraphQL — only pull tickets whose
+   blockers are Done
+3. Calculate available capacity:
+     working_days × engineers × 0.8
+4. Fill the cycle from unblocked tickets, prioritizing critical path
+
+## Phase 3: Sequence work
+
+Create a week-by-week plan showing:
+- Which tickets to work on each week
+- When blocked tickets become unblocked
+- Any stretch goals if capacity allows
+
+## Then create a plan. After approval, execute:
+
+- Move tickets to appropriate states
+- Update `~/.cursor/rules/personal/eva-project.md` with current cycle plan
+```
