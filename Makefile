@@ -23,3 +23,8 @@ build:
 test:
 	cd backend && cabal test all --test-show-details=direct
 	cd frontend && npm test
+
+# Seed the Weekly Project Summarizer demo program (backend must be running).
+# Usage: make seed  OR  make seed BASE_URL=http://localhost:8080
+seed:
+	@./scripts/seed-demo.sh $(BASE_URL)
