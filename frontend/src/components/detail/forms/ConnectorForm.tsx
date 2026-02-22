@@ -1,4 +1,4 @@
-import { Settings } from 'lucide-react'
+import { AlertTriangle, Settings } from 'lucide-react'
 import type { ConnectorConfig, SystemType } from '../../../types'
 import { useCredentials } from '../../../api/hooks'
 
@@ -51,16 +51,24 @@ export function ConnectorForm({ config, onChange }: Props) {
             </span>
           </div>
         ) : (
-          <select
-            value={config.credentialId ?? ''}
-            onChange={(e) => update({ credentialId: e.target.value || undefined })}
-            className={selectClass}
-          >
-            <option value="">— select credential —</option>
-            {systemCredentials.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <>
+            <select
+              value={config.credentialId ?? ''}
+              onChange={(e) => update({ credentialId: e.target.value || undefined })}
+              className={selectClass}
+            >
+              <option value="">— select credential —</option>
+              {systemCredentials.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {!config.credentialId && (
+              <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-amber-500/80">
+                <AlertTriangle size={10} className="shrink-0" />
+                <span>No credential selected — connector will fail at runtime.</span>
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -20,6 +20,10 @@ module Eva.Engine.LLM
   , TokenUsage (..)
   , LLMError (..)
 
+    -- * Tool-calling types
+  , ToolSpec (..)
+  , ToolCall (..)
+
     -- * Exposed for testing
   , parseSseLine
   , classifyStatus
@@ -27,7 +31,7 @@ module Eva.Engine.LLM
 
 import Control.Exception (SomeException, try)
 import Control.Monad (unless)
-import Data.Aeson (Value (..), decode, encode, object, (.:), (.=))
+import Data.Aeson (Value (..), decode, encode, object, (.:), (.:?), (.=))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Types (Pair, Parser, parseMaybe)
 import Data.ByteString (ByteString)
@@ -64,13 +68,38 @@ data LLMError
   deriving (Eq, Show)
 
 -- ---------------------------------------------------------------------------
+-- Tool-calling types
+-- ---------------------------------------------------------------------------
+
+-- | An LLM tool derived from a connector's 'ActionSpec'.
+data ToolSpec = ToolSpec
+  { toolName        :: Text
+  , toolDescription :: Text
+  , toolParameters  :: Value  -- ^ JSON Schema object
+  }
+  deriving (Eq, Show)
+
+-- | A tool call returned by the LLM (finish_reason == "tool_calls").
+data ToolCall = ToolCall
+  { toolCallId   :: Text
+  , toolCallName :: Text
+  , toolCallArgs :: Value  -- ^ Parsed JSON arguments
+  }
+  deriving (Eq, Show)
+
+-- ---------------------------------------------------------------------------
 -- Request / Response types
 -- ---------------------------------------------------------------------------
 
-data ChatMessage = ChatMessage
-  { chatRole    :: Text
-  , chatContent :: Text
-  }
+-- | A chat conversation turn.
+--
+-- 'ChatMessage' covers system/user/assistant text messages (existing usage).
+-- 'ToolCallMsg' is the assistant turn that contains tool calls instead of text.
+-- 'ToolResultMsg' is the tool role message feeding results back to the LLM.
+data ChatMessage
+  = ChatMessage { chatRole :: Text, chatContent :: Text }
+  | ToolCallMsg  [ToolCall]
+  | ToolResultMsg Text Text  -- ^ tool_call_id, result content
   deriving (Eq, Show)
 
 data LLMRequest = LLMRequest
@@ -79,6 +108,7 @@ data LLMRequest = LLMRequest
   , llmTemperature    :: Double
   , llmMaxTokens      :: Maybe Int
   , llmResponseFormat :: ResponseFormat
+  , llmTools          :: [ToolSpec]  -- ^ Empty list = no tool calling
   }
   deriving (Eq, Show)
 
@@ -90,8 +120,9 @@ data TokenUsage = TokenUsage
   deriving (Eq, Show)
 
 data LLMResponse = LLMResponse
-  { llmContent :: Text
-  , llmUsage   :: TokenUsage
+  { llmContent   :: Text             -- ^ Empty when tool calls present
+  , llmToolCalls :: Maybe [ToolCall] -- ^ 'Just' when finish_reason == "tool_calls"
+  , llmUsage     :: TokenUsage
   }
   deriving (Eq, Show)
 
@@ -109,7 +140,6 @@ data LLMClient = LLMClient
   }
 
 -- | A no-op client for use in tests and when no API key is configured.
--- Every call immediately returns 'Left (LLMAuthError "no LLM client configured")'.
 dummyLLMClient :: LLMClient
 dummyLLMClient = LLMClient
   { clientCall   = \_ -> pure (Left (LLMAuthError "no LLM client configured"))
@@ -205,7 +235,7 @@ doStream apiKey mgr req onToken = do
             usage   = case mUsage of
               Just u  -> u
               Nothing -> TokenUsage 0 0 0
-        pure (Right (LLMResponse content usage))
+        pure (Right (LLMResponse content Nothing usage))
 
 -- | Decode and process one SSE line, updating the accumulators.
 processLine
@@ -281,10 +311,52 @@ buildRequestBody req streaming =
       ]
       ++ maybe [] (\n -> ["max_tokens" .= n]) (llmMaxTokens req)
       ++ formatField (llmResponseFormat req)
+      ++ toolsField (llmTools req)
       ++ [ "stream_options" .= object ["include_usage" .= True] | streaming ]
 
+toolsField :: [ToolSpec] -> [Pair]
+toolsField [] = []
+toolsField ts =
+  [ "tools" .= map toolSpecToJson ts
+  , "tool_choice" .= ("auto" :: Text)
+  ]
+
+toolSpecToJson :: ToolSpec -> Value
+toolSpecToJson t = object
+  [ "type"     .= ("function" :: Text)
+  , "function" .= object
+      [ "name"        .= toolName t
+      , "description" .= toolDescription t
+      , "parameters"  .= toolParameters t
+      ]
+  ]
+
 messageToJson :: ChatMessage -> Value
-messageToJson m = object ["role" .= chatRole m, "content" .= chatContent m]
+messageToJson (ChatMessage role content) =
+  object ["role" .= role, "content" .= content]
+messageToJson (ToolCallMsg calls) =
+  object
+    [ "role"       .= ("assistant" :: Text)
+    , "content"    .= Null
+    , "tool_calls" .= map toolCallToJson calls
+    ]
+messageToJson (ToolResultMsg callId content) =
+  object
+    [ "role"         .= ("tool" :: Text)
+    , "tool_call_id" .= callId
+    , "content"      .= content
+    ]
+
+toolCallToJson :: ToolCall -> Value
+toolCallToJson tc = object
+  [ "id"   .= toolCallId tc
+  , "type" .= ("function" :: Text)
+  , "function" .= object
+      [ "name"      .= toolCallName tc
+        -- OpenAI format: arguments is a JSON-encoded string, not an object
+      , "arguments" .= TE.decodeUtf8Lenient (BL.toStrict (encode (toolCallArgs tc)))
+      ]
+  ]
 
 formatField :: ResponseFormat -> [Pair]
 formatField ResponseText = []
@@ -314,21 +386,43 @@ parseNonStreamingBody body =
 parseCompletion :: Value -> Parser LLMResponse
 parseCompletion = Aeson.withObject "Completion" $ \o -> do
   choices <- o .: "choices"
-  content <- case choices of
-    (first : _) -> first .: "message" >>= (.: "content")
-    []          -> fail "empty choices array"
+  (content, mToolCalls) <- case choices of
+    (first : _) -> do
+      finishReason <- first .:? "finish_reason" :: Parser (Maybe Text)
+      msg          <- first .: "message"
+      if finishReason == Just "tool_calls"
+        then do
+          rawCalls <- msg .: "tool_calls"
+          calls    <- mapM parseToolCall rawCalls
+          pure ("", Just calls)
+        else do
+          txt <- msg .: "content"
+          pure (txt, Nothing)
+    [] -> fail "empty choices array"
   usage         <- o .: "usage"
   promptTok     <- usage .: "prompt_tokens"
   completionTok <- usage .: "completion_tokens"
   totalTok      <- usage .: "total_tokens"
   pure LLMResponse
-    { llmContent = content
-    , llmUsage   = TokenUsage
+    { llmContent   = content
+    , llmToolCalls = mToolCalls
+    , llmUsage     = TokenUsage
         { usagePromptTokens     = promptTok
         , usageCompletionTokens = completionTok
         , usageTotalTokens      = totalTok
         }
     }
+
+parseToolCall :: Value -> Parser ToolCall
+parseToolCall = Aeson.withObject "ToolCall" $ \o -> do
+  callId   <- o .: "id"
+  fn       <- o .: "function"
+  name     <- fn .: "name"
+  argsText <- fn .: "arguments"  -- JSON-encoded string
+  let args = case Aeson.decode (BL.fromStrict (TE.encodeUtf8 argsText)) of
+               Just v  -> v
+               Nothing -> Aeson.String argsText  -- fallback: treat as raw text
+  pure ToolCall { toolCallId = callId, toolCallName = name, toolCallArgs = args }
 
 -- | Parse a streaming chunk: returns optional token delta and optional usage
 -- (the final chunk carries usage when @stream_options.include_usage@ is set).
