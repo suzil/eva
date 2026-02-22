@@ -186,7 +186,7 @@ spec = do
           Left err -> expectationFailure $
             "expected Right runner for http system, got: " <> T.unpack (connectorErrorText err)
 
-    it "returns a ConnectorRunner for a valid Linear credential (stub: empty actions)" $
+    it "returns a ConnectorRunner for a valid Linear credential with 3 actions" $
       withTestEnv $ \env -> do
         insertLinearCredential env
         result <- runAppM env $ resolveConnectorRunner linearConfig
@@ -195,7 +195,11 @@ spec = do
             "expected Right ConnectorRunner, got: " <> T.unpack (connectorErrorText err)
           Right runner -> do
             actions <- connectorAvailableActions runner
-            actions `shouldBe` []
+            length actions `shouldBe` 3
+            let names = map actionSpecName actions
+            names `shouldSatisfy` elem "list_issues"
+            names `shouldSatisfy` elem "create_issue"
+            names `shouldSatisfy` elem "update_issue"
 
     it "applies action filter to limit available actions" $
       withTestEnv $ \env -> do
@@ -206,5 +210,6 @@ spec = do
           Left err -> expectationFailure $ "unexpected error: " <> show err
           Right runner -> do
             actions <- connectorAvailableActions runner
-            -- Linear stub returns empty; filter doesn't change that
-            actions `shouldBe` []
+            -- Filter ["list_issues"] keeps only that one action
+            length actions `shouldBe` 1
+            map actionSpecName actions `shouldBe` ["list_issues"]

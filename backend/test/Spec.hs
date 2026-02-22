@@ -16,6 +16,7 @@ import qualified Eva.Engine.LLMSpec
 import qualified Eva.Engine.RetrySpec
 import qualified Eva.Engine.RunnerSpec
 import qualified Eva.Engine.StateMachineSpec
+import qualified Eva.Integration.LinearSpec
 import qualified Eva.Persistence.PersistenceSpec
 
 main :: IO ()
@@ -34,4 +35,5 @@ main = hspec $ do
   Eva.Engine.RetrySpec.spec
   Eva.Engine.RunnerSpec.spec
   Eva.Engine.StateMachineSpec.spec
+  Eva.Integration.LinearSpec.spec
   Eva.Persistence.PersistenceSpec.spec
