@@ -7,16 +7,20 @@ import {
   MiniMap,
   BackgroundVariant,
   useReactFlow,
+  addEdge,
   type Node,
   type Edge,
   type OnNodesChange,
   type OnEdgesChange,
+  type Connection,
+  type IsValidConnection,
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { nodeTypes } from '../nodes'
 import { NODE_TYPE_META } from '../nodes/constants'
+import { edgeTypes } from '../edges'
 import type { EvaNodeData, NodeType } from '../../types'
 
 // ---------------------------------------------------------------------------
@@ -82,10 +86,10 @@ const DEMO_NODES: Node<EvaNodeData>[] = [
 ]
 
 const DEMO_EDGES: Edge[] = [
-  { id: 'e1', source: 'trigger-1', sourceHandle: 'event', target: 'agent-1', targetHandle: 'instruction' },
-  { id: 'e2', source: 'knowledge-1', sourceHandle: 'content', target: 'agent-1', targetHandle: 'context' },
-  { id: 'e3', source: 'connector-1', sourceHandle: 'tools', target: 'agent-1', targetHandle: 'tools' },
-  { id: 'e4', source: 'agent-1', sourceHandle: 'output', target: 'action-1', targetHandle: 'input' },
+  { id: 'e1', type: 'data', source: 'trigger-1', sourceHandle: 'event', target: 'agent-1', targetHandle: 'instruction' },
+  { id: 'e2', type: 'resource', source: 'knowledge-1', sourceHandle: 'content', target: 'agent-1', targetHandle: 'context' },
+  { id: 'e3', type: 'resource', source: 'connector-1', sourceHandle: 'tools', target: 'agent-1', targetHandle: 'tools' },
+  { id: 'e4', type: 'data', source: 'agent-1', sourceHandle: 'output', target: 'action-1', targetHandle: 'input' },
 ]
 
 // ---------------------------------------------------------------------------
@@ -168,6 +172,26 @@ function CanvasInner() {
     [],
   )
 
+  const isValidConnection = useCallback<IsValidConnection>(
+    (conn) => {
+      const srcMeta = NODE_TYPE_META[nodes.find((n) => n.id === conn.source)?.type ?? '']
+      const tgtMeta = NODE_TYPE_META[nodes.find((n) => n.id === conn.target)?.type ?? '']
+      const srcPort = srcMeta?.outputs.find((p) => p.name === conn.sourceHandle)
+      const tgtPort = tgtMeta?.inputs.find((p) => p.name === conn.targetHandle)
+      return srcPort?.category === tgtPort?.category
+    },
+    [nodes],
+  )
+
+  const onConnect = useCallback(
+    (conn: Connection) => {
+      const srcMeta = NODE_TYPE_META[nodes.find((n) => n.id === conn.source)?.type ?? '']
+      const cat = srcMeta?.outputs.find((p) => p.name === conn.sourceHandle)?.category ?? 'data'
+      setEdges((es) => addEdge({ ...conn, id: crypto.randomUUID(), type: cat }, es))
+    },
+    [nodes],
+  )
+
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
@@ -191,14 +215,17 @@ function CanvasInner() {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
         onDragOver={onDragOver}
         onDrop={onDrop}
+        isValidConnection={isValidConnection}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         className="bg-gray-950"
-        deleteKeyCode={null}
+        deleteKeyCode={['Backspace', 'Delete']}
       >
         <Background
           variant={BackgroundVariant.Dots}
