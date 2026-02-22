@@ -18,6 +18,7 @@ module Eva.Engine.StateMachine
     -- * Runtime context
   , RunContext (..)
   , newRunContext
+  , waitForRun
 
     -- * Effectful transitions
   , transitionRun
@@ -27,6 +28,7 @@ module Eva.Engine.StateMachine
 import Control.Concurrent.STM
 import Control.Exception (Exception)
 import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (Value)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isNothing)
@@ -107,19 +109,51 @@ showState = T.pack . show
 -- Runtime context
 -- ---------------------------------------------------------------------------
 
--- | Per-Run execution context. EVA-14 will extend this with per-node
--- input mailboxes and a broadcast channel for WebSocket events.
+-- | Per-Run execution context. Holds all mutable state for one graph execution.
 data RunContext = RunContext
-  { rcRun   :: TVar Run
-  , rcSteps :: TVar (Map NodeId (TVar Step))
+  { rcRun        :: TVar Run
+  , rcRunId      :: RunId
+    -- ^ Immutable convenience copy of the RunId (avoids STM reads for logging/meta).
+  , rcSteps      :: TVar (Map NodeId (TVar Step))
+  , rcMailboxes  :: Map (NodeId, PortName) (TMVar Message)
+    -- ^ One empty TMVar per data-input port. Resource ports are excluded.
+  , rcDispatched :: TVar (Set NodeId)
+    -- ^ Nodes whose async worker has already been forked (prevents double-dispatch).
+  , rcAllDone    :: TVar Bool
+    -- ^ Set to True by the walker when all terminal nodes have completed/failed.
+  , rcBroadcast  :: TChan Value
+    -- ^ Broadcast channel for WebSocket events (consumed by EVA-26).
   }
 
 -- | Allocate a fresh RunContext for the given Run.
-newRunContext :: Run -> IO RunContext
-newRunContext run = do
-  runTVar   <- newTVarIO run
-  stepsTVar <- newTVarIO Map.empty
-  pure RunContext { rcRun = runTVar, rcSteps = stepsTVar }
+-- @dataPorts@ lists every (NodeId, PortName) that should receive a data mailbox;
+-- typically all (nodeId, port) pairs from 'Eva.Core.Graph.requiredDataInputs'.
+newRunContext :: Run -> [(NodeId, PortName)] -> IO RunContext
+newRunContext run dataPorts = do
+  runTVar    <- newTVarIO run
+  stepsTVar  <- newTVarIO Map.empty
+  mailboxes  <- Map.fromList <$> mapM (\k -> (k,) <$> newEmptyTMVarIO) dataPorts
+  dispatched <- newTVarIO Set.empty
+  allDone    <- newTVarIO False
+  broadcast  <- newBroadcastTChanIO
+  pure RunContext
+    { rcRun        = runTVar
+    , rcRunId      = runId run
+    , rcSteps      = stepsTVar
+    , rcMailboxes  = mailboxes
+    , rcDispatched = dispatched
+    , rcAllDone    = allDone
+    , rcBroadcast  = broadcast
+    }
+
+-- | Block until the Run has reached a terminal state (Completed, Failed, or Canceled).
+-- This is safe to call from any thread and guarantees the Run record is fully
+-- persisted before returning.
+waitForRun :: RunContext -> IO ()
+waitForRun ctx = atomically $ do
+  run <- readTVar (rcRun ctx)
+  let isTerminal = runState run `elem` [RunCompleted, RunFailed, RunCanceled]
+  if isTerminal then pure () else retry
 
 -- ---------------------------------------------------------------------------
 -- Effectful transitions
