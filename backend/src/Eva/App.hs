@@ -29,6 +29,7 @@ import Data.Time (UTCTime, getCurrentTime)
 import Database.Persist.Sql (ConnectionPool)
 import Database.Persist.Sqlite (createSqlitePool)
 import Eva.Config (AppConfig (..), LogLevel (..))
+import Eva.Persistence.Migration (runMigrations)
 
 -- ---------------------------------------------------------------------------
 -- Log entry
@@ -79,12 +80,13 @@ runAppM = flip runReaderT
 -- ---------------------------------------------------------------------------
 
 -- | Construct an 'AppEnv' from a loaded 'AppConfig'. Creates the SQLite
--- connection pool (EVA-8 will add schema migration here). The JSON logger
--- writes to stdout; entries below the configured log level are dropped.
+-- connection pool and runs auto-migration. The JSON logger writes to stdout;
+-- entries below the configured log level are dropped.
 makeAppEnv :: AppConfig -> IO AppEnv
 makeAppEnv cfg = do
   pool <- runNoLoggingT $
     createSqlitePool (T.pack (configDbPath cfg)) 10
+  runMigrations pool
   let minLevel = configLogLevel cfg
       logger entry
         | leLevel entry < minLevel = pure ()
