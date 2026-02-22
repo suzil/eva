@@ -127,3 +127,17 @@ export function useResumeProgram(id: string) {
     },
   })
 }
+
+// ---------------------------------------------------------------------------
+// WebSocket invalidation hook point
+// EVA-27: call invalidateGraph() when WS run_state / step_state events arrive
+// to force a fresh server fetch of the program (including updated graph state).
+// ---------------------------------------------------------------------------
+
+export function useGraphInvalidation(programId: string) {
+  const queryClient = useQueryClient()
+  const invalidateGraph = () => {
+    void queryClient.invalidateQueries({ queryKey: programKeys.detail(programId) })
+  }
+  return { invalidateGraph }
+}

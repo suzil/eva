@@ -1,6 +1,7 @@
-import { Play, Rocket, Command, ChevronRight } from 'lucide-react'
+import { Play, Rocket, Command, ChevronRight, Save } from 'lucide-react'
 import { type AppMode, useUiStore } from '../../store/uiStore'
-import { useProgram } from '../../api/hooks'
+import { useProgram, useSaveGraph } from '../../api/hooks'
+import { useCanvasStore } from '../../store/canvasStore'
 import type { ProgramState } from '../../types'
 
 // ---------------------------------------------------------------------------
@@ -24,6 +25,16 @@ export function Toolbar() {
   const selectedProgramId = useUiStore((s) => s.selectedProgramId)
 
   const { data: program } = useProgram(selectedProgramId ?? '')
+
+  const isDirty = useCanvasStore((s) => s.isDirty)
+  const buildGraph = useCanvasStore((s) => s.buildGraph)
+  const markClean = useCanvasStore((s) => s.markClean)
+  const saveMutation = useSaveGraph(selectedProgramId ?? '')
+
+  const handleSave = () => {
+    if (!selectedProgramId) return
+    saveMutation.mutate(buildGraph(), { onSuccess: markClean })
+  }
 
   return (
     <header className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-gray-800 bg-gray-900 px-3">
@@ -55,6 +66,19 @@ export function Toolbar() {
 
       {/* Action buttons */}
       <div className="flex items-center gap-1">
+        <ToolbarButton
+          icon={
+            <span className="relative flex items-center">
+              <Save className="h-3.5 w-3.5" />
+              {isDirty && (
+                <span className="absolute -right-1.5 -top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400" />
+              )}
+            </span>
+          }
+          label="Save"
+          onClick={handleSave}
+          disabled={!selectedProgramId || !isDirty || saveMutation.isPending}
+        />
         <ToolbarButton
           icon={<Play className="h-3.5 w-3.5" />}
           label="Run"

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -22,6 +22,8 @@ import { NODE_TYPE_META } from '../nodes/constants'
 import { edgeTypes } from '../edges'
 import type { EvaNodeData, NodeType } from '../../types'
 import { useCanvasStore } from '../../store/canvasStore'
+import { useUiStore } from '../../store/uiStore'
+import { useProgram } from '../../api/hooks'
 
 // ---------------------------------------------------------------------------
 // Default configs for newly dropped nodes
@@ -92,15 +94,25 @@ function buildDefaultNode(
 function CanvasInner() {
   const nodes = useCanvasStore((s) => s.nodes)
   const edges = useCanvasStore((s) => s.edges)
+  const currentProgramId = useCanvasStore((s) => s.currentProgramId)
+  const loadGraph = useCanvasStore((s) => s.loadGraph)
   const applyNodes = useCanvasStore((s) => s.applyNodeChanges)
   const applyEdges = useCanvasStore((s) => s.applyEdgeChanges)
   const addEdgeToStore = useCanvasStore((s) => s.addEdge)
   const addNodeToStore = useCanvasStore((s) => s.addNode)
-  // nodes/edges passed to ReactFlow directly from store
   const setSelectedNode = useCanvasStore((s) => s.setSelectedNode)
   const setSelectedEdge = useCanvasStore((s) => s.setSelectedEdge)
   const clearSelection = useCanvasStore((s) => s.clearSelection)
   const { screenToFlowPosition } = useReactFlow()
+
+  const selectedProgramId = useUiStore((s) => s.selectedProgramId)
+  const { data: program } = useProgram(selectedProgramId ?? '')
+
+  useEffect(() => {
+    if (program && selectedProgramId && selectedProgramId !== currentProgramId) {
+      loadGraph(program.graph, selectedProgramId)
+    }
+  }, [program, selectedProgramId, currentProgramId, loadGraph])
 
   const onNodesChange: OnNodesChange<Node<EvaNodeData>> = useCallback(
     (changes) => applyNodes(changes),
