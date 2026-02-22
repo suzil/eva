@@ -48,7 +48,7 @@ import Eva.Core.Types
   , RunId
   )
 import qualified Eva.Crypto as Crypto
-import Eva.Engine.LLM (LLMClient, dummyLLMClient, mkOpenAIClient)
+import Eva.Engine.LLM (LLMClient, dummyLLMClient, mkAnthropicClient, mkOpenAIClient)
 import Eva.Persistence.Migration (runMigrations)
 
 -- ---------------------------------------------------------------------------
@@ -87,15 +87,18 @@ type DispatchFn =
   RunId -> Node -> Map PortName Message -> ResourceBindings -> AppM Message
 
 data AppEnv = AppEnv
-  { envConfig        :: AppConfig
-  , envDbPool        :: ConnectionPool
-  , envLogger        :: LogEntry -> IO ()
-  , envDispatch      :: DispatchFn
-  , envLLMClient     :: LLMClient
-  , envBroadcasts    :: TVar (Map RunId (TChan Value))
+  { envConfig          :: AppConfig
+  , envDbPool          :: ConnectionPool
+  , envLogger          :: LogEntry -> IO ()
+  , envDispatch        :: DispatchFn
+  , envLLMClient       :: LLMClient
+    -- ^ OpenAI client (or dummyLLMClient when EVA_LLM_API_KEY is unset).
+  , envAnthropicClient :: LLMClient
+    -- ^ Anthropic client (or dummyLLMClient when EVA_ANTHROPIC_API_KEY is unset).
+  , envBroadcasts      :: TVar (Map RunId (TChan Value))
     -- ^ Registry of active run broadcast channels. Keyed by RunId.
     -- Engine writes events; WebSocket clients dupTChan and read.
-  , envCredentialKey :: ByteString
+  , envCredentialKey   :: ByteString
     -- ^ 32-byte AES-256 key derived from EVA_CREDENTIAL_KEY at startup.
   }
 
@@ -122,8 +125,11 @@ makeAppEnv cfg dispatch = do
   pool <- runNoLoggingT $
     createSqlitePool (T.pack (configDbPath cfg)) 10
   runMigrations pool
-  llmClient <- case configLlmApiKey cfg of
+  llmClient       <- case configLlmApiKey cfg of
     Just key -> mkOpenAIClient key
+    Nothing  -> pure dummyLLMClient
+  anthropicClient <- case configAnthropicApiKey cfg of
+    Just key -> mkAnthropicClient key
     Nothing  -> pure dummyLLMClient
   broadcasts <- newTVarIO Map.empty
   let minLevel = configLogLevel cfg
@@ -132,13 +138,14 @@ makeAppEnv cfg dispatch = do
         | leLevel entry < minLevel = pure ()
         | otherwise = BLC.putStrLn (encode entry) >> hFlush stdout
   pure AppEnv
-    { envConfig        = cfg
-    , envDbPool        = pool
-    , envLogger        = logger
-    , envDispatch      = dispatch
-    , envLLMClient     = llmClient
-    , envBroadcasts    = broadcasts
-    , envCredentialKey = credKey
+    { envConfig          = cfg
+    , envDbPool          = pool
+    , envLogger          = logger
+    , envDispatch        = dispatch
+    , envLLMClient       = llmClient
+    , envAnthropicClient = anthropicClient
+    , envBroadcasts      = broadcasts
+    , envCredentialKey   = credKey
     }
 
 -- ---------------------------------------------------------------------------

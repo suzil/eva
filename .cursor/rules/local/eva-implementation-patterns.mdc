@@ -167,6 +167,37 @@ Tool use (`rbConnectors`) is stubbed in M4 — real loop is EVA-33.
 every react-flow node. `nodeType` is the full discriminated union variant
 including config.
 
+### Undo/redo (EVA-41)
+
+`past` / `future` arrays hold `{ nodes, edges }` snapshots (capped at 50).
+`snapshot()` must be called **before** any mutating operation. Call sites:
+
+- `addNode`, `addEdge` — call `get().snapshot()` before `set()`
+- `applyNodeChanges`, `applyEdgeChanges` — snapshot only when a `remove`
+  change is present (skip position/selection changes to avoid log spam)
+- `CanvasContainer.onNodeDragStart` — snapshot before drag begins (captures
+  position before the drag, not after each frame)
+
+`undo()` / `redo()` swap current state with the top of `past` / `future`.
+Both set `isDirty: true` so the save dot reappears.
+
+### Auto-layout (EVA-41)
+
+`frontend/src/lib/autoLayout.ts` — pure function `applyDagreLayout(nodes, edges) → Node[]`
+using `@dagrejs/dagre` with `rankdir: 'LR', nodesep: 60, ranksep: 100`.
+
+`setLayoutedNodes(nodes)` in the store replaces nodes and sets `triggerFitView: true`.
+`CanvasInner` watches `triggerFitView` and calls `fitView({ padding: 0.3 })` via
+`useReactFlow()`, then resets the flag. This pattern is needed because `fitView` is
+an imperative API only available inside `ReactFlowProvider`.
+
+### Global keyboard shortcuts
+
+Keyboard shortcuts live in `Toolbar.tsx` via a `useEffect` attaching to
+`window.addEventListener('keydown', ...)`. All shortcuts check `e.metaKey || e.ctrlKey`.
+Toolbar has access to all store actions and mutation refs needed, so no separate
+hook is needed. Pattern: read store values directly in the effect dependency array.
+
 ## Frontend: Query Key Factory
 
 ```typescript

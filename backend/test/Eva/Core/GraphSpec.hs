@@ -58,7 +58,8 @@ agentNode :: NodeType
 agentNode =
   AgentNode
     AgentConfig
-      { agentModel          = "gpt-4o"
+      { agentProvider       = Nothing
+      , agentModel          = "gpt-4o"
       , agentSystemPrompt   = "test"
       , agentResponseFormat = ResponseText
       , agentTemperature    = 0.5

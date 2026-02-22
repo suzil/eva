@@ -27,6 +27,7 @@ module Eva.Core.Types
   , Credential (..)
 
     -- * Config sub-types
+  , LLMProvider (..)
   , ResponseFormat (..)
   , ContentSource (..)
   , KnowledgeFormat (..)
@@ -232,6 +233,19 @@ instance FromJSON PortSpec where
 -- Config Sub-types
 -- ---------------------------------------------------------------------------
 
+data LLMProvider = ProviderOpenAI | ProviderAnthropic
+  deriving stock (Eq, Show, Generic, Enum, Bounded)
+
+instance ToJSON LLMProvider where
+  toJSON ProviderOpenAI    = "openai"
+  toJSON ProviderAnthropic = "anthropic"
+
+instance FromJSON LLMProvider where
+  parseJSON = withText "LLMProvider" $ \case
+    "openai"    -> pure ProviderOpenAI
+    "anthropic" -> pure ProviderAnthropic
+    other -> fail $ "Unknown LLMProvider: " <> show other
+
 data ResponseFormat = ResponseText | ResponseJson
   deriving stock (Eq, Show, Generic, Enum, Bounded)
 
@@ -402,7 +416,8 @@ instance FromJSON BackoffStrategy where
 -- ---------------------------------------------------------------------------
 
 data AgentConfig = AgentConfig
-  { agentModel :: Text
+  { agentProvider :: Maybe LLMProvider
+  , agentModel :: Text
   , agentSystemPrompt :: Text
   , agentResponseFormat :: ResponseFormat
   , agentTemperature :: Double

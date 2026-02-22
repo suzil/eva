@@ -83,8 +83,11 @@ export type BackoffStrategy =
 // Node config types (JSON field names per Aeson dropPrefix serialization)
 // ---------------------------------------------------------------------------
 
+export type LLMProvider = 'openai' | 'anthropic'
+
 // AgentConfig: dropPrefix "agent" -> strip "agent" prefix
 export interface AgentConfig {
+  provider?: LLMProvider
   model: string
   systemPrompt: string
   responseFormat: ResponseFormat

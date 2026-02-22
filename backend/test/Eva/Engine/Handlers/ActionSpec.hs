@@ -80,22 +80,24 @@ withTestEnv action = do
   let cfg = AppConfig
         { configDbPath        = ":memory:"
         , configPort          = 8080
-        , configLlmApiKey     = Nothing
-        , configLogLevel      = LogError
-        , configCredentialKey = "test-key"
+        , configLlmApiKey       = Nothing
+        , configAnthropicApiKey = Nothing
+        , configLogLevel        = LogError
+        , configCredentialKey   = "test-key"
         }
       dummyLLMClient = LLMClient
         { clientCall   = \_ -> pure (Right (LLMResponse "unused" Nothing (TokenUsage 0 0 0)))
         , clientStream = \_ _ -> pure (Right (LLMResponse "unused" Nothing (TokenUsage 0 0 0)))
         }
       env = AppEnv
-        { envConfig     = cfg
-        , envDbPool     = pool
-        , envLogger     = \_ -> pure ()
-        , envDispatch   = \_ _ _ _ -> error "dispatch not used in handler unit tests"
-        , envLLMClient  = dummyLLMClient
-        , envBroadcasts    = broadcasts
-        , envCredentialKey = Crypto.deriveKey "test-key"
+        { envConfig          = cfg
+        , envDbPool          = pool
+        , envLogger          = \_ -> pure ()
+        , envDispatch        = \_ _ _ _ -> error "dispatch not used in handler unit tests"
+        , envLLMClient       = dummyLLMClient
+        , envAnthropicClient = dummyLLMClient
+        , envBroadcasts      = broadcasts
+        , envCredentialKey   = Crypto.deriveKey "test-key"
         }
   action env
 

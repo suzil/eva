@@ -1,13 +1,25 @@
 import { useState } from 'react'
 import Editor from '@monaco-editor/react'
-import type { AgentConfig, ResponseFormat } from '../../../types'
+import type { AgentConfig, LLMProvider, ResponseFormat } from '../../../types'
 
-const MODELS = [
+const OPENAI_MODELS = [
   'gpt-4o',
   'gpt-4o-mini',
   'gpt-4-turbo',
   'gpt-3.5-turbo',
 ]
+
+const ANTHROPIC_MODELS = [
+  'claude-opus-4-5',
+  'claude-sonnet-4-5',
+  'claude-3-5-sonnet-20241022',
+  'claude-3-5-haiku-20241022',
+]
+
+const PROVIDER_LABELS: Record<LLMProvider, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+}
 
 interface Props {
   config: AgentConfig
@@ -21,9 +33,31 @@ export function AgentForm({ config, onChange }: Props) {
 
   const update = (patch: Partial<AgentConfig>) => onChange({ ...config, ...patch })
 
+  const activeProvider: LLMProvider = config.provider ?? 'openai'
+  const modelList = activeProvider === 'anthropic' ? ANTHROPIC_MODELS : OPENAI_MODELS
+
+  const handleProviderChange = (provider: LLMProvider) => {
+    const models = provider === 'anthropic' ? ANTHROPIC_MODELS : OPENAI_MODELS
+    update({ provider, model: models[0] })
+  }
+
   return (
     <div className="space-y-4">
       <SectionLabel>Model</SectionLabel>
+
+      {/* Provider picker */}
+      <div>
+        <FieldLabel>Provider</FieldLabel>
+        <select
+          value={activeProvider}
+          onChange={(e) => handleProviderChange(e.target.value as LLMProvider)}
+          className={selectClass}
+        >
+          {(Object.keys(PROVIDER_LABELS) as LLMProvider[]).map((p) => (
+            <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>
+          ))}
+        </select>
+      </div>
 
       {/* Model picker */}
       <div>
@@ -33,10 +67,10 @@ export function AgentForm({ config, onChange }: Props) {
           onChange={(e) => update({ model: e.target.value })}
           className={selectClass}
         >
-          {MODELS.map((m) => (
+          {modelList.map((m) => (
             <option key={m} value={m}>{m}</option>
           ))}
-          {!MODELS.includes(config.model) && (
+          {!modelList.includes(config.model) && (
             <option value={config.model}>{config.model}</option>
           )}
         </select>

@@ -21,7 +21,7 @@ import Eva.Config (AppConfig (..), LogLevel (..))
 import qualified Eva.Crypto as Crypto
 import Eva.Core.Types
 import Eva.Engine.Handlers.Knowledge (handleKnowledge)
-import Eva.Engine.LLM (LLMClient (..))
+import Eva.Engine.LLM (LLMClient (..), dummyLLMClient)
 import Eva.Persistence.Migration (runMigrations)
 
 -- ---------------------------------------------------------------------------
@@ -87,22 +87,24 @@ withTestEnv action = do
   let cfg = AppConfig
         { configDbPath        = ":memory:"
         , configPort          = 8080
-        , configLlmApiKey     = Nothing
-        , configLogLevel      = LogError
-        , configCredentialKey = "test-key"
+        , configLlmApiKey       = Nothing
+        , configAnthropicApiKey = Nothing
+        , configLogLevel        = LogError
+        , configCredentialKey   = "test-key"
         }
       dummyLLM = LLMClient
         { clientCall   = \_ -> error "LLM not used in Knowledge handler tests"
         , clientStream = \_ _ -> error "LLM not used in Knowledge handler tests"
         }
       env = AppEnv
-        { envConfig        = cfg
-        , envDbPool        = pool
-        , envLogger        = \_ -> pure ()
-        , envDispatch      = \_ _ _ _ -> error "dispatch not used in handler unit tests"
-        , envLLMClient     = dummyLLM
-        , envBroadcasts    = broadcasts
-        , envCredentialKey = Crypto.deriveKey "test-key"
+        { envConfig          = cfg
+        , envDbPool          = pool
+        , envLogger          = \_ -> pure ()
+        , envDispatch        = \_ _ _ _ -> error "dispatch not used in handler unit tests"
+        , envLLMClient       = dummyLLM
+        , envAnthropicClient = dummyLLMClient
+        , envBroadcasts      = broadcasts
+        , envCredentialKey   = Crypto.deriveKey "test-key"
         }
   action env
 

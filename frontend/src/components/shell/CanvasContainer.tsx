@@ -36,6 +36,7 @@ function buildDefaultNodeType(type: string): NodeType {
       return {
         type: 'agent',
         config: {
+          provider: 'openai',
           model: 'gpt-4o',
           systemPrompt: '',
           responseFormat: 'text',

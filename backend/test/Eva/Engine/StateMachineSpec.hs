@@ -36,19 +36,21 @@ withTestEnv action = do
   let cfg = AppConfig
         { configDbPath        = ":memory:"
         , configPort          = 8080
-        , configLlmApiKey     = Nothing
-        , configLogLevel      = LogError
-        , configCredentialKey = "test-key"
+        , configLlmApiKey       = Nothing
+        , configAnthropicApiKey = Nothing
+        , configLogLevel        = LogError
+        , configCredentialKey   = "test-key"
         }
   broadcasts <- newTVarIO Map.empty
   let env = AppEnv
-        { envConfig     = cfg
-        , envDbPool     = pool
-        , envLogger     = \_ -> pure ()
-        , envDispatch   = execute
-        , envLLMClient  = dummyLLMClient
-        , envBroadcasts    = broadcasts
-        , envCredentialKey = Crypto.deriveKey "test-key"
+        { envConfig          = cfg
+        , envDbPool          = pool
+        , envLogger          = \_ -> pure ()
+        , envDispatch        = execute
+        , envLLMClient       = dummyLLMClient
+        , envAnthropicClient = dummyLLMClient
+        , envBroadcasts      = broadcasts
+        , envCredentialKey   = Crypto.deriveKey "test-key"
         }
   action env
 

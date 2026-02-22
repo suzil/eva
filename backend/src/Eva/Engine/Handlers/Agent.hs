@@ -18,7 +18,7 @@ module Eva.Engine.Handlers.Agent
 
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (ask, asks)
+import Control.Monad.Reader (ask)
 import Data.Aeson (Value (..), encode, toJSON)
 import qualified Data.Aeson as Aeson
 import Data.Map.Strict (Map)
@@ -87,9 +87,12 @@ handleAgent rid node inputs bindings = do
         , spec            <- specs
         ]
 
-  -- 6. Run tool-call loop (or single-turn streaming when no tools wired).
+  -- 6. Select LLM client based on agentProvider config, then run tool-call loop.
   env       <- ask
-  llmClient <- asks App.envLLMClient
+  let provider  = maybe ProviderOpenAI id (agentProvider cfg)
+      llmClient = case provider of
+        ProviderOpenAI    -> App.envLLMClient env
+        ProviderAnthropic -> App.envAnthropicClient env
   runToolLoop env cfg rid node llmClient tools actionMap initMessages 0 0.0
 
 -- ---------------------------------------------------------------------------
@@ -248,11 +251,18 @@ estimateCost model usage =
 -- | (prompt $/token, completion $/token) for known models.
 modelRates :: Text -> (Double, Double)
 modelRates m
-  | "gpt-4o-mini" `T.isInfixOf` m = (0.15 / 1_000_000, 0.60 / 1_000_000)
-  | "gpt-4o"      `T.isInfixOf` m = (5.00 / 1_000_000, 15.00 / 1_000_000)
-  | "gpt-4-turbo" `T.isInfixOf` m = (10.00 / 1_000_000, 30.00 / 1_000_000)
-  | "gpt-3.5"     `T.isInfixOf` m = (0.50 / 1_000_000, 1.50 / 1_000_000)
-  | otherwise                      = (5.00 / 1_000_000, 15.00 / 1_000_000)
+  -- OpenAI models
+  | "gpt-4o-mini"    `T.isInfixOf` m = (0.15  / 1_000_000,  0.60 / 1_000_000)
+  | "gpt-4o"         `T.isInfixOf` m = (5.00  / 1_000_000, 15.00 / 1_000_000)
+  | "gpt-4-turbo"    `T.isInfixOf` m = (10.00 / 1_000_000, 30.00 / 1_000_000)
+  | "gpt-3.5"        `T.isInfixOf` m = (0.50  / 1_000_000,  1.50 / 1_000_000)
+  -- Anthropic models
+  | "claude-opus"    `T.isInfixOf` m = (15.00 / 1_000_000, 75.00 / 1_000_000)
+  | "claude-3-5-haiku" `T.isInfixOf` m = (0.80 / 1_000_000,  4.00 / 1_000_000)
+  | "claude-3-5-sonnet" `T.isInfixOf` m = (3.00 / 1_000_000, 15.00 / 1_000_000)
+  | "claude-sonnet-4"  `T.isInfixOf` m = (3.00 / 1_000_000, 15.00 / 1_000_000)
+  | "claude-haiku-4"   `T.isInfixOf` m = (0.80 / 1_000_000,  4.00 / 1_000_000)
+  | otherwise                          = (5.00 / 1_000_000, 15.00 / 1_000_000)
 
 -- ---------------------------------------------------------------------------
 -- Helpers

@@ -37,7 +37,8 @@ testRunId = RunId "test-run-001"
 
 agentCfg :: AgentConfig
 agentCfg = AgentConfig
-  { agentModel          = "gpt-4o"
+  { agentProvider       = Nothing
+  , agentModel          = "gpt-4o"
   , agentSystemPrompt   = "You are a helpful assistant."
   , agentResponseFormat = ResponseText
   , agentTemperature    = 0.7
@@ -122,20 +123,22 @@ withTestEnv llmClient action = do
   runMigrations pool
   broadcasts <- newTVarIO Map.empty
   let cfg = AppConfig
-        { configDbPath        = ":memory:"
-        , configPort          = 8080
-        , configLlmApiKey     = Nothing
-        , configLogLevel      = LogError
-        , configCredentialKey = "test-key"
+        { configDbPath          = ":memory:"
+        , configPort            = 8080
+        , configLlmApiKey       = Nothing
+        , configAnthropicApiKey = Nothing
+        , configLogLevel        = LogError
+        , configCredentialKey   = "test-key"
         }
       env = AppEnv
-        { envConfig        = cfg
-        , envDbPool        = pool
-        , envLogger        = \_ -> pure ()
-        , envDispatch      = \_ _ _ _ -> error "dispatch not used in handler unit tests"
-        , envLLMClient     = llmClient
-        , envBroadcasts    = broadcasts
-        , envCredentialKey = Crypto.deriveKey "test-key"
+        { envConfig          = cfg
+        , envDbPool          = pool
+        , envLogger          = \_ -> pure ()
+        , envDispatch        = \_ _ _ _ -> error "dispatch not used in handler unit tests"
+        , envLLMClient       = llmClient
+        , envAnthropicClient = dummyLLMClient
+        , envBroadcasts      = broadcasts
+        , envCredentialKey   = Crypto.deriveKey "test-key"
         }
   action env
 

@@ -35,18 +35,20 @@ withTestEnv action = do
   let cfg = AppConfig
         { configDbPath        = ":memory:"
         , configPort          = 8080
-        , configLlmApiKey     = Nothing
-        , configLogLevel      = LogError
-        , configCredentialKey = "test-key"
+        , configLlmApiKey       = Nothing
+        , configAnthropicApiKey = Nothing
+        , configLogLevel        = LogError
+        , configCredentialKey   = "test-key"
         }
   let env = AppEnv
-        { envConfig     = cfg
-        , envDbPool     = pool
-        , envLogger     = \_ -> pure ()
-        , envDispatch   = execute
-        , envLLMClient  = dummyLLMClient
-        , envBroadcasts    = broadcasts
-        , envCredentialKey = Crypto.deriveKey "test-key"
+        { envConfig          = cfg
+        , envDbPool          = pool
+        , envLogger          = \_ -> pure ()
+        , envDispatch        = execute
+        , envLLMClient       = dummyLLMClient
+        , envAnthropicClient = dummyLLMClient
+        , envBroadcasts      = broadcasts
+        , envCredentialKey   = Crypto.deriveKey "test-key"
         }
   action env
 
@@ -77,7 +79,8 @@ sampleProgram =
                   { nodeId    = "n-agent"
                   , nodeLabel = "My Agent"
                   , nodeType  = AgentNode AgentConfig
-                      { agentModel          = "gpt-4o"
+                      { agentProvider       = Nothing
+                      , agentModel          = "gpt-4o"
                       , agentSystemPrompt   = "You are helpful."
                       , agentResponseFormat = ResponseText
                       , agentTemperature    = 0.7
@@ -131,7 +134,8 @@ allNodeTypesProgram =
         { graphNodes = Map.fromList
             [ mk "n-agent"
                 (AgentNode AgentConfig
-                  { agentModel = "gpt-4o", agentSystemPrompt = "sys"
+                  { agentProvider = Nothing
+                  , agentModel = "gpt-4o", agentSystemPrompt = "sys"
                   , agentResponseFormat = ResponseText, agentTemperature = 0.5
                   , agentMaxTokens = Just 512, agentMaxIterations = 1
                   , agentCostBudgetUsd = Just 1.0
