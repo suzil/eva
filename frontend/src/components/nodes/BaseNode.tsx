@@ -12,6 +12,7 @@ import type { PortDef } from './constants'
 interface BaseNodeProps {
   id: string
   label: string
+  subtitle?: string
   icon: LucideIcon
   accentClass: string
   accentColor: string
@@ -51,6 +52,7 @@ function nodeHeight(inputs: PortDef[], outputs: PortDef[]): number {
 
 export function BaseNode({
   label,
+  subtitle,
   icon: Icon,
   accentClass,
   accentColor,
@@ -97,6 +99,9 @@ export function BaseNode({
             {label}
           </span>
         </div>
+        {subtitle && (
+          <p className="mb-1 truncate text-[10px] leading-tight text-gray-500">{subtitle}</p>
+        )}
 
         {/* Port labels */}
         {inputs.map((port, i) => (
