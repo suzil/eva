@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Plus, LayoutList } from 'lucide-react'
+import { Plus, LayoutList, Loader2 } from 'lucide-react'
 import { usePrograms, useCreateProgram, usePatchProgram } from '../../api/hooks'
 import { useUiStore } from '../../store/uiStore'
 import { useCanvasStore } from '../../store/canvasStore'
@@ -125,7 +125,7 @@ function ProgramItem({
 // ---------------------------------------------------------------------------
 
 export function ProgramsPanel() {
-  const { data: programs, isLoading, isError } = usePrograms()
+  const { data: programs, isLoading, isError, refetch } = usePrograms()
   const createProgram = useCreateProgram()
   const selectedProgramId = useUiStore((s) => s.selectedProgramId)
   const setSelectedProgramId = useUiStore((s) => s.setSelectedProgramId)
@@ -177,11 +177,17 @@ export function ProgramsPanel() {
       {/* Body */}
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center p-4">
-          <p className="text-xs text-gray-600">Loading…</p>
+          <Loader2 className="h-4 w-4 animate-spin text-gray-600" />
         </div>
       ) : isError ? (
-        <div className="flex flex-1 items-center justify-center p-4">
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4">
           <p className="text-center text-xs text-red-500">Failed to load programs</p>
+          <button
+            onClick={() => refetch()}
+            className="rounded border border-gray-700 px-2.5 py-1 text-xs text-gray-400 transition-colors hover:border-gray-600 hover:text-white"
+          >
+            Try again
+          </button>
         </div>
       ) : list.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-4">

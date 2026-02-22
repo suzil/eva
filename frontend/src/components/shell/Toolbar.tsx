@@ -10,6 +10,9 @@ import {
   PauseCircle,
   PlayCircle,
   XCircle,
+  LayoutGrid,
+  Undo2,
+  Redo2,
 } from 'lucide-react'
 import { type AppMode, useUiStore } from '../../store/uiStore'
 import {
@@ -26,6 +29,7 @@ import {
 } from '../../api/hooks'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useRunStream } from '../../hooks/useRunStream'
+import { applyDagreLayout } from '../../lib/autoLayout'
 import type { ProgramState, Run, ValidationError } from '../../types'
 
 // ---------------------------------------------------------------------------
@@ -87,6 +91,13 @@ export function Toolbar() {
   const clearRunState = useCanvasStore((s) => s.clearRunState)
   const loadRunSteps = useCanvasStore((s) => s.loadRunSteps)
   const setSelectedNode = useCanvasStore((s) => s.setSelectedNode)
+  const nodes = useCanvasStore((s) => s.nodes)
+  const edges = useCanvasStore((s) => s.edges)
+  const setLayoutedNodes = useCanvasStore((s) => s.setLayoutedNodes)
+  const undo = useCanvasStore((s) => s.undo)
+  const redo = useCanvasStore((s) => s.redo)
+  const past = useCanvasStore((s) => s.past)
+  const future = useCanvasStore((s) => s.future)
   const saveMutation = useSaveGraph(selectedProgramId ?? '')
 
   const validateMutation = useValidateProgram(selectedProgramId ?? '')
@@ -141,6 +152,29 @@ export function Toolbar() {
 
   // Subscribe to the active run stream (no-op when activeRunId is null)
   useRunStream(activeRunId, selectedProgramId ?? '')
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey
+      if (!mod) return
+
+      if (e.key === 's') {
+        e.preventDefault()
+        if (selectedProgramId && isDirty && !saveMutation.isPending) {
+          saveMutation.mutate(buildGraph(), { onSuccess: markClean })
+        }
+      } else if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+        e.preventDefault()
+        redo()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [selectedProgramId, isDirty, saveMutation, buildGraph, markClean, undo, redo])
 
   const showRunError = (msg: string) => {
     setRunErrorMsg(msg)
@@ -384,6 +418,37 @@ export function Toolbar() {
               onClick={handleResume}
               disabled={resumeMutation.isPending}
               variant="primary"
+            />
+          )}
+
+          {/* Undo / Redo — Author mode only */}
+          {mode === 'author' && (
+            <>
+              <ToolbarButton
+                icon={<Undo2 className="h-3.5 w-3.5" />}
+                label="Undo (⌘Z)"
+                onClick={undo}
+                disabled={past.length === 0}
+                hideLabel
+              />
+              <ToolbarButton
+                icon={<Redo2 className="h-3.5 w-3.5" />}
+                label="Redo (⌘Y)"
+                onClick={redo}
+                disabled={future.length === 0}
+                hideLabel
+              />
+            </>
+          )}
+
+          {/* Auto-layout — Author mode only */}
+          {mode === 'author' && (
+            <ToolbarButton
+              icon={<LayoutGrid className="h-3.5 w-3.5" />}
+              label="Auto-layout"
+              onClick={() => setLayoutedNodes(applyDagreLayout(nodes, edges))}
+              disabled={nodes.length === 0}
+              hideLabel
             />
           )}
 

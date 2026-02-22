@@ -10,6 +10,17 @@ import {
 import type { EvaNodeData, Graph, NodeId, NodeType, PortCategory, Step, StepState } from '../types'
 
 // ---------------------------------------------------------------------------
+// History
+// ---------------------------------------------------------------------------
+
+interface HistoryEntry {
+  nodes: Node<EvaNodeData>[]
+  edges: Edge[]
+}
+
+const HISTORY_LIMIT = 50
+
+// ---------------------------------------------------------------------------
 // Store shape
 // ---------------------------------------------------------------------------
 
@@ -26,6 +37,14 @@ interface CanvasState {
   /** Per-node step error messages, populated from RunDetail when a run finishes. */
   nodeStepErrors: Record<NodeId, string>
 
+  /** Undo history — snapshots before mutating operations. */
+  past: HistoryEntry[]
+  /** Redo stack — snapshots that can be re-applied. */
+  future: HistoryEntry[]
+
+  /** Set to true by setLayoutedNodes; CanvasInner watches it to call fitView(). */
+  triggerFitView: boolean
+
   loadGraph: (graph: Graph, programId: string) => void
   applyNodeChanges: (changes: NodeChange<Node<EvaNodeData>>[]) => void
   applyEdgeChanges: (changes: EdgeChange[]) => void
@@ -37,6 +56,15 @@ interface CanvasState {
   setSelectedEdge: (id: string | null) => void
   clearSelection: () => void
   markClean: () => void
+
+  /** Push current nodes+edges onto the undo stack and clear the redo stack. */
+  snapshot: () => void
+  undo: () => void
+  redo: () => void
+
+  /** Replace node positions after auto-layout; triggers fitView on next render. */
+  setLayoutedNodes: (nodes: Node<EvaNodeData>[]) => void
+  setTriggerFitView: (value: boolean) => void
 
   /** Update a single node's step state and sync it into EvaNodeData for BaseNode rendering. */
   setNodeStepState: (nodeId: NodeId, state: StepState) => void
@@ -60,6 +88,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   isDirty: false,
   nodeStepStates: {},
   nodeStepErrors: {},
+  past: [],
+  future: [],
+  triggerFitView: false,
 
   loadGraph: (graph, programId) => {
     const nodes: Node<EvaNodeData>[] = Object.values(graph.nodes).map((n) => ({
@@ -76,26 +107,47 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       targetHandle: e.targetPort,
       type: e.category,
     }))
-    set({ nodes, edges, currentProgramId: programId, isDirty: false, selectedNodeId: null, selectedEdgeId: null, nodeStepStates: {}, nodeStepErrors: {} })
+    set({
+      nodes,
+      edges,
+      currentProgramId: programId,
+      isDirty: false,
+      selectedNodeId: null,
+      selectedEdgeId: null,
+      nodeStepStates: {},
+      nodeStepErrors: {},
+      past: [],
+      future: [],
+    })
   },
 
-  applyNodeChanges: (changes) =>
+  applyNodeChanges: (changes) => {
+    const hasRemoval = changes.some((c) => c.type === 'remove')
+    if (hasRemoval) get().snapshot()
     set((s) => ({
       nodes: applyNodeChanges(changes, s.nodes),
       isDirty: true,
-    })),
+    }))
+  },
 
-  applyEdgeChanges: (changes) =>
+  applyEdgeChanges: (changes) => {
+    const hasRemoval = changes.some((c) => c.type === 'remove')
+    if (hasRemoval) get().snapshot()
     set((s) => ({
       edges: applyEdgeChanges(changes, s.edges),
       isDirty: true,
-    })),
+    }))
+  },
 
-  addNode: (node) =>
-    set((s) => ({ nodes: [...s.nodes, node], isDirty: true })),
+  addNode: (node) => {
+    get().snapshot()
+    set((s) => ({ nodes: [...s.nodes, node], isDirty: true }))
+  },
 
-  addEdge: (edge) =>
-    set((s) => ({ edges: [...s.edges, edge], isDirty: true })),
+  addEdge: (edge) => {
+    get().snapshot()
+    set((s) => ({ edges: [...s.edges, edge], isDirty: true }))
+  },
 
   updateNodeLabel: (id, label) =>
     set((s) => ({
@@ -133,6 +185,47 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     })),
 
   markClean: () => set({ isDirty: false }),
+
+  snapshot: () => {
+    const { nodes, edges, past } = get()
+    set({
+      past: [...past.slice(-HISTORY_LIMIT + 1), { nodes, edges }],
+      future: [],
+    })
+  },
+
+  undo: () => {
+    const { past, nodes, edges, future } = get()
+    if (past.length === 0) return
+    const prev = past[past.length - 1]
+    set({
+      past: past.slice(0, -1),
+      future: [{ nodes, edges }, ...future],
+      nodes: prev.nodes,
+      edges: prev.edges,
+      isDirty: true,
+    })
+  },
+
+  redo: () => {
+    const { past, nodes, edges, future } = get()
+    if (future.length === 0) return
+    const next = future[0]
+    set({
+      past: [...past, { nodes, edges }],
+      future: future.slice(1),
+      nodes: next.nodes,
+      edges: next.edges,
+      isDirty: true,
+    })
+  },
+
+  setLayoutedNodes: (nodes) => {
+    get().snapshot()
+    set({ nodes, isDirty: true, triggerFitView: true })
+  },
+
+  setTriggerFitView: (value) => set({ triggerFitView: value }),
 
   setNodeStepState: (nodeId, state) =>
     set((s) => ({
