@@ -74,7 +74,7 @@ knowledgeCfg content = KnowledgeConfig
   }
 
 emptyBindings :: ResourceBindings
-emptyBindings = ResourceBindings { rbKnowledge = [], rbConnectors = [] }
+emptyBindings = ResourceBindings { rbKnowledge = [], rbConnectors = [], rbConnectorRunners = [] }
 
 -- ---------------------------------------------------------------------------
 -- Mock LLM clients

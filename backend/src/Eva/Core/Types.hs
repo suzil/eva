@@ -57,6 +57,9 @@ module Eva.Core.Types
     -- * Execution
   , ResourceBindings (..)
   , RetryPolicy (..)
+
+    -- * Re-exports from Integration.Types (to avoid downstream circular deps)
+  , module Eva.Integration.Types
   , Run (..)
   , Step (..)
 
@@ -75,6 +78,8 @@ import Data.String (IsString)
 import Data.Text (Text)
 import Data.Time (UTCTime)
 import GHC.Generics (Generic)
+
+import Eva.Integration.Types
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -589,11 +594,15 @@ instance FromJSON Message where
 -- ---------------------------------------------------------------------------
 
 -- | Resolved resource connections for a node at dispatch time.
--- Knowledge content sources and Connector capability configs, collected
--- from resource edges pointing at the node. Static grants — not runtime messages.
+-- Knowledge content sources, Connector capability configs, and resolved
+-- ConnectorRunners, collected from resource edges pointing at the node.
+-- Static grants — not runtime messages.
+-- 'rbConnectorRunners' is populated by 'Eva.Engine.Handlers.Connector.resolveConnectorRunner'
+-- after credential lookup; used by the Agent tool-use loop (EVA-33).
 data ResourceBindings = ResourceBindings
-  { rbKnowledge  :: [KnowledgeConfig]
-  , rbConnectors :: [ConnectorConfig]
+  { rbKnowledge        :: [KnowledgeConfig]
+  , rbConnectors       :: [ConnectorConfig]
+  , rbConnectorRunners :: [ConnectorRunner]
   }
 
 data RetryPolicy = RetryPolicy

@@ -9,6 +9,7 @@ import qualified Eva.Core.TypesSpec
 import qualified Eva.Core.ValidationSpec
 import qualified Eva.Engine.Handlers.ActionSpec
 import qualified Eva.Engine.Handlers.AgentSpec
+import qualified Eva.Engine.Handlers.ConnectorSpec
 import qualified Eva.Engine.Handlers.TriggerSpec
 import qualified Eva.Engine.LLMSpec
 import qualified Eva.Engine.RetrySpec
@@ -25,6 +26,7 @@ main = hspec $ do
   Eva.Core.ValidationSpec.spec
   Eva.Engine.Handlers.ActionSpec.spec
   Eva.Engine.Handlers.AgentSpec.spec
+  Eva.Engine.Handlers.ConnectorSpec.spec
   Eva.Engine.Handlers.TriggerSpec.spec
   Eva.Engine.LLMSpec.spec
   Eva.Engine.RetrySpec.spec
