@@ -239,7 +239,7 @@ Local: none (bind 127.0.0.1). Deployed (post-MLP): JWT bearer + WS token param.
 | `runs` | id, program_id FK, state, trigger_info (JSON), started_at, finished_at |
 | `steps` | id, run_id FK, node_id, state, input (JSON), output (JSON), error, retry_count, started_at, finished_at |
 | `log_entries` | id, step_id FK, level, message, data (JSON), created_at |
-| `credentials` | id, name, system_type, encrypted_data, created_at |
+| `credentials` | id, name, system_type, cred_type (nullable), encrypted_data (AES-256-GCM blob), created_at |
 
 Knowledge stored in node config JSON (inline) or file refs. Version history deferred.
 Graph save: full-graph PUT (no per-node CRUD for MLP).

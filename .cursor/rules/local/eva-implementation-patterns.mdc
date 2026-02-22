@@ -1,5 +1,5 @@
 ---
-description: Eva implementation patterns — coding conventions that have crystallized during M1–M4 implementation. Covers AppEnv/AppM, LLMClient injection, WebSocket broadcast lifecycle, retry/dispatch, frontend store, and test setup.
+description: Eva implementation patterns — coding conventions that have crystallized during M1–M5 implementation. Covers AppEnv/AppM, LLMClient injection, WebSocket broadcast lifecycle, retry/dispatch, frontend store, test setup, and credential encryption.
 globs: ["backend/**/*.hs", "frontend/src/**/*.ts", "frontend/src/**/*.tsx"]
 ---
 
@@ -225,3 +225,42 @@ result <- runAppM env $ handleAgent testRunId node inputs bindings
 
 Runner tests that need the full walker use `startRun`/`waitForRun` with
 an injectable dispatch that controls success/failure per node.
+
+## Credential Encryption (EVA-32)
+
+AES-256-GCM via `crypton`. Wire format: `[12-byte IV][16-byte auth tag][ciphertext]`
+stored in `credentials.encrypted_data` (SQLite BLOB).
+
+```haskell
+-- Eva.Crypto
+deriveKey :: ByteString -> ByteString        -- SHA-256(key_material) → 32 bytes
+encrypt   :: ByteString -> ByteString -> IO ByteString   -- key, plaintext
+decrypt   :: ByteString -> ByteString -> Either String ByteString  -- key, blob
+```
+
+**Key derivation:** `EVA_CREDENTIAL_KEY` env var → `TE.encodeUtf8` → `Crypto.deriveKey`
+→ stored in `AppEnv.envCredentialKey :: ByteString`. Required at startup.
+
+**AppEnv fields (EVA-32 additions):**
+```haskell
+AppEnv { ...
+  , envCredentialKey :: ByteString  -- 32-byte AES key
+  }
+AppConfig { ...
+  , configCredentialKey :: Text     -- raw EVA_CREDENTIAL_KEY value
+  }
+```
+
+**Test harness pattern:** All test files that construct `AppConfig`/`AppEnv` must include:
+```haskell
+-- in AppConfig:
+, configCredentialKey = "test-key"
+-- in AppEnv:
+, envCredentialKey = Crypto.deriveKey "test-key"
+-- import:
+import qualified Eva.Crypto as Crypto
+```
+
+**JSON naming:** `Credential` uses `dropPrefix "credential"` so `credentialType` serializes
+as `"type"`. `CreateCredentialReq` also uses `"type"` (not `"credType"`) for consistency.
+The secret field never appears in responses — only `id`, `name`, `system`, `type`, `createdAt`.
