@@ -24,6 +24,22 @@ BASE_URL="${1:-http://localhost:8080}"
 echo "Seeding demo program at ${BASE_URL} ..."
 
 # ---------------------------------------------------------------------------
+# 0. Delete any existing "Weekly Project Summarizer" (idempotent re-seed)
+# ---------------------------------------------------------------------------
+EXISTING_ID=$(curl -sf "${BASE_URL}/api/programs" \
+  | python3 -c "
+import json, sys
+programs = json.load(sys.stdin)
+match = next((p['id'] for p in programs if p['name'] == 'Weekly Project Summarizer'), None)
+if match: print(match)
+" 2>/dev/null || true)
+
+if [ -n "${EXISTING_ID}" ]; then
+  curl -sf -X DELETE "${BASE_URL}/api/programs/${EXISTING_ID}" > /dev/null
+  echo "  Deleted existing program: ${EXISTING_ID}"
+fi
+
+# ---------------------------------------------------------------------------
 # 1. Create the program
 # ---------------------------------------------------------------------------
 PROGRAM_JSON=$(curl -sf -X POST "${BASE_URL}/api/programs" \
