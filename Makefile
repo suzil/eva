@@ -27,10 +27,28 @@ test:
 	cd backend && cabal test all --test-show-details=direct
 	cd frontend && npm test
 
-# Seed the Weekly Project Summarizer demo program (backend must be running).
-# Usage: make seed  OR  make seed BASE_URL=http://localhost:8080
+# Reset the database and seed the demo program.
+# Kills any server on EVA_PORT, wipes EVA_DB_PATH, starts a fresh backend,
+# waits for it to be healthy, then runs the seed script.
 seed:
-	@./scripts/seed-demo.sh $(BASE_URL)
+	@set -a; [ -f .env ] && . ./.env || true; set +a; \
+	PORT=$${EVA_PORT:-8080}; DB=$${EVA_DB_PATH:-./eva.db}; \
+	echo "--- Resetting $$DB ---"; \
+	lsof -ti :$$PORT 2>/dev/null | xargs kill -9 2>/dev/null || true; \
+	sleep 0.3; \
+	rm -f "$$DB"; \
+	(cd backend && cabal run exe:eva >>/tmp/eva-backend.log 2>&1) & \
+	printf "Waiting for backend on :$$PORT"; \
+	for i in $$(seq 1 60); do \
+		sleep 1; printf "."; \
+		curl -sf "http://localhost:$$PORT/api/health" >/dev/null 2>&1 && break; \
+		if [ "$$i" -eq 60 ]; then printf "\nBackend did not start.\n"; exit 1; fi; \
+	done; \
+	printf "\n"; \
+	./scripts/seed-demo.sh "http://localhost:$$PORT"; \
+	echo ""; \
+	echo "Backend running in background (PID $$(lsof -ti :$$PORT 2>/dev/null))."
+	@echo "Restart 'make dev' to reattach ghcid."
 
 # Build the Docker image (multi-stage: GHC + Node + runtime).
 docker-build:
