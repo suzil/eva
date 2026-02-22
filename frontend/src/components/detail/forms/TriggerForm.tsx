@@ -1,4 +1,7 @@
+import { useMemo } from 'react'
 import { Clock } from 'lucide-react'
+import cronstrue from 'cronstrue'
+import { CronExpressionParser } from 'cron-parser'
 import type { TriggerConfig, TriggerType } from '../../../types'
 
 interface Props {
@@ -13,8 +16,50 @@ const TRIGGER_TYPES: { value: TriggerType; label: string; available: boolean }[]
   { value: 'connectorevent', label: 'Connector event (deferred)', available: false },
 ]
 
+const PRESETS: { label: string; value: string }[] = [
+  { label: 'Every hour', value: '0 * * * *' },
+  { label: 'Daily 9 AM', value: '0 9 * * *' },
+  { label: 'Mon 9:00', value: '0 9 * * 1' },
+  { label: 'Every 15 min', value: '*/15 * * * *' },
+]
+
+function parseCron(schedule: string): { description: string; nextFire: Date } | { error: string } {
+  if (!schedule.trim()) return { error: '' }
+  try {
+    const description = cronstrue.toString(schedule, {
+      verbose: false,
+      throwExceptionOnParseError: true,
+    })
+    const expr = CronExpressionParser.parse(schedule)
+    const nextFire = expr.next().toDate()
+    return { description, nextFire }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message.replace(/^.*?:\s*/, '') : 'Invalid expression' }
+  }
+}
+
+function formatNextFire(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
 export function TriggerForm({ config, onChange }: Props) {
   const update = (patch: Partial<TriggerConfig>) => onChange({ ...config, ...patch })
+
+  const cronResult = useMemo(
+    () => (config.type === 'cron' ? parseCron(config.schedule ?? '') : null),
+    [config.type, config.schedule],
+  )
+
+  const validationError =
+    cronResult && 'error' in cronResult && cronResult.error ? cronResult.error : null
+  const cronDescription = cronResult && 'description' in cronResult ? cronResult.description : null
+  const cronNextFire = cronResult && 'nextFire' in cronResult ? cronResult.nextFire : null
 
   return (
     <div className="space-y-4">
@@ -46,36 +91,73 @@ export function TriggerForm({ config, onChange }: Props) {
       {/* Manual trigger — no additional config */}
       {config.type === 'manual' && (
         <div className="rounded border border-gray-800 bg-gray-900/40 p-3 text-[11px] text-gray-500">
-          This trigger fires when you click <span className="font-medium text-gray-400">Run</span> in the toolbar.
-          No additional configuration required.
+          This trigger fires when you click <span className="font-medium text-gray-400">Run</span>{' '}
+          in the toolbar. No additional configuration required.
         </div>
       )}
 
-      {/* Cron trigger — will be expanded by EVA-36 with a visual schedule builder */}
+      {/* Cron trigger */}
       {config.type === 'cron' && (
         <div className="space-y-3">
+          {/* Presets */}
+          <div>
+            <FieldLabel>Presets</FieldLabel>
+            <div className="flex flex-wrap gap-1">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => update({ schedule: p.value })}
+                  className={[
+                    'rounded border px-2 py-0.5 text-[10px] transition-colors',
+                    config.schedule === p.value
+                      ? 'border-blue-600 bg-blue-600/20 text-blue-300'
+                      : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600 hover:text-gray-300',
+                  ].join(' ')}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Expression input */}
           <div>
             <FieldLabel>Cron expression</FieldLabel>
             <input
               type="text"
               value={config.schedule ?? ''}
-              placeholder="0 9 * * 1  (Mon 9:00 AM)"
+              placeholder="0 9 * * 1"
               onChange={(e) => update({ schedule: e.target.value || undefined })}
-              className={inputClass + ' font-mono'}
+              className={[
+                inputClass,
+                'font-mono',
+                validationError ? 'border-red-600 focus:border-red-500' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
             />
             <p className="mt-1 text-[10px] text-gray-600">
-              Standard cron format: minute hour day month weekday
+              minute &nbsp; hour &nbsp; day-of-month &nbsp; month &nbsp; day-of-week
             </p>
+            {validationError && (
+              <p className="mt-1 text-[10px] text-red-500">{validationError}</p>
+            )}
           </div>
-          {config.schedule && (
-            <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-              <Clock size={11} className="text-gray-600" />
-              <span className="font-mono text-gray-500">{config.schedule}</span>
+
+          {/* Preview card — only shown for valid, non-empty expressions */}
+          {cronDescription && cronNextFire && (
+            <div className="space-y-1.5 rounded border border-gray-800 bg-gray-900/40 px-2.5 py-2">
+              <div className="flex items-center gap-1.5">
+                <Clock size={11} className="shrink-0 text-blue-500" />
+                <span className="text-[11px] text-gray-200">{cronDescription}</span>
+              </div>
+              <div className="flex items-center gap-1.5 pl-0.5">
+                <span className="text-[10px] text-gray-600">Next:</span>
+                <span className="text-[10px] text-gray-500">{formatNextFire(cronNextFire)}</span>
+              </div>
             </div>
           )}
-          <div className="rounded border border-amber-900/40 bg-amber-950/20 px-2 py-1.5 text-[10px] text-amber-600">
-            Visual schedule builder coming in EVA-36
-          </div>
         </div>
       )}
     </div>
@@ -84,9 +166,7 @@ export function TriggerForm({ config, onChange }: Props) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">
-      {children}
-    </p>
+    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">{children}</p>
   )
 }
 
