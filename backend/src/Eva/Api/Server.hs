@@ -23,8 +23,7 @@ import qualified Data.UUID as UUID
 import Data.UUID.V4 (nextRandom)
 import Network.HTTP.Types (ResponseHeaders, methodOptions, status200, status204)
 import Network.Wai
-  ( Application
-  , Middleware
+  ( Middleware
   , mapResponseHeaders
   , rawPathInfo
   , requestMethod
