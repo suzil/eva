@@ -3,6 +3,7 @@
 module Eva.App
   ( -- * Environment
     AppEnv (..)
+  , DispatchFn
   , LogEntry (..)
 
     -- * Monad
@@ -22,6 +23,7 @@ import Control.Monad.Logger (runNoLoggingT)
 import Control.Monad.Reader (ReaderT, asks, runReaderT)
 import Data.Aeson (ToJSON (..), Value (..), encode, object, (.=))
 import qualified Data.ByteString.Lazy.Char8 as BLC
+import Data.Map.Strict (Map)
 import Data.Text (Text)
 import System.IO (hFlush, stdout)
 import qualified Data.Text as T
@@ -29,6 +31,13 @@ import Data.Time (UTCTime, getCurrentTime)
 import Database.Persist.Sql (ConnectionPool)
 import Database.Persist.Sqlite (createSqlitePool)
 import Eva.Config (AppConfig (..), LogLevel (..))
+import Eva.Core.Types
+  ( Message
+  , Node
+  , PortName
+  , ResourceBindings
+  , RunId
+  )
 import Eva.Persistence.Migration (runMigrations)
 
 -- ---------------------------------------------------------------------------
@@ -60,10 +69,17 @@ instance ToJSON LogEntry where
 -- Application environment
 -- ---------------------------------------------------------------------------
 
+-- | Injectable dispatch function: routes a node to its handler.
+-- Production default is 'Eva.Engine.Dispatch.execute'.
+-- Tests inject a custom handler (e.g. one that fails N times) via this field.
+type DispatchFn =
+  RunId -> Node -> Map PortName Message -> ResourceBindings -> AppM Message
+
 data AppEnv = AppEnv
-  { envConfig :: AppConfig
-  , envDbPool :: ConnectionPool
-  , envLogger :: LogEntry -> IO ()
+  { envConfig   :: AppConfig
+  , envDbPool   :: ConnectionPool
+  , envLogger   :: LogEntry -> IO ()
+  , envDispatch :: DispatchFn
   }
 
 -- ---------------------------------------------------------------------------
@@ -79,11 +95,13 @@ runAppM = flip runReaderT
 -- Startup
 -- ---------------------------------------------------------------------------
 
--- | Construct an 'AppEnv' from a loaded 'AppConfig'. Creates the SQLite
--- connection pool and runs auto-migration. The JSON logger writes to stdout;
--- entries below the configured log level are dropped.
-makeAppEnv :: AppConfig -> IO AppEnv
-makeAppEnv cfg = do
+-- | Construct an 'AppEnv' from a loaded 'AppConfig' and an injectable dispatch
+-- function. Creates the SQLite connection pool and runs auto-migration.
+-- The JSON logger writes to stdout; entries below the configured log level
+-- are dropped. Pass 'Eva.Engine.Dispatch.execute' as the dispatch function
+-- in production; inject a custom handler in tests.
+makeAppEnv :: AppConfig -> DispatchFn -> IO AppEnv
+makeAppEnv cfg dispatch = do
   pool <- runNoLoggingT $
     createSqlitePool (T.pack (configDbPath cfg)) 10
   runMigrations pool
@@ -92,9 +110,10 @@ makeAppEnv cfg = do
         | leLevel entry < minLevel = pure ()
         | otherwise = BLC.putStrLn (encode entry) >> hFlush stdout
   pure AppEnv
-    { envConfig = cfg
-    , envDbPool = pool
-    , envLogger = logger
+    { envConfig   = cfg
+    , envDbPool   = pool
+    , envLogger   = logger
+    , envDispatch = dispatch
     }
 
 -- ---------------------------------------------------------------------------

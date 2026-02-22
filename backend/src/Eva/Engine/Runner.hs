@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Execution engine: RunContext creation, graph walker, message propagation,
--- terminal detection. Uses STM + async for concurrent branch execution.
+-- terminal detection, retry policy, and error port propagation.
 --
 -- Execution model:
 --   1. 'startRun' creates a RunContext with per-port TMVar mailboxes, transitions
@@ -11,11 +11,15 @@
 --   2. The graph walker loops via STM: atomically finds nodes whose required data
 --      inputs are all filled, consumes those messages, forks an async per ready
 --      node, waits for the batch, then repeats.
---   3. 'executeNodeStep' creates/transitions a Step, calls Dispatch.execute,
---      places the output into downstream mailboxes, and signals done when all
---      terminal nodes have finished.
+--   3. 'executeNodeStep' creates/transitions a Step, calls the injected dispatch
+--      function with the node's retry policy and timeout, places the output into
+--      downstream mailboxes, and signals done when all terminal nodes finish.
 --   4. Resource edges are resolved as static context at dispatch time — they do
 --      not get mailboxes and do not gate execution readiness.
+--   5. Error handling: on final dispatch failure, if a wired "error" output edge
+--      exists the error message is propagated downstream (branch continues).
+--      Otherwise 'skipDescendants' marks downstream nodes as Skipped and
+--      'rcHasUnhandledError' is set, causing the Run to transition to Failed.
 module Eva.Engine.Runner
   ( -- * Run lifecycle
     startRun
@@ -23,15 +27,19 @@ module Eva.Engine.Runner
 
     -- * Exposed for testing
   , resolveResourceBindings
+  , withRetry
+  , NodeStepFailure (..)
   ) where
 
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (async, waitCatch)
 import Control.Concurrent.STM
-import Control.Exception (SomeException, try)
+import Control.Exception (Exception, SomeException, fromException, throwIO, try)
 import Control.Monad (forM, forM_, when)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (ask)
-import Data.Aeson (Value, toJSON)
+import Control.Monad.Reader (ask, asks)
+import Data.Aeson (Value, object, toJSON, (.=))
+import qualified Data.Aeson as Aeson
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
@@ -41,24 +49,49 @@ import qualified Data.Text as T
 import Data.Time (getCurrentTime)
 import qualified Data.UUID as UUID
 import Data.UUID.V4 (nextRandom)
+import System.Timeout (timeout)
 
 import Eva.App (AppEnv, AppM, runAppM)
+import qualified Eva.App as App
 import Eva.Core.Graph
   ( dataEdgesOf
+  , hasErrorEdge
+  , nodeDataOutputPort
+  , reachableFrom
   , requiredDataInputs
   , rootNodes
   , terminalNodes
   )
 import Eva.Core.Types
-import Eva.Engine.Dispatch (ResourceBindings (..), execute)
 import Eva.Engine.StateMachine
   ( RunContext (..)
+  , markUnhandledError
   , newRunContext
   , transitionRun
   , transitionStep
   , waitForRun
   )
-import Eva.Persistence.Queries (insertRun, insertStep)
+import Eva.Persistence.Queries
+  ( insertLogEntry
+  , insertRun
+  , insertStep
+  , updateStepRetryCount
+  )
+
+-- ---------------------------------------------------------------------------
+-- NodeStepFailure exception
+-- ---------------------------------------------------------------------------
+
+-- | Thrown by 'executeNodeStep' when a node fails after all retries and its
+-- error port is not wired. Carries the node ID so the walker can identify
+-- which branch to skip.
+data NodeStepFailure = NodeStepFailure
+  { nsfNodeId :: NodeId
+  , nsfCause  :: SomeException
+  }
+  deriving Show
+
+instance Exception NodeStepFailure
 
 -- ---------------------------------------------------------------------------
 -- Public API
@@ -72,7 +105,6 @@ startRun :: Program -> Maybe Value -> AppM RunContext
 startRun program triggerPayload = do
   env <- ask
 
-  -- 1. Allocate identifiers and build the initial Run record.
   rid <- liftIO $ RunId . UUID.toText <$> nextRandom
   now <- liftIO getCurrentTime
   let graph = programGraph program
@@ -85,71 +117,50 @@ startRun program triggerPayload = do
         , runFinishedAt  = Nothing
         }
 
-  -- 2. Compute mailbox keys: one per required data-input port across all nodes.
   let dataPorts =
         [ (nid, port)
         | (nid, node) <- Map.toList (graphNodes graph)
         , port <- requiredDataInputs (nodeType node)
         ]
 
-  -- 3. Create the RunContext (allocates TMVars, TVars, broadcast channel).
   ctx <- liftIO $ newRunContext run dataPorts
 
-  -- 4. Persist the Run and transition pending → running.
   insertRun run
   _ <- transitionRun (rcRun ctx) RunRunning now
 
-  -- 5. Execute Trigger nodes (root nodes with no data inputs) synchronously.
-  --    Their output messages seed the downstream mailboxes before the walker starts.
   let dEdges = dataEdgesOf graph
   forM_ (rootNodes graph) $ \nid ->
     case Map.lookup nid (graphNodes graph) of
       Nothing   -> pure ()
       Just node -> case nodeType node of
         TriggerNode _ -> do
-          outMsg <- executeNodeStep env ctx graph node Map.empty
-          liftIO $ placeMessages ctx dEdges nid outMsg
+          mOutMsg <- executeNodeStep env ctx graph node Map.empty
+          forM_ mOutMsg $ \outMsg ->
+            liftIO $ placeMessages ctx dEdges nid (nodeDataOutputPort (nodeType node)) outMsg
         _ -> pure ()
 
-  -- 6. Fork the graph walker as a background thread.
   _ <- liftIO $ async $ runAppM env $ graphWalkerLoop ctx graph
-
   pure ctx
 
 -- ---------------------------------------------------------------------------
 -- Graph walker
 -- ---------------------------------------------------------------------------
 
--- | Main graph-walking loop. Runs in a background async thread.
--- Each iteration atomically finds ready nodes, forks their execution in
--- parallel, waits for the batch, then loops. Exits when all terminal nodes
--- are complete and 'rcAllDone' is set.
 graphWalkerLoop :: RunContext -> Graph -> AppM ()
 graphWalkerLoop ctx graph = do
   env <- ask
   let dEdges = dataEdgesOf graph
-      -- "Executable" nodes are those that will have Steps created during this
-      -- run. Steps are created for:
-      --   • TriggerNode — executed synchronously in startRun
-      --   • Any node with at least one required data input — executed by the
-      --     walker when its mailboxes fill (Agent, Action in MLP)
-      -- Knowledge and Connector nodes have no required data inputs and are not
-      -- TriggerNodes, so they never receive steps and must NOT be terminals.
-      -- Including them would cause checkAndSignalDone to never fire, deadlocking
-      -- the walker.
       willHaveStep (_nid, node) = case nodeType node of
         TriggerNode _ -> True
         _             -> not (null (requiredDataInputs (nodeType node)))
       executableNodes =
         Set.fromList
-          [ nid | (nid, node) <- Map.toList (graphNodes graph), willHaveStep (nid, node) ]
+          [ nid | (nid, node) <- Map.toList (graphNodes graph)
+                , willHaveStep (nid, node) ]
       terminals = Set.fromList (terminalNodes graph) `Set.intersection` executableNodes
-  go env dEdges terminals
+  go env dEdges terminals executableNodes
   where
-    go env dEdges terminals = do
-      -- STM: atomically collect ready nodes and consume their input messages.
-      -- If rcAllDone is set (terminal detection fired), return [] to exit.
-      -- If nothing is ready yet, STM retries (blocking) until a TMVar changes.
+    go env dEdges terminals executableNodes = do
       readyInputs <- liftIO $ atomically $ do
         done <- readTVar (rcAllDone ctx)
         if done
@@ -161,39 +172,43 @@ graphWalkerLoop ctx graph = do
             modifyTVar (rcDispatched ctx) (Set.union (Set.fromList (map fst pairs)))
             pure pairs
 
-      -- When readyInputs is [] the walker should exit (rcAllDone was True).
-      -- This check prevents an infinite loop if collectReadyInputs somehow
-      -- returns [] without the retry path being taken.
       if null readyInputs
         then finishRun
         else do
-          -- Fork every ready node in parallel.
-          asyncs <- forM readyInputs $ \(nid, inputs) ->
-            liftIO $ async $ runAppM env $ do
+          asyncsWithIds <- forM readyInputs $ \(nid, inputs) ->
+            (nid,) <$> liftIO (async $ runAppM env $
               case Map.lookup nid (graphNodes graph) of
                 Nothing   -> pure ()
                 Just node -> do
-                  outMsg <- executeNodeStep env ctx graph node inputs
-                  liftIO $ placeMessages ctx dEdges nid outMsg
-                  liftIO $ checkAndSignalDone ctx terminals
+                  mOutMsg <- executeNodeStep env ctx graph node inputs
+                  forM_ mOutMsg $ \outMsg ->
+                    liftIO $ placeMessages ctx dEdges nid
+                               (nodeDataOutputPort (nodeType node)) outMsg
+                  liftIO $ checkAndSignalDone ctx terminals)
 
-          -- Wait for all forks; on any failure, transition Run to Failed and stop.
-          results <- liftIO $ mapM waitCatch asyncs
-          let failures = [e | Left e <- results] :: [SomeException]
-          if null failures
-            then go env dEdges terminals
-            else do
-              now <- liftIO getCurrentTime
-              _ <- transitionRun (rcRun ctx) RunFailed now
-              liftIO $ atomically $ writeTVar (rcAllDone ctx) True
+          results <- liftIO $ mapM (\(nid, a) -> (nid,) <$> waitCatch a) asyncsWithIds
 
-    -- Transition the Run to Completed if it is still in Running state.
+          forM_ results $ \(walkerNid, outcome) ->
+            case outcome of
+              Right () -> pure ()
+              Left e   -> do
+                -- Use node ID from NodeStepFailure if available, else walkerNid.
+                let nid = case fromException e of
+                            Just (NodeStepFailure failNid _) -> failNid
+                            Nothing                          -> walkerNid
+                skipDescendants ctx graph executableNodes nid
+                liftIO $ markUnhandledError ctx
+
+          go env dEdges terminals executableNodes
+
     finishRun = do
       run <- liftIO $ readTVarIO (rcRun ctx)
       case runState run of
         RunRunning -> do
-          now <- liftIO getCurrentTime
-          _ <- transitionRun (rcRun ctx) RunCompleted now
+          hasErr <- liftIO $ readTVarIO (rcHasUnhandledError ctx)
+          now    <- liftIO getCurrentTime
+          _      <- transitionRun (rcRun ctx)
+                      (if hasErr then RunFailed else RunCompleted) now
           pure ()
         _ -> pure ()
 
@@ -201,17 +216,18 @@ graphWalkerLoop ctx graph = do
 -- Node step execution
 -- ---------------------------------------------------------------------------
 
--- | Execute a single node within a run: allocate a Step, transition through
--- Pending→Running→Completed (or Failed on exception), and return the output.
+-- | Execute a single node within a run.
+-- Returns 'Just outMsg' on success, or 'Nothing' if the error was propagated
+-- via the node's wired "error" output port.
+-- Throws 'NodeStepFailure' if the node fails with no wired error port.
 executeNodeStep
   :: AppEnv
   -> RunContext
   -> Graph
   -> Node
-  -> Map PortName Message  -- ^ Consumed data inputs
-  -> AppM Message
+  -> Map PortName Message
+  -> AppM (Maybe Message)
 executeNodeStep env ctx graph node inputs = do
-  -- 1. Allocate and persist the Step in Pending state.
   sid <- liftIO $ StepId . UUID.toText <$> nextRandom
   now <- liftIO getCurrentTime
   let step = Step
@@ -232,54 +248,171 @@ executeNodeStep env ctx graph node inputs = do
     pure tv
   insertStep step
 
-  -- 2. Transition Pending → Running.
   _ <- transitionStep stepTVar StepRunning now
 
-  -- 3. Resolve resource bindings (pure graph lookup — no mailboxes involved).
   let bindings = resolveResourceBindings graph (nodeId node)
+      mPolicy  = nodeRetryPolicy (nodeType node)
 
-  -- 4. Dispatch to the appropriate handler.
-  result <- liftIO $ try $ runAppM env $ execute (rcRunId ctx) node inputs bindings
+  dispatch <- asks App.envDispatch
+  result   <- liftIO $
+    dispatchWithRetry env dispatch mPolicy sid ctx node inputs bindings
 
   case result of
     Right outMsg -> do
-      -- 5a. Record output, transition Running → Completed.
       now2 <- liftIO getCurrentTime
       liftIO $ atomically $
         modifyTVar stepTVar (\s -> s { stepOutput = Just (toJSON outMsg) })
       _ <- transitionStep stepTVar StepCompleted now2
-      pure outMsg
+      pure (Just outMsg)
 
-    Left (e :: SomeException) -> do
-      -- 5b. Record error, transition Running → Failed, re-throw.
+    Left finalErr -> do
       now2 <- liftIO getCurrentTime
+      let errText = T.pack (show finalErr)
       liftIO $ atomically $
-        modifyTVar stepTVar (\s -> s { stepError = Just (T.pack (show e)) })
+        modifyTVar stepTVar (\s -> s { stepError = Just errText })
       _ <- transitionStep stepTVar StepFailed now2
-      liftIO $ ioError (userError (show e))
+
+      if hasErrorEdge graph (nodeId node)
+        then do
+          traceId <- liftIO $ UUID.toText <$> nextRandom
+          errNow  <- liftIO getCurrentTime
+          let meta   = MessageMeta
+                { metaTraceId    = traceId
+                , metaTimestamp  = errNow
+                , metaSourceNode = nodeId node
+                , metaRunId      = rcRunId ctx
+                }
+              errMsg = Message "error" (Aeson.object ["error" .= errText]) meta
+              dEdges = dataEdgesOf graph
+          liftIO $ placeMessages ctx dEdges (nodeId node) "error" errMsg
+          pure Nothing
+        else
+          liftIO $ throwIO (NodeStepFailure (nodeId node) finalErr)
+
+-- ---------------------------------------------------------------------------
+-- Dispatch with retry
+-- ---------------------------------------------------------------------------
+
+-- | Dispatch a node's handler, applying the optional retry policy.
+-- Logs each failed attempt to log_entries and updates stepRetryCount in the DB.
+-- Returns 'Right msg' on success or 'Left err' after all attempts exhausted.
+dispatchWithRetry
+  :: AppEnv
+  -> (RunId -> Node -> Map PortName Message -> ResourceBindings -> AppM Message)
+  -> Maybe RetryPolicy
+  -> StepId
+  -> RunContext
+  -> Node
+  -> Map PortName Message
+  -> ResourceBindings
+  -> IO (Either SomeException Message)
+dispatchWithRetry env dispatch mPolicy sid ctx node inputs bindings =
+  go 0
+  where
+    (maxAttempts, mTimeoutMs, backoff) = case mPolicy of
+      Nothing     -> (0, Nothing, BackoffFixed 0)
+      Just policy -> (retryMaxAttempts policy, retryTimeoutMs policy, retryBackoff policy)
+
+    runDispatch :: IO (Either SomeException Message)
+    runDispatch = try $ case mTimeoutMs of
+      Nothing -> runAppM env $ dispatch (rcRunId ctx) node inputs bindings
+      Just ms -> do
+        mResult <- timeout (ms * 1000) $
+          runAppM env $ dispatch (rcRunId ctx) node inputs bindings
+        case mResult of
+          Just r  -> pure r
+          Nothing -> ioError (userError ("timeout after " <> show ms <> "ms"))
+
+    go :: Int -> IO (Either SomeException Message)
+    go n = do
+      result <- runDispatch
+      case result of
+        Right v -> pure (Right v)
+        Left  e
+          | n < maxAttempts -> do
+              let attemptNum = n + 1
+                  nodeIdTxt  = let (NodeId t) = nodeId node in t
+                  msg = T.concat
+                    [ "Retry ", T.pack (show attemptNum)
+                    , "/",      T.pack (show maxAttempts)
+                    , " for node ", nodeIdTxt
+                    , ": ", T.pack (show e)
+                    ]
+                  dat = object
+                    [ "attempt"     .= attemptNum
+                    , "maxAttempts" .= maxAttempts
+                    , "error"       .= T.pack (show e)
+                    , "nodeId"      .= nodeIdTxt
+                    ]
+              runAppM env $ insertLogEntry sid "warn" msg (Just dat)
+              runAppM env $ updateStepRetryCount sid attemptNum
+              -- Update in-memory step TVar.
+              steps <- readTVarIO (rcSteps ctx)
+              case Map.lookup (nodeId node) steps of
+                Just tv -> atomically $ modifyTVar tv (\s -> s { stepRetryCount = attemptNum })
+                Nothing -> pure ()
+              threadDelay (backoffDelay backoff n)
+              go (n + 1)
+          | otherwise -> pure (Left e)
+
+-- | Exposed for testing: apply a retry policy to an arbitrary IO action.
+-- Returns 'Right' on the first success, 'Left' after all attempts exhausted.
+withRetry :: forall a. RetryPolicy -> IO a -> IO (Either SomeException a)
+withRetry policy action = go 0
+  where
+    maxAttempts = retryMaxAttempts policy
+    mTimeoutMs  = retryTimeoutMs policy
+    boff        = retryBackoff policy
+
+    go :: Int -> IO (Either SomeException a)
+    go n = do
+      result <- try $ case mTimeoutMs of
+        Nothing -> action
+        Just ms -> do
+          mResult <- timeout (ms * 1000) action
+          case mResult of
+            Just r  -> pure r
+            Nothing -> ioError (userError ("timeout after " <> show ms <> "ms"))
+      case result of
+        Right v -> pure (Right v)
+        Left  e
+          | n < maxAttempts -> do
+              threadDelay (backoffDelay boff n)
+              go (n + 1)
+          | otherwise -> pure (Left e)
+
+-- | Compute the backoff delay in microseconds for attempt @n@ (0-indexed).
+-- BackoffFixed ms: constant delay.
+-- BackoffExponential baseMs capMs: @baseMs * 2^n@ ms, capped at @capMs@ ms.
+backoffDelay :: BackoffStrategy -> Int -> Int
+backoffDelay (BackoffFixed ms)               _n = ms * 1000
+backoffDelay (BackoffExponential baseMs capMs) n =
+  min capMs (baseMs * (2 ^ n)) * 1000
+
+-- | Extract the retry policy from a node's type-specific config.
+nodeRetryPolicy :: NodeType -> Maybe RetryPolicy
+nodeRetryPolicy (AgentNode   cfg) = agentRetryPolicy  cfg
+nodeRetryPolicy (ActionNode  cfg) = actionRetryPolicy cfg
+nodeRetryPolicy _                 = Nothing
 
 -- ---------------------------------------------------------------------------
 -- Mailbox helpers
 -- ---------------------------------------------------------------------------
 
 -- | Place a message into the downstream mailboxes of all data edges that
--- originate from @srcNode@. Silently skips any edge whose target port
--- does not have a mailbox (e.g. resource ports, or unmapped ports).
-placeMessages :: RunContext -> [Edge] -> NodeId -> Message -> IO ()
-placeMessages ctx dEdges srcNode msg =
+-- originate from @srcNode@ on @srcPort@. Silently skips edges whose target
+-- port has no mailbox (resource ports, unmapped ports).
+placeMessages :: RunContext -> [Edge] -> NodeId -> PortName -> Message -> IO ()
+placeMessages ctx dEdges srcNode srcPort msg =
   atomically $
     forM_ dEdges $ \e ->
-      when (edgeSourceNode e == srcNode) $
+      when (edgeSourceNode e == srcNode && edgeSourcePort e == srcPort) $
         case Map.lookup (edgeTargetNode e, edgeTargetPort e) (rcMailboxes ctx) of
           Just tmv -> putTMVar tmv msg
           Nothing  -> pure ()
 
 -- | STM action: scan all un-dispatched nodes and return those whose required
--- data-input mailboxes are all full. Atomically consumes (takes) the messages
--- for every node included in the result.
---
--- Returns [] if no nodes are currently ready. The caller should call 'retry'
--- when it wants to block until something becomes available.
+-- data-input mailboxes are all full. Atomically consumes the messages.
 collectReadyInputs
   :: RunContext
   -> Graph
@@ -293,18 +426,14 @@ collectReadyInputs ctx graph dispatched =
         else do
           let required = requiredDataInputs (nodeType node)
           case required of
-            -- Nodes with no required data inputs (Trigger, Knowledge, Connector)
-            -- are handled as roots/statics, not by the readiness loop.
             [] -> pure Nothing
             _  -> do
-              -- Peek (non-blocking) to check all required ports are filled.
               peeks <- forM required $ \port ->
                 case Map.lookup (nid, port) (rcMailboxes ctx) of
                   Nothing  -> pure Nothing
                   Just tmv -> tryReadTMVar tmv
               if all (/= Nothing) peeks
                 then do
-                  -- All required ports are full: consume (take) each message.
                   msgs <- forM required $ \port ->
                     case Map.lookup (nid, port) (rcMailboxes ctx) of
                       Nothing  -> pure (port, emptyMessage)
@@ -319,9 +448,8 @@ collectReadyInputs ctx graph dispatched =
 -- Resource binding resolution
 -- ---------------------------------------------------------------------------
 
--- | Resolve the static resource bindings for @nid@: scan all resource edges
--- whose target is @nid@, look up each source node, and collect Knowledge/
--- Connector configs. This is a pure graph traversal — no runtime state.
+-- | Resolve static resource bindings for @nid@: collect Knowledge/Connector
+-- configs from resource edges targeting this node. Pure graph traversal.
 resolveResourceBindings :: Graph -> NodeId -> ResourceBindings
 resolveResourceBindings graph nid =
   let resourceEdges =
@@ -343,9 +471,8 @@ resolveResourceBindings graph nid =
 -- Terminal detection
 -- ---------------------------------------------------------------------------
 
--- | After a step completes, check if all terminal nodes (no outgoing data edges)
--- are in a terminal step state. If so, set 'rcAllDone' to unblock 'waitForRun'
--- and let the walker exit.
+-- | Check if all terminal nodes have reached a terminal step state.
+-- If so, set 'rcAllDone' to unblock 'waitForRun'.
 checkAndSignalDone :: RunContext -> Set NodeId -> IO ()
 checkAndSignalDone ctx terminals = atomically $ do
   steps <- readTVar (rcSteps ctx)
@@ -357,3 +484,50 @@ checkAndSignalDone ctx terminals = atomically $ do
           s <- readTVar tv
           pure (stepState s `elem` [StepCompleted, StepFailed, StepSkipped])
   when allDone $ writeTVar (rcAllDone ctx) True
+
+-- ---------------------------------------------------------------------------
+-- Branch isolation
+-- ---------------------------------------------------------------------------
+
+-- | Mark all executable descendants of a failed node as Skipped so the walker
+-- does not block waiting for their mailboxes to fill.
+-- Already-dispatched nodes and nodes already in rcSteps are untouched.
+skipDescendants
+  :: RunContext
+  -> Graph
+  -> Set NodeId
+  -> NodeId
+  -> AppM ()
+skipDescendants ctx graph executableNodes failedNid = do
+  let terminals   = Set.fromList (terminalNodes graph) `Set.intersection` executableNodes
+      descendants = reachableFrom graph failedNid
+      toSkip      = Set.intersection descendants executableNodes
+  forM_ (Set.toList toSkip) $ \nid -> do
+    alreadyDispatched <- liftIO $ atomically $
+      Set.member nid <$> readTVar (rcDispatched ctx)
+    alreadyHasStep <- liftIO $ atomically $
+      Map.member nid <$> readTVar (rcSteps ctx)
+    when (not alreadyDispatched && not alreadyHasStep) $ do
+      sid <- liftIO $ StepId . UUID.toText <$> nextRandom
+      now <- liftIO getCurrentTime
+      let step = Step
+            { stepId         = sid
+            , stepRunId      = rcRunId ctx
+            , stepNodeId     = nid
+            , stepState      = StepPending
+            , stepInput      = Nothing
+            , stepOutput     = Nothing
+            , stepError      = Nothing
+            , stepRetryCount = 0
+            , stepStartedAt  = Nothing
+            , stepFinishedAt = Nothing
+            }
+      stepTVar <- liftIO $ do
+        tv <- newTVarIO step
+        atomically $ do
+          modifyTVar (rcSteps ctx)      (Map.insert nid tv)
+          modifyTVar (rcDispatched ctx) (Set.insert nid)
+        pure tv
+      insertStep step
+      _ <- transitionStep stepTVar StepSkipped now
+      liftIO $ checkAndSignalDone ctx terminals

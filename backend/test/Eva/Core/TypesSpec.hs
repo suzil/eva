@@ -160,6 +160,7 @@ instance Arbitrary AgentConfig where
       <*> oneof [pure Nothing, Just <$> choose (100, 4096)]
       <*> choose (1, 10)
       <*> oneof [pure Nothing, Just <$> choose (0.01, 10.0)]
+      <*> oneof [pure Nothing, Just <$> arbitrary]
 
 instance Arbitrary KnowledgeConfig where
   arbitrary = KnowledgeConfig <$> arbitrary <*> arbitrary <*> arbitrary
@@ -174,7 +175,11 @@ instance Arbitrary ConnectorConfig where
       <*> listOf arbitraryText
 
 instance Arbitrary ActionConfig where
-  arbitrary = ActionConfig <$> arbitrary <*> arbitraryValue <*> arbitrary
+  arbitrary = ActionConfig
+    <$> arbitrary
+    <*> arbitraryValue
+    <*> arbitrary
+    <*> oneof [pure Nothing, Just <$> arbitrary]
 
 instance Arbitrary TriggerConfig where
   arbitrary =
@@ -354,6 +359,7 @@ sampleProgram =
                               , agentMaxTokens = Just 1024
                               , agentMaxIterations = 5
                               , agentCostBudgetUsd = Just 0.5
+                              , agentRetryPolicy = Nothing
                               }
                       , nodePosX = 550
                       , nodePosY = 200
@@ -366,9 +372,10 @@ sampleProgram =
                       , nodeType =
                           ActionNode
                             ActionConfig
-                              { actionOperation = OpTemplate
-                              , actionParameters = object ["template" .= ("# Weekly Report\n{{input}}" :: Text)]
+                              { actionOperation    = OpTemplate
+                              , actionParameters   = object ["template" .= ("# Weekly Report\n{{input}}" :: Text)]
                               , actionErrorHandling = ErrFail
+                              , actionRetryPolicy  = Nothing
                               }
                       , nodePosX = 750
                       , nodePosY = 200

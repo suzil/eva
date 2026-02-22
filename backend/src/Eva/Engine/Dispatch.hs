@@ -4,11 +4,8 @@
 -- EVA-14 provides stub handlers that echo inputs; real implementations follow in
 -- EVA-23 (LLM client), EVA-24 (Agent handler), EVA-25 (Action/Trigger handlers).
 module Eva.Engine.Dispatch
-  ( -- * Resource bindings
-    ResourceBindings (..)
-
-    -- * Dispatch
-  , execute
+  ( -- * Dispatch
+    execute
   ) where
 
 import Control.Monad.IO.Class (liftIO)
@@ -21,21 +18,7 @@ import qualified Data.UUID as UUID
 import Data.UUID.V4 (nextRandom)
 
 import Eva.App (AppM)
-import Eva.Core.Types
-
--- ---------------------------------------------------------------------------
--- Resource bindings
--- ---------------------------------------------------------------------------
-
--- | Resolved resource connections for a node: Knowledge content sources and
--- Connector capability configs. Computed from resource edges at dispatch time.
--- Resource ports are static grants — they do not carry runtime messages.
-data ResourceBindings = ResourceBindings
-  { rbKnowledge  :: [KnowledgeConfig]
-    -- ^ Config of each Knowledge node connected via a resource edge.
-  , rbConnectors :: [ConnectorConfig]
-    -- ^ Config of each Connector node connected via a resource edge.
-  }
+import Eva.Core.Types  -- includes ResourceBindings
 
 -- ---------------------------------------------------------------------------
 -- Dispatch

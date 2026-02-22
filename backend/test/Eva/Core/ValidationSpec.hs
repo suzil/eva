@@ -66,22 +66,24 @@ mkAgent :: Text -> Text -> NodeType
 mkAgent model prompt =
   AgentNode
     AgentConfig
-      { agentModel = model
-      , agentSystemPrompt = prompt
+      { agentModel          = model
+      , agentSystemPrompt   = prompt
       , agentResponseFormat = ResponseText
-      , agentTemperature = 0.7
-      , agentMaxTokens = Nothing
-      , agentMaxIterations = 3
-      , agentCostBudgetUsd = Nothing
+      , agentTemperature    = 0.7
+      , agentMaxTokens      = Nothing
+      , agentMaxIterations  = 3
+      , agentCostBudgetUsd  = Nothing
+      , agentRetryPolicy    = Nothing
       }
 
 mkAction :: NodeType
 mkAction =
   ActionNode
     ActionConfig
-      { actionOperation = OpTemplate
-      , actionParameters = Null
+      { actionOperation    = OpTemplate
+      , actionParameters   = Null
       , actionErrorHandling = ErrFail
+      , actionRetryPolicy  = Nothing
       }
 
 mkKnowledge :: Text -> NodeType

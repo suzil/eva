@@ -6,6 +6,7 @@ import qualified Eva.Api.ServerSpec
 import qualified Eva.Core.GraphSpec
 import qualified Eva.Core.TypesSpec
 import qualified Eva.Core.ValidationSpec
+import qualified Eva.Engine.RetrySpec
 import qualified Eva.Engine.RunnerSpec
 import qualified Eva.Engine.StateMachineSpec
 import qualified Eva.Persistence.PersistenceSpec
@@ -16,6 +17,7 @@ main = hspec $ do
   Eva.Core.GraphSpec.spec
   Eva.Core.TypesSpec.spec
   Eva.Core.ValidationSpec.spec
+  Eva.Engine.RetrySpec.spec
   Eva.Engine.RunnerSpec.spec
   Eva.Engine.StateMachineSpec.spec
   Eva.Persistence.PersistenceSpec.spec

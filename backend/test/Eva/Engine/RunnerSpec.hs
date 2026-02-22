@@ -12,7 +12,7 @@ import Test.Hspec
 import Eva.App (AppEnv (..), runAppM)
 import Eva.Config (AppConfig (..), LogLevel (..))
 import Eva.Core.Types
-import Eva.Engine.Dispatch (ResourceBindings (..))
+import Eva.Engine.Dispatch (execute)
 import Eva.Engine.Runner (resolveResourceBindings, startRun, waitForRun)
 import Eva.Engine.StateMachine (RunContext (..))
 import Eva.Persistence.Migration (runMigrations)
@@ -33,9 +33,10 @@ withTestEnv action = do
         , configLogLevel  = LogError
         }
   let env = AppEnv
-        { envConfig = cfg
-        , envDbPool = pool
-        , envLogger = \_ -> pure ()
+        { envConfig   = cfg
+        , envDbPool   = pool
+        , envLogger   = \_ -> pure ()
+        , envDispatch = execute
         }
   action env
 
@@ -65,6 +66,7 @@ actionNode nid = Node
       { actionOperation    = OpTemplate
       , actionParameters   = "{}"
       , actionErrorHandling = ErrFail
+      , actionRetryPolicy  = Nothing
       }
   , nodePosX  = 100
   , nodePosY  = 0
@@ -82,6 +84,7 @@ agentNode nid = Node
       , agentMaxTokens      = Nothing
       , agentMaxIterations  = 1
       , agentCostBudgetUsd  = Nothing
+      , agentRetryPolicy    = Nothing
       }
   , nodePosX  = 100
   , nodePosY  = 0

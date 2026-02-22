@@ -41,6 +41,7 @@ import Test.Hspec
 import Eva.Api.Server (makeApp)
 import Eva.App (AppEnv (..))
 import Eva.Config (AppConfig (..), LogLevel (..))
+import Eva.Engine.Dispatch (execute)
 import Eva.Persistence.Migration (runMigrations)
 
 -- ---------------------------------------------------------------------------
@@ -60,8 +61,9 @@ makeTestApp = do
             , configLlmApiKey = Nothing
             , configLogLevel  = LogError
             }
-        , envDbPool = pool
-        , envLogger = \_ -> pure ()
+        , envDbPool   = pool
+        , envLogger   = \_ -> pure ()
+        , envDispatch = execute
         }
   pure (makeApp env)
 

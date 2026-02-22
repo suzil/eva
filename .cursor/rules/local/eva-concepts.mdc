@@ -131,11 +131,18 @@ Steps are logged with inputs, outputs, duration, and status.
 
 ### Error Handling
 
-- Per-node retry policy: max attempts, backoff (fixed/exponential), timeout
-- Failed nodes emit on implicit `error` port
-- Wired error ports → recovery logic (notification, fallback Agent, Checkpoint)
-- Unwired error → branch fails; other branches continue
-- Run: `completed` if all branches succeed; `failed` if any unhandled error
+- Per-node retry policy (`RetryPolicy` on `AgentConfig`/`ActionConfig`):
+  `agentRetryPolicy`/`actionRetryPolicy :: Maybe RetryPolicy`
+  Fields: `retryMaxAttempts :: Int`, `retryBackoff :: BackoffStrategy`
+  (BackoffFixed ms | BackoffExponential baseMs capMs), `retryTimeoutMs :: Maybe Int`
+- Each retry attempt is logged to `log_entries`; `stepRetryCount` persisted
+- Failed nodes emit on implicit `error` port (source port name `"error"`)
+- Wired error ports → error `Message` propagated downstream; recovery logic
+  (notification, fallback Agent, Checkpoint). Step state = `Failed`, Run continues.
+- Unwired error → `skipDescendants` marks all reachable downstream nodes
+  `StepSkipped`; `rcHasUnhandledError` flag set; other branches continue
+- Run: `RunCompleted` if all branches succeed (or all errors handled);
+  `RunFailed` if any unhandled (unwired) error occurred
 
 ## Design Decisions (from research)
 
