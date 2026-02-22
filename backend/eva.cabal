@@ -88,6 +88,7 @@ test-suite eva-test
   main-is:          Spec.hs
   hs-source-dirs:   test
   other-modules:
+    Eva.Core.GraphSpec
     Eva.Core.TypesSpec
     Eva.Persistence.PersistenceSpec
     Eva.Api.ServerSpec
