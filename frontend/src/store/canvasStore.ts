@@ -114,13 +114,21 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     })),
 
   setSelectedNode: (id) =>
-    set({ selectedNodeId: id, selectedEdgeId: null }),
+    set((state) => ({
+      selectedNodeId: id,
+      selectedEdgeId: null,
+      nodes: state.nodes.map((n) => ({ ...n, selected: n.id === id })),
+    })),
 
   setSelectedEdge: (id) =>
     set({ selectedEdgeId: id, selectedNodeId: null }),
 
   clearSelection: () =>
-    set({ selectedNodeId: null, selectedEdgeId: null }),
+    set((state) => ({
+      selectedNodeId: null,
+      selectedEdgeId: null,
+      nodes: state.nodes.map((n) => ({ ...n, selected: false })),
+    })),
 
   markClean: () => set({ isDirty: false }),
 

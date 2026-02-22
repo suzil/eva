@@ -1,10 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Square, Rocket, Command, ChevronRight, Save, Loader2 } from 'lucide-react'
+import {
+  Play,
+  Square,
+  Rocket,
+  Command,
+  ChevronRight,
+  Save,
+  Loader2,
+  PauseCircle,
+  PlayCircle,
+  XCircle,
+} from 'lucide-react'
 import { type AppMode, useUiStore } from '../../store/uiStore'
-import { useProgram, useSaveGraph, useValidateProgram, useCreateRun, useCancelRun } from '../../api/hooks'
+import {
+  useProgram,
+  useSaveGraph,
+  useValidateProgram,
+  useCreateRun,
+  useCancelRun,
+  useDeployProgram,
+  usePauseProgram,
+  useResumeProgram,
+} from '../../api/hooks'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useRunStream } from '../../hooks/useRunStream'
-import type { ProgramState } from '../../types'
+import type { ProgramState, ValidationError } from '../../types'
 
 // ---------------------------------------------------------------------------
 // Breadcrumb badge — mirrors ProgramsList StateBadge but lighter weight
@@ -29,6 +49,17 @@ const BREADCRUMB_BADGE_STYLES: Record<ProgramState, string> = {
 type RunPhase = 'idle' | 'validating' | 'creating' | 'running' | 'error'
 
 // ---------------------------------------------------------------------------
+// Deploy state machine
+// idle       — ready to deploy
+// validating — POST validate in flight
+// deploying  — POST deploy in flight
+// error      — validation or deploy failed, shows error panel
+// success    — deployed, banner shown briefly before auto-dismiss
+// ---------------------------------------------------------------------------
+
+type DeployPhase = 'idle' | 'validating' | 'deploying' | 'error' | 'success'
+
+// ---------------------------------------------------------------------------
 // Toolbar
 // ---------------------------------------------------------------------------
 
@@ -48,15 +79,25 @@ export function Toolbar() {
   const buildGraph = useCanvasStore((s) => s.buildGraph)
   const markClean = useCanvasStore((s) => s.markClean)
   const clearRunState = useCanvasStore((s) => s.clearRunState)
+  const setSelectedNode = useCanvasStore((s) => s.setSelectedNode)
   const saveMutation = useSaveGraph(selectedProgramId ?? '')
 
   const validateMutation = useValidateProgram(selectedProgramId ?? '')
   const createRunMutation = useCreateRun(selectedProgramId ?? '')
   const cancelRunMutation = useCancelRun()
+  const deployMutation = useDeployProgram(selectedProgramId ?? '')
+  const pauseMutation = usePauseProgram(selectedProgramId ?? '')
+  const resumeMutation = useResumeProgram(selectedProgramId ?? '')
 
+  // Run phase
   const [runPhase, setRunPhase] = useState<RunPhase>('idle')
-  const [errorMsg, setErrorMsg] = useState<string>('')
-  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [runErrorMsg, setRunErrorMsg] = useState<string>('')
+  const runErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Deploy phase
+  const [deployPhase, setDeployPhase] = useState<DeployPhase>('idle')
+  const [deployErrors, setDeployErrors] = useState<ValidationError[]>([])
+  const deployTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Keep activeRunId and runPhase in sync
   useEffect(() => {
@@ -67,16 +108,22 @@ export function Toolbar() {
     }
   }, [activeRunId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Reset deploy phase when program changes
+  useEffect(() => {
+    setDeployPhase('idle')
+    setDeployErrors([])
+  }, [selectedProgramId])
+
   // Subscribe to the active run stream (no-op when activeRunId is null)
   useRunStream(activeRunId, selectedProgramId ?? '')
 
-  const showError = (msg: string) => {
-    setErrorMsg(msg)
+  const showRunError = (msg: string) => {
+    setRunErrorMsg(msg)
     setRunPhase('error')
-    if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
-    errorTimerRef.current = setTimeout(() => {
+    if (runErrorTimerRef.current) clearTimeout(runErrorTimerRef.current)
+    runErrorTimerRef.current = setTimeout(() => {
       setRunPhase('idle')
-      setErrorMsg('')
+      setRunErrorMsg('')
     }, 5000)
   }
 
@@ -93,7 +140,7 @@ export function Toolbar() {
       onSuccess: (result) => {
         if (!result.valid) {
           const msgs = result.errors.map((e) => e.message).join('; ')
-          showError(msgs || 'Graph has validation errors')
+          showRunError(msgs || 'Graph has validation errors')
           return
         }
         setRunPhase('creating')
@@ -101,18 +148,16 @@ export function Toolbar() {
           onSuccess: (run) => {
             clearRunState()
             setActiveRunId(run.id)
-            // Open the Output tab so streaming tokens are immediately visible
             setBottomPanelOpen(true)
             setActiveBottomTab('output')
-            // runPhase transitions to 'running' via the activeRunId effect above
           },
           onError: (err) => {
-            showError((err as Error).message || 'Failed to start run')
+            showRunError((err as Error).message || 'Failed to start run')
           },
         })
       },
       onError: (err) => {
-        showError((err as Error).message || 'Validation failed')
+        showRunError((err as Error).message || 'Validation failed')
       },
     })
   }
@@ -120,17 +165,57 @@ export function Toolbar() {
   const handleCancel = () => {
     if (!activeRunId) return
     cancelRunMutation.mutate(activeRunId, {
-      onSuccess: () => {
-        setActiveRunId(null)
+      onSuccess: () => setActiveRunId(null),
+      onError: () => setActiveRunId(null),
+    })
+  }
+
+  const handleDeploy = () => {
+    if (!selectedProgramId) return
+    setDeployPhase('validating')
+    setDeployErrors([])
+
+    validateMutation.mutate(undefined, {
+      onSuccess: (result) => {
+        if (!result.valid) {
+          setDeployPhase('error')
+          setDeployErrors(result.errors)
+          return
+        }
+        setDeployPhase('deploying')
+        deployMutation.mutate(undefined, {
+          onSuccess: () => {
+            setDeployPhase('success')
+            setMode('operate')
+            if (deployTimerRef.current) clearTimeout(deployTimerRef.current)
+            deployTimerRef.current = setTimeout(() => {
+              setDeployPhase('idle')
+            }, 3000)
+          },
+          onError: (err) => {
+            setDeployPhase('error')
+            setDeployErrors([{ message: (err as Error).message || 'Deploy failed' }])
+          },
+        })
       },
-      onError: () => {
-        // Run may have already finished; clear anyway
-        setActiveRunId(null)
+      onError: (err) => {
+        setDeployPhase('error')
+        setDeployErrors([{ message: (err as Error).message || 'Validation failed' }])
       },
     })
   }
 
+  const handlePause = () => {
+    pauseMutation.mutate(undefined)
+  }
+
+  const handleResume = () => {
+    resumeMutation.mutate(undefined)
+  }
+
   const isRunBusy = runPhase === 'validating' || runPhase === 'creating'
+  const isDeployBusy = deployPhase === 'validating' || deployPhase === 'deploying'
+  const programState = program?.state
 
   return (
     <div className="flex flex-col flex-shrink-0">
@@ -161,8 +246,9 @@ export function Toolbar() {
         {/* Author / Operate toggle */}
         <ModeToggle mode={mode} onChange={setMode} />
 
-        {/* Action buttons */}
+        {/* Action buttons — adapt to program state */}
         <div className="flex items-center gap-1">
+          {/* Save — always present */}
           <ToolbarButton
             icon={
               <span className="relative flex items-center">
@@ -177,36 +263,97 @@ export function Toolbar() {
             disabled={!selectedProgramId || !isDirty || saveMutation.isPending}
           />
 
-          {runPhase === 'running' ? (
-            <ToolbarButton
-              icon={<Square className="h-3.5 w-3.5" />}
-              label="Cancel"
-              onClick={handleCancel}
-              disabled={cancelRunMutation.isPending}
-              variant="danger"
-            />
-          ) : (
+          {/* Run / Cancel — shown for draft and active programs */}
+          {(programState === 'draft' || programState === 'active' || programState === undefined) && (
+            <>
+              {runPhase === 'running' ? (
+                <ToolbarButton
+                  icon={<Square className="h-3.5 w-3.5" />}
+                  label="Cancel"
+                  onClick={handleCancel}
+                  disabled={cancelRunMutation.isPending}
+                  variant="danger"
+                />
+              ) : (
+                <ToolbarButton
+                  icon={
+                    isRunBusy ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5" />
+                    )
+                  }
+                  label={
+                    runPhase === 'validating'
+                      ? 'Validating…'
+                      : runPhase === 'creating'
+                        ? 'Starting…'
+                        : 'Run'
+                  }
+                  onClick={handleRun}
+                  disabled={!selectedProgramId || isRunBusy || runPhase === 'error'}
+                />
+              )}
+            </>
+          )}
+
+          {/* Deploy — Draft only */}
+          {programState === 'draft' && (
             <ToolbarButton
               icon={
-                isRunBusy ? (
+                isDeployBusy ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Play className="h-3.5 w-3.5" />
+                  <Rocket className="h-3.5 w-3.5" />
                 )
               }
-              label={runPhase === 'validating' ? 'Validating…' : runPhase === 'creating' ? 'Starting…' : 'Run'}
-              onClick={handleRun}
-              disabled={!selectedProgramId || isRunBusy || runPhase === 'error'}
+              label={
+                deployPhase === 'validating'
+                  ? 'Validating…'
+                  : deployPhase === 'deploying'
+                    ? 'Deploying…'
+                    : 'Deploy'
+              }
+              onClick={handleDeploy}
+              disabled={!selectedProgramId || isDeployBusy}
+              variant="primary"
             />
           )}
 
-          <ToolbarButton
-            icon={<Rocket className="h-3.5 w-3.5" />}
-            label="Deploy"
-            onClick={() => {}}
-            disabled
-            variant="primary"
-          />
+          {/* Pause — Active only */}
+          {programState === 'active' && (
+            <ToolbarButton
+              icon={
+                pauseMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <PauseCircle className="h-3.5 w-3.5" />
+                )
+              }
+              label="Pause"
+              onClick={handlePause}
+              disabled={pauseMutation.isPending}
+            />
+          )}
+
+          {/* Resume — Paused only */}
+          {programState === 'paused' && (
+            <ToolbarButton
+              icon={
+                resumeMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <PlayCircle className="h-3.5 w-3.5" />
+                )
+              }
+              label="Resume"
+              onClick={handleResume}
+              disabled={resumeMutation.isPending}
+              variant="primary"
+            />
+          )}
+
+          {/* Command palette placeholder */}
           <ToolbarButton
             icon={<Command className="h-3.5 w-3.5" />}
             label="⌘K"
@@ -217,18 +364,71 @@ export function Toolbar() {
         </div>
       </header>
 
-      {/* Validation / run error banner */}
-      {runPhase === 'error' && errorMsg && (
+      {/* Run validation / error banner */}
+      {runPhase === 'error' && runErrorMsg && (
         <div className="flex items-center gap-2 border-b border-red-900/60 bg-red-950/50 px-3 py-1.5 text-xs text-red-400">
           <span className="shrink-0 font-semibold">Run error:</span>
-          <span className="truncate">{errorMsg}</span>
+          <span className="truncate">{runErrorMsg}</span>
           <button
-            onClick={() => { setRunPhase('idle'); setErrorMsg('') }}
+            onClick={() => {
+              setRunPhase('idle')
+              setRunErrorMsg('')
+            }}
             className="ml-auto shrink-0 text-red-600 hover:text-red-400"
             aria-label="Dismiss"
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* Deploy success banner */}
+      {deployPhase === 'success' && (
+        <div className="flex items-center gap-2 border-b border-green-900/60 bg-green-950/50 px-3 py-1.5 text-xs text-green-400">
+          <span className="shrink-0 font-semibold">Deployed.</span>
+          <span>Program is now active — switched to Operate mode.</span>
+          <button
+            onClick={() => setDeployPhase('idle')}
+            className="ml-auto shrink-0 text-green-700 hover:text-green-400"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Deploy error panel — list of clickable validation errors */}
+      {deployPhase === 'error' && deployErrors.length > 0 && (
+        <div className="border-b border-red-900/60 bg-red-950/50 px-3 py-2 text-xs text-red-400">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="font-semibold">Deploy failed — fix the following issues:</span>
+            <button
+              onClick={() => {
+                setDeployPhase('idle')
+                setDeployErrors([])
+              }}
+              className="ml-auto shrink-0 text-red-600 hover:text-red-400"
+              aria-label="Dismiss"
+            >
+              <XCircle className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <ul className="space-y-0.5">
+            {deployErrors.map((err, i) => (
+              <li key={i}>
+                {err.nodeId ? (
+                  <button
+                    className="text-left text-red-300 underline decoration-red-700 underline-offset-2 hover:text-red-100"
+                    onClick={() => setSelectedNode(err.nodeId!)}
+                  >
+                    {err.message}
+                  </button>
+                ) : (
+                  <span className="text-red-300">{err.message}</span>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

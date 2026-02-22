@@ -70,7 +70,7 @@ checkTriggerPresence :: Graph -> [ValidationError]
 checkTriggerPresence g =
   let triggers = filter isTrigger (Map.elems (graphNodes g))
   in if null triggers
-       then [ValidationError "Graph must contain at least one Trigger node"]
+       then [ValidationError { veMessage = "Graph must contain at least one Trigger node", veNodeId = Nothing }]
        else []
   where
     isTrigger n = case nodeType n of
@@ -86,9 +86,12 @@ checkDag g =
   case detectCycle g of
     Nothing    -> []
     Just cyclePath ->
-      [ ValidationError $
-          "Cycle detected in data edges among nodes: "
-            <> T.intercalate ", " (map unNodeId cyclePath)
+      [ ValidationError
+          { veMessage =
+              "Cycle detected in data edges among nodes: "
+                <> T.intercalate ", " (map unNodeId cyclePath)
+          , veNodeId = Nothing
+          }
       ]
 
 -- ---------------------------------------------------------------------------
@@ -115,15 +118,18 @@ checkEdgePortNames g =
           in if edgeSourcePort e `elem` declared
                then []
                else
-                 [ ValidationError $
-                     "Edge source port '"
-                       <> unPortName (edgeSourcePort e)
-                       <> "' is not a valid output port of node '"
-                       <> nodeLabel srcNode
-                       <> "' ("
-                       <> nodeTypeName (nodeType srcNode)
-                       <> "). Valid output ports: "
-                       <> T.intercalate ", " (map unPortName declared)
+                 [ ValidationError
+                     { veMessage =
+                         "Edge source port '"
+                           <> unPortName (edgeSourcePort e)
+                           <> "' is not a valid output port of node '"
+                           <> nodeLabel srcNode
+                           <> "' ("
+                           <> nodeTypeName (nodeType srcNode)
+                           <> "). Valid output ports: "
+                           <> T.intercalate ", " (map unPortName declared)
+                     , veNodeId = Nothing
+                     }
                  ]
 
     tgtErrors :: Edge -> [ValidationError]
@@ -135,15 +141,18 @@ checkEdgePortNames g =
           in if edgeTargetPort e `elem` declared
                then []
                else
-                 [ ValidationError $
-                     "Edge target port '"
-                       <> unPortName (edgeTargetPort e)
-                       <> "' is not a valid input port of node '"
-                       <> nodeLabel tgtNode
-                       <> "' ("
-                       <> nodeTypeName (nodeType tgtNode)
-                       <> "). Valid input ports: "
-                       <> T.intercalate ", " (map unPortName declared)
+                 [ ValidationError
+                     { veMessage =
+                         "Edge target port '"
+                           <> unPortName (edgeTargetPort e)
+                           <> "' is not a valid input port of node '"
+                           <> nodeLabel tgtNode
+                           <> "' ("
+                           <> nodeTypeName (nodeType tgtNode)
+                           <> "). Valid input ports: "
+                           <> T.intercalate ", " (map unPortName declared)
+                     , veNodeId = Nothing
+                     }
                  ]
 
 -- ---------------------------------------------------------------------------
@@ -175,15 +184,18 @@ checkPortCategories g =
               if declared == edgeCategory e
                 then []
                 else
-                  [ ValidationError $
-                      "Edge category mismatch on source port '"
-                        <> unPortName (edgeSourcePort e)
-                        <> "' of node '"
-                        <> nodeLabel srcNode
-                        <> "': port is "
-                        <> showCategory declared
-                        <> " but edge is marked "
-                        <> showCategory (edgeCategory e)
+                  [ ValidationError
+                      { veMessage =
+                          "Edge category mismatch on source port '"
+                            <> unPortName (edgeSourcePort e)
+                            <> "' of node '"
+                            <> nodeLabel srcNode
+                            <> "': port is "
+                            <> showCategory declared
+                            <> " but edge is marked "
+                            <> showCategory (edgeCategory e)
+                      , veNodeId = Nothing
+                      }
                   ]
 
     tgtCatErrors :: Edge -> [ValidationError]
@@ -197,15 +209,18 @@ checkPortCategories g =
               if declared == edgeCategory e
                 then []
                 else
-                  [ ValidationError $
-                      "Edge category mismatch on target port '"
-                        <> unPortName (edgeTargetPort e)
-                        <> "' of node '"
-                        <> nodeLabel tgtNode
-                        <> "': port is "
-                        <> showCategory declared
-                        <> " but edge is marked "
-                        <> showCategory (edgeCategory e)
+                  [ ValidationError
+                      { veMessage =
+                          "Edge category mismatch on target port '"
+                            <> unPortName (edgeTargetPort e)
+                            <> "' of node '"
+                            <> nodeLabel tgtNode
+                            <> "': port is "
+                            <> showCategory declared
+                            <> " but edge is marked "
+                            <> showCategory (edgeCategory e)
+                      , veNodeId = Nothing
+                      }
                   ]
 
 -- ---------------------------------------------------------------------------
@@ -241,14 +256,17 @@ checkRequiredWiring g =
         then Nothing
         else
           Just $
-            ValidationError $
-              "Node '"
-                <> nodeLabel node
-                <> "' ("
-                <> nodeTypeName (nodeType node)
-                <> ") requires port '"
-                <> unPortName port
-                <> "' to be wired but has no incoming data edge on that port"
+            ValidationError
+              { veMessage =
+                  "Node '"
+                    <> nodeLabel node
+                    <> "' ("
+                    <> nodeTypeName (nodeType node)
+                    <> ") requires port '"
+                    <> unPortName port
+                    <> "' to be wired but has no incoming data edge on that port"
+              , veNodeId = Just nid
+              }
 
 -- ---------------------------------------------------------------------------
 -- Check 7: Config completeness
@@ -256,36 +274,39 @@ checkRequiredWiring g =
 
 checkConfigComplete :: Graph -> [ValidationError]
 checkConfigComplete g =
-  concatMap (checkNode . snd) (Map.toList (graphNodes g))
+  concatMap checkNode (Map.toList (graphNodes g))
   where
-    checkNode :: Node -> [ValidationError]
-    checkNode node = case nodeType node of
-      AgentNode cfg     -> checkAgentConfig node cfg
-      TriggerNode cfg   -> checkTriggerConfig node cfg
-      KnowledgeNode cfg -> checkKnowledgeConfig node cfg
+    checkNode :: (NodeId, Node) -> [ValidationError]
+    checkNode (nid, node) = case nodeType node of
+      AgentNode cfg     -> checkAgentConfig nid node cfg
+      TriggerNode cfg   -> checkTriggerConfig nid node cfg
+      KnowledgeNode cfg -> checkKnowledgeConfig nid node cfg
       ConnectorNode _   -> []
       ActionNode _      -> []
 
-    checkAgentConfig :: Node -> AgentConfig -> [ValidationError]
-    checkAgentConfig node cfg =
-      [ ValidationError $
+    mkErr :: NodeId -> Text -> ValidationError
+    mkErr nid msg = ValidationError { veMessage = msg, veNodeId = Just nid }
+
+    checkAgentConfig :: NodeId -> Node -> AgentConfig -> [ValidationError]
+    checkAgentConfig nid node cfg =
+      [ mkErr nid $
           "Node '"
             <> nodeLabel node
             <> "' (agent): 'model' must not be empty"
       | T.null (agentModel cfg)
       ]
-        <> [ ValidationError $
+        <> [ mkErr nid $
                "Node '"
                  <> nodeLabel node
                  <> "' (agent): 'systemPrompt' must not be empty"
            | T.null (agentSystemPrompt cfg)
            ]
 
-    checkTriggerConfig :: Node -> TriggerConfig -> [ValidationError]
-    checkTriggerConfig node cfg =
+    checkTriggerConfig :: NodeId -> Node -> TriggerConfig -> [ValidationError]
+    checkTriggerConfig nid node cfg =
       case triggerType cfg of
         TriggerCron ->
-          [ ValidationError $
+          [ mkErr nid $
               "Node '"
                 <> nodeLabel node
                 <> "' (trigger): cron trigger requires a 'schedule' expression"
@@ -293,11 +314,11 @@ checkConfigComplete g =
           ]
         _ -> []
 
-    checkKnowledgeConfig :: Node -> KnowledgeConfig -> [ValidationError]
-    checkKnowledgeConfig node cfg =
+    checkKnowledgeConfig :: NodeId -> Node -> KnowledgeConfig -> [ValidationError]
+    checkKnowledgeConfig nid node cfg =
       case knowledgeSource cfg of
         InlineText t ->
-          [ ValidationError $
+          [ mkErr nid $
               "Node '"
                 <> nodeLabel node
                 <> "' (knowledge): inline content must not be empty"
@@ -333,12 +354,15 @@ checkReachability g =
         then Nothing
         else
           Just $
-            ValidationError $
-              "Node '"
-                <> nodeLabel node
-                <> "' ("
-                <> nodeTypeName (nodeType node)
-                <> ") is not reachable from any Trigger via data edges"
+            ValidationError
+              { veMessage =
+                  "Node '"
+                    <> nodeLabel node
+                    <> "' ("
+                    <> nodeTypeName (nodeType node)
+                    <> ") is not reachable from any Trigger via data edges"
+              , veNodeId = Just (nodeId node)
+              }
 
 -- | BFS/DFS from all Trigger nodes following data edges only.
 reachableViaDataEdges :: Graph -> Set NodeId
