@@ -44,3 +44,6 @@ frontend/build/
 .DS_Store
 *.swp
 *.swo
+
+# Local Cursor rules
+.cursor/rules/local
