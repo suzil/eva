@@ -19,6 +19,7 @@ export function useRunStream(runId: RunId | null, programId: string): void {
   const setActiveRunId = useUiStore((s) => s.setActiveRunId)
   const setInspectedRunId = useUiStore((s) => s.setInspectedRunId)
   const appendLlmToken = useUiStore((s) => s.appendLlmToken)
+  const setLlmOutput = useUiStore((s) => s.setLlmOutput)
   const appendLogEntry = useUiStore((s) => s.appendLogEntry)
   const clearRunOutput = useUiStore((s) => s.clearRunOutput)
   const setRunError = useUiStore((s) => s.setRunError)
@@ -86,7 +87,8 @@ export function useRunStream(runId: RunId | null, programId: string): void {
           } else {
             const id = String(d.tool_call_id ?? '')
             const fn = toolCallNames.get(id) ?? 'tool'
-            const raw = String(d.result ?? '')
+            const resultVal = d.result ?? ''
+            const raw = typeof resultVal === 'string' ? resultVal : JSON.stringify(resultVal)
             const truncated = raw.length > 400 ? raw.slice(0, 400) + '…' : raw
             appendLogEntry({
               stepId: event.nodeId,
@@ -129,6 +131,20 @@ export function useRunStream(runId: RunId | null, programId: string): void {
                 // Populate RQ cache so useRunDetail returns immediately when
                 // inspectedRunId is set — avoids a second network round-trip.
                 queryClient.setQueryData(runKeys.detail(event.runId), detail)
+                // Extract the agent text output from the completed run's steps.
+                // This ensures the Output panel shows content even if llm_token
+                // events were missed (e.g. background tab, slow connection).
+                const agentStep = detail.steps.find((s) => {
+                  const out = s.output as { type?: string } | null | undefined
+                  return out?.type === 'agent_output'
+                })
+                const agentPayload = agentStep
+                  ? (agentStep.output as { type: string; payload?: unknown }).payload
+                  : undefined
+                if (typeof agentPayload === 'string' && agentPayload.length > 0) {
+                  setLlmOutput(agentPayload)
+                  setActiveBottomTab('output')
+                }
                 // Auto-select the finished run so its step states stay visible
                 // on the canvas and it gets highlighted in RunsPanel.
                 setInspectedRunId(event.runId)

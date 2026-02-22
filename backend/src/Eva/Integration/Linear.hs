@@ -282,12 +282,11 @@ doGraphQL
 doGraphQL mgr apiKey query vars = do
   initReq <- parseRequest "POST https://api.linear.app/graphql"
   let body    = encode (object ["query" .= query, "variables" .= vars])
-      -- Normalise the stored key: strip whitespace and any accidental
-      -- "Bearer " prefix that users sometimes include when copying from docs.
+      -- Linear personal API keys (lin_api_...) must be sent directly as the
+      -- Authorization header value — no "Bearer" prefix. OAuth access tokens
+      -- should be stored as "Bearer <token>" by the user if needed.
       rawKeyText  = T.strip (decodeUtf8With lenientDecode apiKey)
-      cleanKey    = maybe rawKeyText id (T.stripPrefix "Bearer " rawKeyText)
-      trimmedKey  = encodeUtf8 cleanKey
-      authHdr     = "Bearer " <> trimmedKey
+      authHdr     = encodeUtf8 rawKeyText
       req     = initReq
         { method         = "POST"
         , requestBody    = RequestBodyLBS body

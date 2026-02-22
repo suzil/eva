@@ -77,20 +77,20 @@ export function NodePanel() {
   const mode = useUiStore((s) => s.mode)
   const saveGraph = useSaveGraph(selectedProgramId ?? '')
 
-  // In Operate mode, show the step inspector instead of the config form
-  if (mode === 'operate') {
-    return <StepInspector />
-  }
-
   const node = nodes.find((n) => n.id === selectedNodeId)
 
-  // Editable label state — synced from node data
+  // Editable label state — synced from node data (must be before any early returns)
   const [labelDraft, setLabelDraft] = useState(node?.data.label ?? '')
   const labelInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setLabelDraft(node?.data.label ?? '')
   }, [node?.data.label, selectedNodeId])
+
+  // In Operate mode, show the step inspector instead of the config form
+  if (mode === 'operate') {
+    return <StepInspector />
+  }
 
   if (!node) return null
 

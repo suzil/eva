@@ -38,6 +38,8 @@ interface UiState {
   setInspectedRunId: (id: RunId | null) => void
   setRunError: (msg: string | null) => void
   appendLlmToken: (token: string) => void
+  /** Replace the full LLM output (used when loading a completed run's output). */
+  setLlmOutput: (output: string) => void
   appendLogEntry: (entry: LogEntry) => void
   /** Reset output, logs, and error — called when a new run starts. */
   clearRunOutput: () => void
@@ -71,6 +73,7 @@ export const useUiStore = create<UiState>((set) => ({
   setInspectedRunId: (id) => set({ inspectedRunId: id }),
   setRunError: (msg) => set({ runError: msg }),
   appendLlmToken: (token) => set((s) => ({ llmOutput: s.llmOutput + token })),
+  setLlmOutput: (output) => set({ llmOutput: output }),
   appendLogEntry: (entry) => set((s) => ({ logEntries: [...s.logEntries, entry] })),
   clearRunOutput: () => set({ llmOutput: '', logEntries: [], runError: null }),
 }))
