@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { fetchRunDetail } from '../api/client'
+import { runKeys } from '../api/hooks'
 import { useCanvasStore } from '../store/canvasStore'
 import { useUiStore } from '../store/uiStore'
 import type { NodeId, RunId, WsEvent } from '../types'
@@ -10,7 +12,8 @@ import type { NodeId, RunId, WsEvent } from '../types'
  * and log entry accumulation. Cleans up automatically when runId changes
  * or the component unmounts.
  */
-export function useRunStream(runId: RunId | null, _programId: string): void {
+export function useRunStream(runId: RunId | null, programId: string): void {
+  const queryClient = useQueryClient()
   const setNodeStepState = useCanvasStore((s) => s.setNodeStepState)
   const setNodeStepErrors = useCanvasStore((s) => s.setNodeStepErrors)
   const clearRunState = useCanvasStore((s) => s.clearRunState)
@@ -62,6 +65,8 @@ export function useRunStream(runId: RunId | null, _programId: string): void {
             // Clear stale output from a previous run when this run begins emitting
             clearRunOutput()
           }
+          // Invalidate runs list so RunsPanel reflects the new state immediately
+          queryClient.invalidateQueries({ queryKey: runKeys.list(programId) })
           const terminal = event.state === 'completed' || event.state === 'failed' || event.state === 'canceled'
           if (terminal) {
             // Fetch full run detail to get per-step error messages
@@ -97,5 +102,5 @@ export function useRunStream(runId: RunId | null, _programId: string): void {
       // Clear overlays when we stop streaming (e.g. program switched)
       clearRunState()
     }
-  }, [runId, setNodeStepState, setNodeStepErrors, clearRunState, setActiveRunId, appendLlmToken, appendLogEntry, clearRunOutput])
+  }, [runId, programId, queryClient, setNodeStepState, setNodeStepErrors, clearRunState, setActiveRunId, appendLlmToken, appendLogEntry, clearRunOutput])
 }
