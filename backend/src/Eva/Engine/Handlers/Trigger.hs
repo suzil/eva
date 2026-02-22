@@ -41,8 +41,9 @@ handleTrigger rid node _inputs _bindings = do
   -- 2. Dispatch on trigger type.
   case triggerType cfg of
     TriggerManual -> handleManual rid node cfg
+    TriggerCron   -> handleManual rid node cfg  -- fires same event message; scheduler sets no payload
     other         -> liftIO $ throwIO $ userError $
-      "Trigger type " <> show other <> " not implemented in M4"
+      "Trigger type " <> show other <> " not yet implemented"
 
 -- ---------------------------------------------------------------------------
 -- Manual trigger

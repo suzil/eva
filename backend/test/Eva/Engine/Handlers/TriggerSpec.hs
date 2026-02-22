@@ -163,15 +163,25 @@ spec = do
           msgType    result `shouldBe` "event"
           msgPayload result `shouldBe` Aeson.object []
 
-    it "fails with a clear error for non-manual trigger types" $ do
+    it "TriggerCron emits an event message (same as TriggerManual)" $ do
       withTestEnv $ \env -> do
         let rid  = RunId "run-trigger-4"
             nid  = NodeId "trigger-4"
             node = triggerNodeWith nid TriggerCron Nothing
+        withRun env rid Nothing $ do
+          result <- runAppM env $
+            handleTrigger rid node Map.empty emptyBindings
+          msgType result `shouldBe` "event"
+
+    it "fails with a clear error for unimplemented trigger types (Webhook)" $ do
+      withTestEnv $ \env -> do
+        let rid  = RunId "run-trigger-5"
+            nid  = NodeId "trigger-5"
+            node = triggerNodeWith nid TriggerWebhook Nothing
         withRun env rid Nothing $ do
           result :: Either SomeException Message <-
             try $ runAppM env $
               handleTrigger rid node Map.empty emptyBindings
           case result of
             Right _  -> expectationFailure "expected exception, got success"
-            Left err -> show err `shouldContain` "not implemented"
+            Left err -> show err `shouldContain` "not yet implemented"
