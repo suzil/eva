@@ -39,6 +39,7 @@ withTestEnv action = do
         , configAnthropicApiKey = Nothing
         , configLogLevel        = LogError
         , configCredentialKey   = "test-key"
+        , configStaticDir       = Nothing
         }
   let env = AppEnv
         { envConfig          = cfg

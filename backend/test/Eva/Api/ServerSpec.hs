@@ -69,6 +69,7 @@ makeTestApp = do
             , configAnthropicApiKey = Nothing
             , configLogLevel        = LogError
             , configCredentialKey   = "test-key"
+        , configStaticDir       = Nothing
             }
         , envDbPool          = pool
         , envLogger          = \_ -> pure ()

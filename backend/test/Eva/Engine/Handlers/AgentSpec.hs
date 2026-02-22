@@ -129,6 +129,7 @@ withTestEnv llmClient action = do
         , configAnthropicApiKey = Nothing
         , configLogLevel        = LogError
         , configCredentialKey   = "test-key"
+        , configStaticDir       = Nothing
         }
       env = AppEnv
         { envConfig          = cfg

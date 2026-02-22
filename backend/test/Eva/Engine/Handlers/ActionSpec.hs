@@ -84,6 +84,7 @@ withTestEnv action = do
         , configAnthropicApiKey = Nothing
         , configLogLevel        = LogError
         , configCredentialKey   = "test-key"
+        , configStaticDir       = Nothing
         }
       dummyLLMClient = LLMClient
         { clientCall   = \_ -> pure (Right (LLMResponse "unused" Nothing (TokenUsage 0 0 0)))

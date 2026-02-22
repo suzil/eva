@@ -42,6 +42,7 @@ withTestEnv action = do
         , configAnthropicApiKey = Nothing
         , configLogLevel        = LogError
         , configCredentialKey   = "test-credential-key"
+        , configStaticDir       = Nothing
         }
       env = AppEnv
         { envConfig          = cfg
