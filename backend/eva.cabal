@@ -109,6 +109,7 @@ test-suite eva-test
     Eva.Persistence.PersistenceSpec
     Eva.Api.ServerSpec
     Eva.Api.WebSocketSpec
+    Eva.Integration.LinearSpec
   build-depends:
       base              ^>=4.20
     , eva
