@@ -9,6 +9,7 @@ import Data.Maybe (isJust)
 import Database.Persist.Sqlite (createSqlitePool)
 import Test.Hspec
 
+import qualified Data.Aeson as Aeson
 import Eva.App (AppEnv (..), runAppM)
 import Eva.Config (AppConfig (..), LogLevel (..))
 import Eva.Core.Types
@@ -75,7 +76,7 @@ actionNode nid = Node
   , nodeLabel = "Action"
   , nodeType  = ActionNode ActionConfig
       { actionOperation    = OpTemplate
-      , actionParameters   = "{}"
+      , actionParameters   = Aeson.object [("template", Aeson.String "processed")]
       , actionErrorHandling = ErrFail
       , actionRetryPolicy  = Nothing
       }

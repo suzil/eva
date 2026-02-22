@@ -22,7 +22,9 @@ library
     Eva.Engine.Runner
     Eva.Engine.StateMachine
     Eva.Engine.Dispatch
+    Eva.Engine.Handlers.Action
     Eva.Engine.Handlers.Agent
+    Eva.Engine.Handlers.Trigger
     Eva.Engine.LLM
     Eva.Engine.Scheduler
     Eva.Api.Server
@@ -92,7 +94,9 @@ test-suite eva-test
     Eva.Core.GraphSpec
     Eva.Core.TypesSpec
     Eva.Core.ValidationSpec
+    Eva.Engine.Handlers.ActionSpec
     Eva.Engine.Handlers.AgentSpec
+    Eva.Engine.Handlers.TriggerSpec
     Eva.Engine.LLMSpec
     Eva.Engine.RetrySpec
     Eva.Engine.RunnerSpec
