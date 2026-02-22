@@ -84,6 +84,7 @@ export function Toolbar() {
 
   const setBottomPanelOpen = useUiStore((s) => s.setBottomPanelOpen)
   const setActiveBottomTab = useUiStore((s) => s.setActiveBottomTab)
+  const clearRunOutput = useUiStore((s) => s.clearRunOutput)
 
   const isDirty = useCanvasStore((s) => s.isDirty)
   const buildGraph = useCanvasStore((s) => s.buildGraph)
@@ -117,14 +118,16 @@ export function Toolbar() {
   const [deployErrors, setDeployErrors] = useState<ValidationError[]>([])
   const deployTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Keep activeRunId and runPhase in sync
+  // Keep activeRunId and runPhase in sync.
+  // Use the functional setter to avoid capturing a stale runPhase value in
+  // the closure — the setter receives the current state at call time.
   useEffect(() => {
     if (activeRunId) {
       setRunPhase('running')
-    } else if (runPhase === 'running') {
-      setRunPhase('idle')
+    } else {
+      setRunPhase((prev) => (prev === 'running' ? 'idle' : prev))
     }
-  }, [activeRunId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeRunId])
 
   // Reset deploy phase when program changes
   useEffect(() => {
@@ -206,6 +209,7 @@ export function Toolbar() {
         createRunMutation.mutate(undefined, {
           onSuccess: (run) => {
             clearRunState()
+            clearRunOutput()
             setActiveRunId(run.id)
             setBottomPanelOpen(true)
             setActiveBottomTab('output')

@@ -124,7 +124,8 @@ curl -sf -X PUT "${BASE_URL}/api/programs/${PROGRAM_ID}/graph" \
       "type": {
         "type": "agent",
         "config": {
-          "model": "gpt-4o",
+          "provider": "anthropic",
+          "model": "claude-sonnet-4-20250514",
           "systemPrompt": "You are a project analyst generating a structured weekly progress report for a software team.\n\nYou have access to Linear (project management). Use the list_issues tool to fetch the current issues from the Eva project. Filter for issues that are in progress, recently completed, or blocked.\n\nUse the provided team context (available in your context section) to understand project milestones, priorities, and the expected report format.\n\nProduce a structured weekly summary following the format in the team context. Be specific: reference issue identifiers and titles. Keep the report concise — aim for under 400 words.",
           "responseFormat": "text",
           "temperature": 0.3,

@@ -34,7 +34,7 @@ module Eva.Engine.Runner
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (async, waitCatch)
 import Control.Concurrent.STM
-import Control.Exception (Exception, SomeException, fromException, throwIO, try)
+import Control.Exception (Exception, SomeException, displayException, fromException, throwIO, toException, try)
 import Control.Monad (forM, forM_, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask, asks)
@@ -56,9 +56,8 @@ import Eva.Api.WebSocket
   , runStateEvent
   , stepStateEvent
   )
-import Eva.App (AppEnv, AppM, broadcastEvent, logMsg, registerRun, runAppM, unregisterRun)
+import Eva.App (AppEnv, AppM, broadcastAndUnregisterRun, broadcastEvent, registerRun, runAppM)
 import qualified Eva.App as App
-import Eva.Config (LogLevel (..))
 import Eva.Core.Graph
   ( dataEdgesOf
   , hasErrorEdge
@@ -226,8 +225,12 @@ graphWalkerLoop ctx graph = do
           now    <- liftIO getCurrentTime
           let finalState = if hasErr then RunFailed else RunCompleted
           _      <- transitionRun (rcRun ctx) finalState now
-          broadcastEvent (rcRunId ctx) (runStateEvent (rcRunId ctx) finalState now)
-          unregisterRun (rcRunId ctx)
+          -- Atomically broadcast the terminal event AND remove the run from
+          -- the registry. This prevents a race where a WebSocket subscriber
+          -- could dupTChan after the write but before the map deletion,
+          -- causing forwardEvents to block forever waiting for a
+          -- write that will never come.
+          broadcastAndUnregisterRun (rcRunId ctx) (runStateEvent (rcRunId ctx) finalState now)
         _ -> pure ()
 
 -- ---------------------------------------------------------------------------
@@ -270,14 +273,19 @@ executeNodeStep env ctx graph node inputs = do
   broadcastEvent (rcRunId ctx)
     (stepStateEvent (rcRunId ctx) (nodeId node) (stepId stepRunning) StepRunning now)
 
-  bindings0 <- resolveResourceBindings graph (nodeId node)
-  cache     <- liftIO $ readTVarIO (rcKnowledgeCache ctx)
-  let bindings = bindings0 { rbKnowledgeDynamic = dynamicKnowledge graph cache (nodeId node) }
-  let mPolicy  = nodeRetryPolicy (nodeType node)
-
-  dispatch <- asks App.envDispatch
-  result   <- liftIO $
-    dispatchWithRetry env dispatch mPolicy sid ctx node inputs bindings
+  eBindings <- resolveResourceBindings graph (nodeId node)
+  result <- case eBindings of
+    Left connErr ->
+      let msg = "Node '" <> T.unpack (nodeLabel node)
+                <> "': connector resolution failed — "
+                <> T.unpack (connectorErrorText connErr)
+      in  pure (Left (toException (userError msg)))
+    Right bindings0 -> do
+      cache <- liftIO $ readTVarIO (rcKnowledgeCache ctx)
+      let bindings = bindings0 { rbKnowledgeDynamic = dynamicKnowledge graph cache (nodeId node) }
+      let mPolicy  = nodeRetryPolicy (nodeType node)
+      dispatch <- asks App.envDispatch
+      liftIO $ dispatchWithRetry env dispatch mPolicy sid ctx node inputs bindings
 
   case result of
     Right outMsg -> do
@@ -298,7 +306,7 @@ executeNodeStep env ctx graph node inputs = do
 
     Left finalErr -> do
       now2 <- liftIO getCurrentTime
-      let errText = T.pack (show finalErr)
+      let errText = T.pack (displayException finalErr)
       liftIO $ atomically $
         modifyTVar stepTVar (\s -> s { stepError = Just errText })
       stepFailed <- transitionStep stepTVar StepFailed now2
@@ -369,12 +377,12 @@ dispatchWithRetry env dispatch mPolicy sid ctx node inputs bindings =
                     [ "Retry ", T.pack (show attemptNum)
                     , "/",      T.pack (show maxAttempts)
                     , " for node ", nodeIdTxt
-                    , ": ", T.pack (show e)
+                    , ": ", T.pack (displayException e)
                     ]
                   dat = object
                     [ "attempt"     .= attemptNum
                     , "maxAttempts" .= maxAttempts
-                    , "error"       .= T.pack (show e)
+                    , "error"       .= T.pack (displayException e)
                     , "nodeId"      .= nodeIdTxt
                     ]
               runAppM env $ insertLogEntry sid "warn" msg (Just dat)
@@ -488,11 +496,11 @@ collectReadyInputs ctx graph dispatched =
 -- | Resolve resource bindings for @nid@: collect Knowledge/Connector configs
 -- from resource edges targeting this node, then resolve ConnectorRunners
 -- (credential lookup + runner construction) for each ConnectorConfig.
--- Connector resolution errors are logged as warnings and the failed runner
--- is omitted from rbConnectorRunners (the config is still in rbConnectors).
+-- Returns 'Left' with a user-facing error on the first connector resolution
+-- failure so 'executeNodeStep' can transition the step to Failed.
 -- Note: 'rbKnowledgeDynamic' is left empty here; it is populated in
 -- 'executeNodeStep' by reading 'rcKnowledgeCache' after this call.
-resolveResourceBindings :: Graph -> NodeId -> AppM ResourceBindings
+resolveResourceBindings :: Graph -> NodeId -> AppM (Either ConnectorError ResourceBindings)
 resolveResourceBindings graph nid = do
   let resourceEdges =
         filter
@@ -504,13 +512,15 @@ resolveResourceBindings graph nid = do
           resourceEdges
       knowledge  = [cfg | KnowledgeNode cfg <- map nodeType sourceNodes]
       connectors = [cfg | ConnectorNode cfg  <- map nodeType sourceNodes]
-  runners <- resolveConnectors connectors
-  pure ResourceBindings
-         { rbKnowledge        = knowledge
-         , rbKnowledgeDynamic = []
-         , rbConnectors       = connectors
-         , rbConnectorRunners = runners
-         }
+  eRunners <- resolveConnectors connectors
+  pure $ case eRunners of
+    Left err      -> Left err
+    Right runners -> Right ResourceBindings
+      { rbKnowledge        = knowledge
+      , rbKnowledgeDynamic = []
+      , rbConnectors       = connectors
+      , rbConnectorRunners = runners
+      }
 
 -- | Build the dynamic Knowledge content list for @targetNid@ by looking up
 -- completed UpstreamPort Knowledge steps in the per-run cache.
@@ -534,18 +544,16 @@ dynamicKnowledge graph cache targetNid =
      ]
 
 -- | Attempt to resolve each ConnectorConfig into a live ConnectorRunner.
--- Failed resolutions are logged at warn level and excluded from the result.
-resolveConnectors :: [ConnectorConfig] -> AppM [ConnectorRunner]
-resolveConnectors cfgs =
-  fmap (mapMaybe id) $
-    forM cfgs $ \cfg -> do
-      result <- resolveConnectorRunner cfg
+-- Short-circuits on the first resolution failure, returning 'Left'.
+resolveConnectors :: [ConnectorConfig] -> AppM (Either ConnectorError [ConnectorRunner])
+resolveConnectors = go []
+  where
+    go acc []       = pure (Right (reverse acc))
+    go acc (c:cs)   = do
+      result <- resolveConnectorRunner c
       case result of
-        Right runner -> pure (Just runner)
-        Left err     -> do
-          let msg = "connector resolution failed: " <> show err
-          logMsg LogWarn (T.pack msg)
-          pure Nothing
+        Left err     -> pure (Left err)
+        Right runner -> go (runner : acc) cs
 
 -- ---------------------------------------------------------------------------
 -- Terminal detection

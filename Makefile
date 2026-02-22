@@ -1,4 +1,4 @@
-.PHONY: dev build test install install-ghcid docker-build docker-run
+.PHONY: dev build test install install-ghcid reset-db docker-build docker-run
 
 # Start backend (ghcid hot-reload) and frontend (Vite) concurrently.
 # Ctrl+C kills both.
@@ -32,6 +32,14 @@ test:
 # Usage: make seed  OR  make seed BASE_URL=http://localhost:8080
 seed:
 	@./scripts/seed-demo.sh $(BASE_URL)
+
+# Delete the dev SQLite database so the backend recreates it on next start.
+# ghcid runs from backend/, so the default "eva.db" lands at backend/eva.db.
+reset-db:
+	@set -a; [ -f .env ] && . ./.env || true; set +a; \
+	DB="$${EVA_DB_PATH:-backend/eva.db}"; \
+	if [ -f "$$DB" ]; then rm "$$DB" && echo "Deleted $$DB"; \
+	else echo "No database at $$DB — nothing to do"; fi
 
 # Build the Docker image (multi-stage: GHC + Node + runtime).
 docker-build:

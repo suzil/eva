@@ -242,7 +242,7 @@ spec = do
 
   describe "startRun / MLP-realistic graph with resource edges" $ do
 
-    it "AC2: Trigger→Agent with Knowledge/Connector resource edges reaches RunCompleted" $
+    it "AC2: Trigger→Agent with unconfigured Connector resource edge reaches RunFailed" $
       withTestEnv $ \env -> do
         let nTrigger   = triggerNode   "n-trigger"
             nAgent     = agentNode     "n-agent"
@@ -260,14 +260,16 @@ spec = do
         waitForRun ctx
 
         run <- readTVarIO (rcRun ctx)
-        runState run `shouldBe` RunCompleted
+        runState run `shouldBe` RunFailed
 
-        -- Trigger and Agent should have steps; Knowledge/Connector do not
-        -- participate in data-driven execution (no data inputs).
         steps <- readTVarIO (rcSteps ctx)
-        Map.size steps `shouldBe` 2
         assertStepCompleted steps "n-trigger"
-        assertStepCompleted steps "n-agent"
+        case Map.lookup "n-agent" steps of
+          Nothing -> expectationFailure "No step for n-agent"
+          Just tv -> do
+            s <- readTVarIO tv
+            stepState s `shouldBe` StepFailed
+            isJust (stepError s) `shouldBe` True
 
     it "AC2: Knowledge/Connector nodes have no mailboxes (resource ports excluded)" $
       withTestEnv $ \env -> do
@@ -286,7 +288,7 @@ spec = do
 
   describe "resolveResourceBindings" $ do
 
-    it "AC5: returns Knowledge and Connector configs from resource edges" $
+    it "AC5: returns Left when a wired connector has no credential" $
       withTestEnv $ \env -> do
         let nAgent     = agentNode     "n-agent"
             nKnowledge = knowledgeNode "n-k"
@@ -301,9 +303,11 @@ spec = do
                   ]
               , graphEdges = [eKnow, eConn]
               }
-        bindings <- runAppM env $ resolveResourceBindings graph "n-agent"
-        length (rbKnowledge  bindings) `shouldBe` 1
-        length (rbConnectors bindings) `shouldBe` 1
+        result <- runAppM env $ resolveResourceBindings graph "n-agent"
+        case result of
+          Left _  -> pure ()
+          Right _ -> expectationFailure
+            "expected Left (connector has no credential) but got Right"
 
     it "AC5: data edges are ignored by resolveResourceBindings" $
       withTestEnv $ \env -> do
@@ -314,9 +318,12 @@ spec = do
               { graphNodes = Map.fromList [("n-t", nTrigger), ("n-a", nAgent)]
               , graphEdges = [eData]
               }
-        bindings <- runAppM env $ resolveResourceBindings graph "n-a"
-        length (rbKnowledge  bindings) `shouldBe` 0
-        length (rbConnectors bindings) `shouldBe` 0
+        result <- runAppM env $ resolveResourceBindings graph "n-a"
+        case result of
+          Left err -> expectationFailure $ "unexpected error: " <> show err
+          Right bindings -> do
+            length (rbKnowledge  bindings) `shouldBe` 0
+            length (rbConnectors bindings) `shouldBe` 0
 
     it "AC5: returns empty bindings when no resource edges target the node" $
       withTestEnv $ \env -> do
@@ -325,9 +332,12 @@ spec = do
               { graphNodes = Map.fromList [("n-a", nAgent)]
               , graphEdges = []
               }
-        bindings <- runAppM env $ resolveResourceBindings graph "n-a"
-        length (rbKnowledge  bindings) `shouldBe` 0
-        length (rbConnectors bindings) `shouldBe` 0
+        result <- runAppM env $ resolveResourceBindings graph "n-a"
+        case result of
+          Left err -> expectationFailure $ "unexpected error: " <> show err
+          Right bindings -> do
+            length (rbKnowledge  bindings) `shouldBe` 0
+            length (rbConnectors bindings) `shouldBe` 0
 
 -- ---------------------------------------------------------------------------
 -- Helpers

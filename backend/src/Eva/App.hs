@@ -15,6 +15,7 @@ module Eva.App
 
     -- * Broadcast helpers
   , broadcastEvent
+  , broadcastAndUnregisterRun
   , registerRun
   , unregisterRun
 
@@ -175,6 +176,22 @@ broadcastEvent rid event = do
   case mCh of
     Nothing -> pure ()
     Just ch -> liftIO $ atomically $ writeTChan ch event
+
+-- | Atomically write a terminal event to the run's broadcast channel AND
+-- remove the run from the registry in a single STM transaction.
+-- This eliminates the race window where a WebSocket subscriber could
+-- dupTChan AFTER the terminal event is written but BEFORE the run is
+-- removed — which would cause the subscriber to start after the terminal
+-- write position and block in forwardEvents forever.
+broadcastAndUnregisterRun :: RunId -> Value -> AppM ()
+broadcastAndUnregisterRun rid event = do
+  broadcasts <- asks envBroadcasts
+  liftIO $ atomically $ do
+    bMap <- readTVar broadcasts
+    case Map.lookup rid bMap of
+      Just ch -> writeTChan ch event
+      Nothing -> pure ()
+    modifyTVar broadcasts (Map.delete rid)
 
 -- ---------------------------------------------------------------------------
 -- Logging helpers

@@ -100,13 +100,22 @@ handleClient env conn = do
 -- events to the client until the run reaches a terminal state or disconnects.
 -- If the run already finished before the client subscribed, fetch its state
 -- from DB and emit a synthetic terminal event so the client can update.
+--
+-- The read + dupTChan is done in a single STM transaction so that it is
+-- atomic with respect to 'broadcastAndUnregisterRun': either we dup before
+-- the terminal write (and will see it), or we find Nothing in the map (and
+-- fall through to the synthetic path). Without this atomicity, we could dup
+-- after the terminal write but before the map deletion, starting the read
+-- cursor after the terminal event and blocking forwardEvents forever.
 subscribeAndForward :: AppEnv -> WS.Connection -> RunId -> IO ()
 subscribeAndForward env conn rid = do
-  broadcasts <- readTVarIO (envBroadcasts env)
-  case Map.lookup rid broadcasts of
-    Just ch -> do
-      dupCh <- atomically $ dupTChan ch
-      forwardEvents conn dupCh
+  mDupCh <- atomically $ do
+    bMap <- readTVar (envBroadcasts env)
+    case Map.lookup rid bMap of
+      Just ch -> Just <$> dupTChan ch
+      Nothing -> pure Nothing
+  case mDupCh of
+    Just dupCh -> forwardEvents conn dupCh
     Nothing -> do
       -- Run finished before the client subscribed — look up its final state
       -- and send a synthetic terminal event so the frontend can update.
