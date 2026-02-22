@@ -42,11 +42,12 @@ import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Time (UTCTime)
+import Data.Time (UTCTime, getCurrentTime)
 import qualified Network.WebSockets as WS
 
-import Eva.App (AppEnv (..))
+import Eva.App (AppEnv (..), runAppM)
 import Eva.Core.Types (NodeId, RunId (..), RunState (..), StepId, StepState (..))
+import Eva.Persistence.Queries (getRun)
 
 -- ---------------------------------------------------------------------------
 -- Subscribe message
@@ -97,14 +98,24 @@ handleClient env conn = do
 
 -- | Look up the broadcast channel for the given run, dup it, and forward
 -- events to the client until the run reaches a terminal state or disconnects.
+-- If the run already finished before the client subscribed, fetch its state
+-- from DB and emit a synthetic terminal event so the client can update.
 subscribeAndForward :: AppEnv -> WS.Connection -> RunId -> IO ()
 subscribeAndForward env conn rid = do
   broadcasts <- readTVarIO (envBroadcasts env)
   case Map.lookup rid broadcasts of
-    Nothing -> sendError conn "run not found or not active"
     Just ch -> do
       dupCh <- atomically $ dupTChan ch
       forwardEvents conn dupCh
+    Nothing -> do
+      -- Run finished before the client subscribed — look up its final state
+      -- and send a synthetic terminal event so the frontend can update.
+      mRun <- runAppM env (getRun rid)
+      now  <- getCurrentTime
+      case mRun of
+        Nothing  -> sendError conn "run not found"
+        Just run -> WS.sendTextData conn
+                      (encode (runStateEvent rid (runState run) now))
 
 -- | Read events from the duplicated channel and send them to the client.
 -- Closes cleanly when:
