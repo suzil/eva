@@ -21,6 +21,7 @@ export function useRunStream(runId: RunId | null, programId: string): void {
   const appendLlmToken = useUiStore((s) => s.appendLlmToken)
   const appendLogEntry = useUiStore((s) => s.appendLogEntry)
   const clearRunOutput = useUiStore((s) => s.clearRunOutput)
+  const setRunError = useUiStore((s) => s.setRunError)
 
   useEffect(() => {
     if (!runId) return
@@ -77,9 +78,21 @@ export function useRunStream(runId: RunId | null, programId: string): void {
                   if (step.error) errors[step.nodeId] = step.error
                 }
                 setNodeStepErrors(errors)
+                // Surface step errors in the output panel when the run failed
+                // with no LLM tokens (e.g. missing API key, unconfigured connector).
+                if (event.state === 'failed') {
+                  const msgs = Object.values(errors)
+                  if (msgs.length > 0) {
+                    setRunError(msgs.join('\n'))
+                  } else {
+                    setRunError('Run failed — check the Logs tab for details')
+                  }
+                }
               })
               .catch(() => {
-                // Best-effort; errors already shown via step_state badges
+                if (event.state === 'failed') {
+                  setRunError('Run failed — check the Logs tab for details')
+                }
               })
             setActiveRunId(null)
           }
@@ -102,5 +115,5 @@ export function useRunStream(runId: RunId | null, programId: string): void {
       // Clear overlays when we stop streaming (e.g. program switched)
       clearRunState()
     }
-  }, [runId, programId, queryClient, setNodeStepState, setNodeStepErrors, clearRunState, setActiveRunId, appendLlmToken, appendLogEntry, clearRunOutput])
+  }, [runId, programId, queryClient, setNodeStepState, setNodeStepErrors, clearRunState, setActiveRunId, appendLlmToken, appendLogEntry, clearRunOutput, setRunError])
 }

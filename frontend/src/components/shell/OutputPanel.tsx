@@ -4,6 +4,7 @@ import { useUiStore } from '../../store/uiStore'
 export function OutputPanel() {
   const llmOutput = useUiStore((s) => s.llmOutput)
   const activeRunId = useUiStore((s) => s.activeRunId)
+  const runError = useUiStore((s) => s.runError)
   const clearRunOutput = useUiStore((s) => s.clearRunOutput)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -34,6 +35,13 @@ export function OutputPanel() {
               <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-blue-400" aria-hidden />
             )}
           </pre>
+        ) : runError ? (
+          <div className="rounded border border-red-900/60 bg-red-950/40 p-3">
+            <p className="mb-1 text-xs font-semibold text-red-400">Run failed</p>
+            <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-red-300">
+              {runError}
+            </pre>
+          </div>
         ) : (
           <p className="text-xs text-gray-600">
             {activeRunId ? 'Waiting for output…' : 'No output yet — click Run to execute the program'}

@@ -21,6 +21,8 @@ interface UiState {
   llmOutput: string
   /** Accumulated log entries from the active (or most recent) run. */
   logEntries: LogEntry[]
+  /** Error message from a failed run, shown in the output panel when no LLM tokens were produced. */
+  runError: string | null
 
   setActiveActivity: (activity: ActivityKey) => void
   setMode: (mode: AppMode) => void
@@ -32,9 +34,10 @@ interface UiState {
   setSelectedProgramId: (id: string | null) => void
   setActiveRunId: (id: RunId | null) => void
   setInspectedRunId: (id: RunId | null) => void
+  setRunError: (msg: string | null) => void
   appendLlmToken: (token: string) => void
   appendLogEntry: (entry: LogEntry) => void
-  /** Reset output and logs — called when a new run starts. */
+  /** Reset output, logs, and error — called when a new run starts. */
   clearRunOutput: () => void
 }
 
@@ -50,6 +53,7 @@ export const useUiStore = create<UiState>((set) => ({
   inspectedRunId: null,
   llmOutput: '',
   logEntries: [],
+  runError: null,
 
   setActiveActivity: (activity) => set({ activeActivity: activity }),
   setMode: (mode) => set({ mode }),
@@ -61,7 +65,8 @@ export const useUiStore = create<UiState>((set) => ({
   setSelectedProgramId: (id) => set({ selectedProgramId: id }),
   setActiveRunId: (id) => set({ activeRunId: id }),
   setInspectedRunId: (id) => set({ inspectedRunId: id }),
+  setRunError: (msg) => set({ runError: msg }),
   appendLlmToken: (token) => set((s) => ({ llmOutput: s.llmOutput + token })),
   appendLogEntry: (entry) => set((s) => ({ logEntries: [...s.logEntries, entry] })),
-  clearRunOutput: () => set({ llmOutput: '', logEntries: [] }),
+  clearRunOutput: () => set({ llmOutput: '', logEntries: [], runError: null }),
 }))
