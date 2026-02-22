@@ -1,31 +1,23 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { fetchRunDetail } from '../api/client'
 import { useCanvasStore } from '../store/canvasStore'
 import { useUiStore } from '../store/uiStore'
 import type { NodeId, RunId, WsEvent } from '../types'
 
-interface UseRunStreamOptions {
-  onLlmToken?: (nodeId: NodeId, token: string) => void
-}
-
 /**
  * Connects to the WebSocket run stream for the given runId.
- * Drives canvas step-state overlays, edge animation, and exposes LLM tokens.
- * Cleans up automatically when runId changes or the component unmounts.
+ * Drives canvas step-state overlays, edge animation, LLM token streaming,
+ * and log entry accumulation. Cleans up automatically when runId changes
+ * or the component unmounts.
  */
-export function useRunStream(
-  runId: RunId | null,
-  _programId: string,
-  opts: UseRunStreamOptions = {},
-): void {
+export function useRunStream(runId: RunId | null, _programId: string): void {
   const setNodeStepState = useCanvasStore((s) => s.setNodeStepState)
   const setNodeStepErrors = useCanvasStore((s) => s.setNodeStepErrors)
   const clearRunState = useCanvasStore((s) => s.clearRunState)
   const setActiveRunId = useUiStore((s) => s.setActiveRunId)
-
-  // Keep opts in a ref so the effect doesn't re-run when callbacks change identity
-  const optsRef = useRef(opts)
-  optsRef.current = opts
+  const appendLlmToken = useUiStore((s) => s.appendLlmToken)
+  const appendLogEntry = useUiStore((s) => s.appendLogEntry)
+  const clearRunOutput = useUiStore((s) => s.clearRunOutput)
 
   useEffect(() => {
     if (!runId) return
@@ -53,14 +45,23 @@ export function useRunStream(
           break
 
         case 'llm_token':
-          optsRef.current.onLlmToken?.(event.nodeId, event.token)
+          appendLlmToken(event.token)
           break
 
         case 'log_entry':
-          // EVA-28 will consume log_entry events for the Logs tab
+          appendLogEntry({
+            stepId: event.stepId,
+            level: event.level,
+            message: event.message,
+            timestamp: event.timestamp,
+          })
           break
 
         case 'run_state': {
+          if (event.state === 'running') {
+            // Clear stale output from a previous run when this run begins emitting
+            clearRunOutput()
+          }
           const terminal = event.state === 'completed' || event.state === 'failed' || event.state === 'canceled'
           if (terminal) {
             // Fetch full run detail to get per-step error messages
@@ -96,5 +97,5 @@ export function useRunStream(
       // Clear overlays when we stop streaming (e.g. program switched)
       clearRunState()
     }
-  }, [runId, setNodeStepState, setNodeStepErrors, clearRunState, setActiveRunId])
+  }, [runId, setNodeStepState, setNodeStepErrors, clearRunState, setActiveRunId, appendLlmToken, appendLogEntry, clearRunOutput])
 }

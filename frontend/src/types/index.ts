@@ -279,11 +279,24 @@ export interface RunDetail {
 }
 
 // ---------------------------------------------------------------------------
+// Log entry — produced by backend node handlers, streamed via WebSocket
+// ---------------------------------------------------------------------------
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+export interface LogEntry {
+  stepId: StepId
+  level: LogLevel
+  message: string
+  timestamp: string
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket event types — shapes match Eva.Api.WebSocket event constructors
 // ---------------------------------------------------------------------------
 
 export type WsEvent =
   | { type: 'step_state'; runId: RunId; nodeId: NodeId; stepId: StepId; state: StepState; timestamp: string }
   | { type: 'llm_token'; runId: RunId; nodeId: NodeId; token: string; timestamp: string }
-  | { type: 'log_entry'; runId: RunId; stepId: StepId; level: string; message: string; timestamp: string }
+  | { type: 'log_entry'; runId: RunId; stepId: StepId; level: LogLevel; message: string; timestamp: string }
   | { type: 'run_state'; runId: RunId; state: RunState; timestamp: string }
