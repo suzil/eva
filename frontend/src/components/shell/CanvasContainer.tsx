@@ -15,7 +15,7 @@ import {
   type IsValidConnection,
   type NodeMouseHandler,
   type EdgeMouseHandler,
-  type NodeDragHandler,
+  type OnNodeDrag,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { nodeTypes } from '../nodes'
@@ -130,7 +130,7 @@ function CanvasInner() {
     }
   }, [triggerFitView, fitView, setTriggerFitView])
 
-  const onNodeDragStart: NodeDragHandler = useCallback(() => {
+  const onNodeDragStart: OnNodeDrag<Node<EvaNodeData>> = useCallback(() => {
     snapshot()
   }, [snapshot])
 
@@ -236,7 +236,7 @@ function CanvasInner() {
         onPaneClick={onPaneClick}
         nodesDraggable={!isOperate}
         nodesConnectable={!isOperate}
-        edgesUpdatable={!isOperate}
+        edgesReconnectable={!isOperate}
         deleteKeyCode={isOperate ? null : ['Backspace', 'Delete']}
         fitView
         fitViewOptions={{ padding: 0.3 }}

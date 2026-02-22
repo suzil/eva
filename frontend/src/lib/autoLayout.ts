@@ -8,7 +8,7 @@ const NODE_HEIGHT = 80
  * Applies a Dagre left-to-right layout to the given nodes and edges.
  * Returns a new array of nodes with updated positions. Edges are unchanged.
  */
-export function applyDagreLayout(nodes: Node[], edges: Edge[]): Node[] {
+export function applyDagreLayout<T extends Node>(nodes: T[], edges: Edge[]): T[] {
   if (nodes.length === 0) return nodes
 
   const g = new dagre.graphlib.Graph()
