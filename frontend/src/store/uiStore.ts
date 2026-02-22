@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { RunId } from '../types'
 
 export type ActivityKey = 'programs' | 'nodes' | 'knowledge' | 'runs' | 'settings'
 export type AppMode = 'author' | 'operate'
@@ -12,6 +13,8 @@ interface UiState {
   sidePanelWidth: number
   detailPanelWidth: number
   selectedProgramId: string | null
+  /** The run currently being streamed, or null when idle. */
+  activeRunId: RunId | null
 
   setActiveActivity: (activity: ActivityKey) => void
   setMode: (mode: AppMode) => void
@@ -21,6 +24,7 @@ interface UiState {
   setSidePanelWidth: (width: number) => void
   setDetailPanelWidth: (width: number) => void
   setSelectedProgramId: (id: string | null) => void
+  setActiveRunId: (id: RunId | null) => void
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -31,6 +35,7 @@ export const useUiStore = create<UiState>((set) => ({
   sidePanelWidth: 240,
   detailPanelWidth: 360,
   selectedProgramId: null,
+  activeRunId: null,
 
   setActiveActivity: (activity) => set({ activeActivity: activity }),
   setMode: (mode) => set({ mode }),
@@ -40,4 +45,5 @@ export const useUiStore = create<UiState>((set) => ({
   setSidePanelWidth: (width) => set({ sidePanelWidth: Math.min(500, Math.max(180, width)) }),
   setDetailPanelWidth: (width) => set({ detailPanelWidth: Math.min(600, Math.max(280, width)) }),
   setSelectedProgramId: (id) => set({ selectedProgramId: id }),
+  setActiveRunId: (id) => set({ activeRunId: id }),
 }))

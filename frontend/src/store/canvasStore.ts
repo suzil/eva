@@ -7,7 +7,7 @@ import {
   type NodeChange,
   type EdgeChange,
 } from '@xyflow/react'
-import type { EvaNodeData, Graph, NodeType, PortCategory } from '../types'
+import type { EvaNodeData, Graph, NodeId, NodeType, PortCategory, StepState } from '../types'
 
 // ---------------------------------------------------------------------------
 // Store shape
@@ -21,6 +21,11 @@ interface CanvasState {
   selectedEdgeId: string | null
   isDirty: boolean
 
+  /** Per-node step states during a run. Drives BaseNode rings/badges and edge animation. */
+  nodeStepStates: Record<NodeId, StepState>
+  /** Per-node step error messages, populated from RunDetail when a run finishes. */
+  nodeStepErrors: Record<NodeId, string>
+
   loadGraph: (graph: Graph, programId: string) => void
   applyNodeChanges: (changes: NodeChange<Node<EvaNodeData>>[]) => void
   applyEdgeChanges: (changes: EdgeChange[]) => void
@@ -33,6 +38,13 @@ interface CanvasState {
   clearSelection: () => void
   markClean: () => void
 
+  /** Update a single node's step state and sync it into EvaNodeData for BaseNode rendering. */
+  setNodeStepState: (nodeId: NodeId, state: StepState) => void
+  /** Bulk-set step errors (keyed by nodeId) after fetching RunDetail. */
+  setNodeStepErrors: (errors: Record<NodeId, string>) => void
+  /** Reset all run-time overlays (step states + errors) after a run finishes or a new graph loads. */
+  clearRunState: () => void
+
   /** Convert current store state to API Graph shape for PUT /programs/:id/graph */
   buildGraph: () => Graph
 }
@@ -44,6 +56,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   selectedNodeId: null,
   selectedEdgeId: null,
   isDirty: false,
+  nodeStepStates: {},
+  nodeStepErrors: {},
 
   loadGraph: (graph, programId) => {
     const nodes: Node<EvaNodeData>[] = Object.values(graph.nodes).map((n) => ({
@@ -60,7 +74,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       targetHandle: e.targetPort,
       type: e.category,
     }))
-    set({ nodes, edges, currentProgramId: programId, isDirty: false, selectedNodeId: null, selectedEdgeId: null })
+    set({ nodes, edges, currentProgramId: programId, isDirty: false, selectedNodeId: null, selectedEdgeId: null, nodeStepStates: {}, nodeStepErrors: {} })
   },
 
   applyNodeChanges: (changes) =>
@@ -109,6 +123,27 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set({ selectedNodeId: null, selectedEdgeId: null }),
 
   markClean: () => set({ isDirty: false }),
+
+  setNodeStepState: (nodeId, state) =>
+    set((s) => ({
+      nodeStepStates: { ...s.nodeStepStates, [nodeId]: state },
+      nodes: s.nodes.map((n) =>
+        n.id === nodeId ? { ...n, data: { ...n.data, stepState: state } } : n,
+      ),
+    })),
+
+  setNodeStepErrors: (errors) => set({ nodeStepErrors: errors }),
+
+  clearRunState: () =>
+    set((s) => ({
+      nodeStepStates: {},
+      nodeStepErrors: {},
+      nodes: s.nodes.map((n) => {
+        if (n.data.stepState === undefined) return n
+        const { stepState: _, ...rest } = n.data
+        return { ...n, data: rest as EvaNodeData }
+      }),
+    })),
 
   buildGraph: () => {
     const { nodes, edges } = get()

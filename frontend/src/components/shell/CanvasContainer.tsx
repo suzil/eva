@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -94,6 +94,7 @@ function buildDefaultNode(
 function CanvasInner() {
   const nodes = useCanvasStore((s) => s.nodes)
   const edges = useCanvasStore((s) => s.edges)
+  const nodeStepStates = useCanvasStore((s) => s.nodeStepStates)
   const currentProgramId = useCanvasStore((s) => s.currentProgramId)
   const loadGraph = useCanvasStore((s) => s.loadGraph)
   const applyNodes = useCanvasStore((s) => s.applyNodeChanges)
@@ -181,11 +182,22 @@ function CanvasInner() {
 
   const onPaneClick = useCallback(() => clearSelection(), [clearSelection])
 
+  // Animate data edges whose source node is currently running
+  const animatedEdges = useMemo(
+    () =>
+      edges.map((e) =>
+        e.type === 'data' && nodeStepStates[e.source] === 'running'
+          ? { ...e, animated: true }
+          : e,
+      ),
+    [edges, nodeStepStates],
+  )
+
   return (
     <div className="relative flex flex-1 flex-col">
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={animatedEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}

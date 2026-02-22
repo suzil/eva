@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Graph, CreateProgramReq, PatchProgramReq } from '../types/index.ts'
 import {
+  cancelRun,
   createProgram,
+  createRun,
   deleteProgram,
   deployProgram,
   fetchProgram,
   fetchPrograms,
+  fetchRunDetail,
   patchProgram,
   pauseProgram,
   putGraph,
@@ -125,6 +128,34 @@ export function useResumeProgram(id: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: programKeys.detail(id) })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Runs
+// ---------------------------------------------------------------------------
+
+export const runKeys = {
+  detail: (id: string) => ['runs', id] as const,
+}
+
+export function useCreateRun(programId: string) {
+  return useMutation({
+    mutationFn: (triggerPayload?: unknown) => createRun(programId, triggerPayload),
+  })
+}
+
+export function useRunDetail(runId: string | null) {
+  return useQuery({
+    queryKey: runKeys.detail(runId ?? ''),
+    queryFn: () => fetchRunDetail(runId!),
+    enabled: Boolean(runId),
+  })
+}
+
+export function useCancelRun() {
+  return useMutation({
+    mutationFn: (runId: string) => cancelRun(runId),
   })
 }
 

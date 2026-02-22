@@ -270,11 +270,20 @@ export interface EvaNodeData extends Record<string, unknown> {
 }
 
 // ---------------------------------------------------------------------------
-// WebSocket event types (for M4 useRunStream)
+// Execution detail (GET /api/runs/:id)
+// ---------------------------------------------------------------------------
+
+export interface RunDetail {
+  run: Run
+  steps: Step[]
+}
+
+// ---------------------------------------------------------------------------
+// WebSocket event types — shapes match Eva.Api.WebSocket event constructors
 // ---------------------------------------------------------------------------
 
 export type WsEvent =
-  | { type: 'step_state'; stepId: StepId; state: StepState }
-  | { type: 'llm_token'; stepId: StepId; token: string }
-  | { type: 'log_entry'; stepId: StepId; level: string; message: string }
-  | { type: 'run_state'; runId: RunId; state: RunState }
+  | { type: 'step_state'; runId: RunId; nodeId: NodeId; stepId: StepId; state: StepState; timestamp: string }
+  | { type: 'llm_token'; runId: RunId; nodeId: NodeId; token: string; timestamp: string }
+  | { type: 'log_entry'; runId: RunId; stepId: StepId; level: string; message: string; timestamp: string }
+  | { type: 'run_state'; runId: RunId; state: RunState; timestamp: string }
