@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Save, Loader2 } from 'lucide-react'
+import { Save, Loader2, AlertCircle } from 'lucide-react'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useUiStore } from '../../store/uiStore'
 import { useSaveGraph } from '../../api/hooks'
@@ -66,6 +66,7 @@ function AccessSummary({ nodeId }: { nodeId: string }) {
 export function NodePanel() {
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId)
   const nodes = useCanvasStore((s) => s.nodes)
+  const nodeStepErrors = useCanvasStore((s) => s.nodeStepErrors)
   const updateNodeLabel = useCanvasStore((s) => s.updateNodeLabel)
   const updateNodeConfig = useCanvasStore((s) => s.updateNodeConfig)
   const buildGraph = useCanvasStore((s) => s.buildGraph)
@@ -162,6 +163,19 @@ export function NodePanel() {
       {saveGraph.isError && (
         <div className="shrink-0 border-b border-red-900/60 bg-red-950/40 px-3 py-1 text-[10px] text-red-400">
           Save failed — {(saveGraph.error as Error).message}
+        </div>
+      )}
+
+      {/* Step execution error */}
+      {node.data.stepState === 'failed' && nodeStepErrors[node.id] && (
+        <div className="shrink-0 border-b border-red-900/60 bg-red-950/40 px-3 py-2">
+          <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-red-500">
+            <AlertCircle size={11} />
+            Step failed
+          </div>
+          <p className="whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-red-300">
+            {nodeStepErrors[node.id]}
+          </p>
         </div>
       )}
 

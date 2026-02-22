@@ -5,6 +5,8 @@ import type {
   PatchProgramReq,
   ValidateResult,
   ApiError,
+  Run,
+  RunDetail,
 } from '../types/index.ts'
 
 const BASE = '/api'
@@ -80,4 +82,23 @@ export function pauseProgram(id: string): Promise<Program> {
 
 export function resumeProgram(id: string): Promise<Program> {
   return request<Program>(`/programs/${id}/resume`, { method: 'POST' })
+}
+
+// ---------------------------------------------------------------------------
+// Runs
+// ---------------------------------------------------------------------------
+
+export function createRun(programId: string, triggerPayload?: unknown): Promise<Run> {
+  return request<Run>(`/programs/${programId}/runs`, {
+    method: 'POST',
+    body: JSON.stringify({ triggerPayload: triggerPayload ?? null }),
+  })
+}
+
+export function fetchRunDetail(runId: string): Promise<RunDetail> {
+  return request<RunDetail>(`/runs/${runId}`)
+}
+
+export function cancelRun(runId: string): Promise<Run> {
+  return request<Run>(`/runs/${runId}/cancel`, { method: 'POST' })
 }
