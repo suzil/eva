@@ -122,8 +122,8 @@ makeApp env =
 -- fallback for unmatched routes (SPA client-side routing). API paths
 -- (starting with @/api@) are forwarded to the inner application.
 withStaticFiles :: FilePath -> Application -> Application
-withStaticFiles dir apiApp req respond
-  | "/api" `BS.isPrefixOf` rawPathInfo req = apiApp req respond
+withStaticFiles dir apiApp req sendResponse
+  | "/api" `BS.isPrefixOf` rawPathInfo req = apiApp req sendResponse
   | otherwise =
       let spaFallback _ res =
             res $ responseFile status200
@@ -132,7 +132,7 @@ withStaticFiles dir apiApp req respond
               Nothing
           settings = (defaultFileServerSettings dir)
             { ss404Handler = Just spaFallback }
-      in staticApp settings req respond
+      in staticApp settings req sendResponse
 
 -- ---------------------------------------------------------------------------
 -- CORS middleware (inline — no extra dependency)
