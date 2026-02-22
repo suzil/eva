@@ -264,3 +264,45 @@ import qualified Eva.Crypto as Crypto
 **JSON naming:** `Credential` uses `dropPrefix "credential"` so `credentialType` serializes
 as `"type"`. `CreateCredentialReq` also uses `"type"` (not `"credType"`) for consistency.
 The secret field never appears in responses — only `id`, `name`, `system`, `type`, `createdAt`.
+
+## ConnectorRunner — Record of Functions (EVA-30)
+
+`ConnectorRunner` is a record-of-functions (parallel to `LLMClient`) defined in
+`Eva.Integration.Types`. It uses `IO` (not `AppM`) to keep `Integration.Types` free of
+the `AppM` dependency. **`Core.Types` re-exports `module Eva.Integration.Types`** so all
+connector types are available everywhere that imports `Core.Types`.
+
+```haskell
+data ConnectorRunner = ConnectorRunner
+  { connectorAvailableActions :: IO [ActionSpec]
+  , connectorExecuteAction    :: ActionName -> Value -> IO (Either ConnectorError Value)
+  }
+```
+
+**Resolution flow:** `Runner.resolveResourceBindings` (now `AppM`) calls
+`Engine.Handlers.Connector.resolveConnectorRunner` for each `ConnectorConfig` in
+resource edges. Runners are stored in `ResourceBindings.rbConnectorRunners :: [ConnectorRunner]`
+alongside the raw configs in `rbConnectors`.
+
+**Credential lookup:** `Persistence.Queries.getDecryptedCredential :: CredentialId -> AppM (Either String ByteString)` fetches and decrypts the credential row using `envCredentialKey`.
+
+**Error hierarchy:**
+```haskell
+data ConnectorError
+  = ConnectorMissingCredential Text  -- no credentialId set
+  | ConnectorInvalidCredential Text  -- credential not found or decrypt failed
+  | ConnectorUnsupported Text         -- system type not yet implemented
+  | ConnectorApiError Text            -- runtime API error
+```
+
+**Adding a new connector:** implement `mkXxxRunner :: ByteString -> ConnectorConfig -> ConnectorRunner`
+in `Integration/Xxx.hs`, then add the `SystemXxx` case in `Engine.Handlers.Connector.mkRunner`.
+
+**Circular dependency note:** `Integration.Types` has NO Eva-internal imports (it uses a local
+`dropPrefixOpts` copy instead of importing `dropPrefix` from `Core.Types`). This is intentional
+— `Core.Types` imports `Integration.Types`, so the dependency goes one way only.
+
+**Test pattern for ConnectorSpec:** use `withTestEnv` (same shape as AgentSpec), call
+`resolveConnectorRunner cfg` directly, insert test credentials with `insertCredential`.
+`ConnectorRunner` has no `Show` instance (functions can't be shown) — use
+`connectorErrorText err` for failure messages instead of `show other`.
