@@ -57,6 +57,9 @@ library
     , crypton             ^>=1.0
     , memory              ^>=0.18
     , envparse            ^>=0.5
+    , yaml                ^>=0.11
+    , monad-logger        ^>=0.3
+    , directory           ^>=1.3
     , text                ^>=2.1
     , bytestring          ^>=0.12
     , containers          ^>=0.7

@@ -6,10 +6,10 @@ module Main where
 
 import Data.Aeson (ToJSON (..), object, (.=))
 import Data.Text (Text)
+import Eva.App (logMsg, makeAppEnv, runAppM)
+import Eva.Config (LogLevel (..), configPort, loadConfig)
 import Network.Wai.Handler.Warp (run)
 import Servant
-import System.Environment (lookupEnv)
-import Text.Read (readMaybe)
 
 -- Health check API: GET /api/health
 type HealthAPI = "api" :> "health" :> Get '[JSON] HealthResponse
@@ -28,7 +28,8 @@ app = serve (Proxy :: Proxy HealthAPI) healthHandler
 
 main :: IO ()
 main = do
-  portEnv <- lookupEnv "PORT"
-  let port = maybe 8080 id (portEnv >>= readMaybe)
-  putStrLn $ "Eva backend listening on port " <> show port
+  cfg <- loadConfig
+  env <- makeAppEnv cfg
+  runAppM env $ logMsg LogInfo "Eva backend starting"
+  let port = configPort cfg
   run port app
