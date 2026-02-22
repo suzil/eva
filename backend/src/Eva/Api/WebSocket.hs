@@ -46,7 +46,7 @@ import Data.Time (UTCTime, getCurrentTime)
 import qualified Network.WebSockets as WS
 
 import Eva.App (AppEnv (..), runAppM)
-import Eva.Core.Types (NodeId, RunId (..), RunState (..), StepId, StepState (..))
+import Eva.Core.Types (NodeId, Run (..), RunId (..), RunState (..), StepId, StepState (..))
 import Eva.Persistence.Queries (getRun)
 
 -- ---------------------------------------------------------------------------
