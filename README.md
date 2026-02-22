@@ -110,14 +110,21 @@ Copy `.env.example` to `.env` and fill in the values below. Never commit `.env`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `8080` | Backend HTTP port |
-| `DB_PATH` | `./eva.db` | SQLite database file path |
-| `LLM_API_KEY` | — | OpenAI API key (required for Agent nodes using GPT models) |
-| `ANTHROPIC_API_KEY` | — | Anthropic API key (required for Agent nodes using Claude models) |
-| `CREDENTIAL_MASTER_KEY` | — | 32-byte hex key for AES-256-GCM credential encryption. Generate with: `openssl rand -hex 32` |
-| `LOG_LEVEL` | `info` | Log verbosity: `debug`, `info`, `warn`, or `error` |
+| `EVA_PORT` | `8080` | Backend HTTP port |
+| `EVA_DB_PATH` | `./eva.db` | SQLite database file path |
+| `EVA_LLM_API_KEY` | — | OpenAI API key (required for Agent nodes using GPT models) |
+| `EVA_ANTHROPIC_API_KEY` | — | Anthropic API key (required for Agent nodes using Claude models) |
+| `EVA_CREDENTIAL_KEY` | — | 32-byte hex key for AES-256-GCM credential encryption. Generate with: `openssl rand -hex 32` |
+| `EVA_LOG_LEVEL` | `info` | Log verbosity: `debug`, `info`, `warn`, or `error` |
 
-At minimum you need `LLM_API_KEY` (or `ANTHROPIC_API_KEY`) to run Agent nodes, and `CREDENTIAL_MASTER_KEY` to store connector credentials.
+At minimum you need `EVA_LLM_API_KEY` (or `EVA_ANTHROPIC_API_KEY`) to run Agent nodes, and `EVA_CREDENTIAL_KEY` to store connector credentials.
+
+To load `.env` into a `make dev` session:
+```bash
+set -a && source .env && set +a && make dev
+```
+
+Alternatively, put the values directly in `backend/eva.yaml` — the backend loads it automatically as a fallback.
 
 ## Development
 
