@@ -1,17 +1,25 @@
-.PHONY: dev build test install-ghcid
+.PHONY: dev build test install install-ghcid
 
-# Hot-reload REPL for backend development.
-# Requires ghcid: run `make install-ghcid` once to install it.
+# Start backend (ghcid hot-reload) and frontend (Vite) concurrently.
+# Ctrl+C kills both.
 dev:
-	cd backend && ghcid
+	@trap 'kill 0' INT; \
+	(cd backend && ghcid) & \
+	(cd frontend && npm run dev) & \
+	wait
 
 install-ghcid:
 	cabal install ghcid --overwrite-policy=always
 
-# Build the backend (and frontend when it exists).
+install:
+	cd frontend && npm install
+
+# Build backend and frontend.
 build:
 	cd backend && cabal build all
+	cd frontend && npm run build
 
-# Run backend tests.
+# Run backend (cabal) and frontend (Vitest) test suites.
 test:
 	cd backend && cabal test all --test-show-details=direct
+	cd frontend && npm test
