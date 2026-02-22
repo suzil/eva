@@ -1,0 +1,4 @@
+EVA_DB_PATH: "eva.db"
+EVA_PORT: "8080"
+EVA_LOG_LEVEL: "debug"
+# EVA_LLM_API_KEY: "sk-..."
