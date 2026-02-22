@@ -41,6 +41,9 @@ export function Toolbar() {
 
   const { data: program } = useProgram(selectedProgramId ?? '')
 
+  const setBottomPanelOpen = useUiStore((s) => s.setBottomPanelOpen)
+  const setActiveBottomTab = useUiStore((s) => s.setActiveBottomTab)
+
   const isDirty = useCanvasStore((s) => s.isDirty)
   const buildGraph = useCanvasStore((s) => s.buildGraph)
   const markClean = useCanvasStore((s) => s.markClean)
@@ -98,6 +101,9 @@ export function Toolbar() {
           onSuccess: (run) => {
             clearRunState()
             setActiveRunId(run.id)
+            // Open the Output tab so streaming tokens are immediately visible
+            setBottomPanelOpen(true)
+            setActiveBottomTab('output')
             // runPhase transitions to 'running' via the activeRunId effect above
           },
           onError: (err) => {

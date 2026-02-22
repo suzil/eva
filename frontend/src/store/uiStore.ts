@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { RunId } from '../types'
+import type { LogEntry, RunId } from '../types'
 
 export type ActivityKey = 'programs' | 'nodes' | 'knowledge' | 'runs' | 'settings'
 export type AppMode = 'author' | 'operate'
@@ -15,6 +15,10 @@ interface UiState {
   selectedProgramId: string | null
   /** The run currently being streamed, or null when idle. */
   activeRunId: RunId | null
+  /** Accumulated LLM tokens from the active (or most recent) run. */
+  llmOutput: string
+  /** Accumulated log entries from the active (or most recent) run. */
+  logEntries: LogEntry[]
 
   setActiveActivity: (activity: ActivityKey) => void
   setMode: (mode: AppMode) => void
@@ -25,6 +29,10 @@ interface UiState {
   setDetailPanelWidth: (width: number) => void
   setSelectedProgramId: (id: string | null) => void
   setActiveRunId: (id: RunId | null) => void
+  appendLlmToken: (token: string) => void
+  appendLogEntry: (entry: LogEntry) => void
+  /** Reset output and logs — called when a new run starts. */
+  clearRunOutput: () => void
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -36,6 +44,8 @@ export const useUiStore = create<UiState>((set) => ({
   detailPanelWidth: 360,
   selectedProgramId: null,
   activeRunId: null,
+  llmOutput: '',
+  logEntries: [],
 
   setActiveActivity: (activity) => set({ activeActivity: activity }),
   setMode: (mode) => set({ mode }),
@@ -46,4 +56,7 @@ export const useUiStore = create<UiState>((set) => ({
   setDetailPanelWidth: (width) => set({ detailPanelWidth: Math.min(600, Math.max(280, width)) }),
   setSelectedProgramId: (id) => set({ selectedProgramId: id }),
   setActiveRunId: (id) => set({ activeRunId: id }),
+  appendLlmToken: (token) => set((s) => ({ llmOutput: s.llmOutput + token })),
+  appendLogEntry: (entry) => set((s) => ({ logEntries: [...s.logEntries, entry] })),
+  clearRunOutput: () => set({ llmOutput: '', logEntries: [] }),
 }))

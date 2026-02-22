@@ -1,5 +1,7 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { type BottomTab, useUiStore } from '../../store/uiStore'
+import { LogsPanel } from './LogsPanel'
+import { OutputPanel } from './OutputPanel'
 
 const TABS: { key: BottomTab; label: string; disabled?: boolean }[] = [
   { key: 'logs', label: 'Logs' },
@@ -69,11 +71,9 @@ export function BottomPanel() {
 
       {/* Content */}
       {open && (
-        <div className="flex flex-1 items-center justify-center overflow-auto">
-          <p className="text-xs text-gray-600">
-            {activeTab === 'logs' && 'Log output (EVA-28)'}
-            {activeTab === 'output' && 'Execution output (EVA-28)'}
-          </p>
+        <div className="flex flex-1 overflow-hidden">
+          {activeTab === 'logs' && <LogsPanel />}
+          {activeTab === 'output' && <OutputPanel />}
         </div>
       )}
     </div>
