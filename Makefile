@@ -2,8 +2,10 @@
 
 # Start backend (ghcid hot-reload) and frontend (Vite) concurrently.
 # Ctrl+C kills both.
+# Sources .env automatically if present (sets EVA_* vars for the backend).
 dev:
-	@trap 'kill 0' INT; \
+	@set -a; [ -f .env ] && . ./.env || true; set +a; \
+	trap 'kill 0' INT; \
 	(cd backend && ghcid) & \
 	(cd frontend && npm run dev) & \
 	wait
