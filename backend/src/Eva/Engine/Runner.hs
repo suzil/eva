@@ -210,6 +210,11 @@ graphWalkerLoop ctx graph = do
                             Nothing                          -> walkerNid
                 skipDescendants ctx graph executableNodes nid
                 liftIO $ markUnhandledError ctx
+                -- If the failed node is itself a terminal (no descendants were
+                -- skipped), checkAndSignalDone inside skipDescendants was never
+                -- called, and the STM retry in the next `go` iteration would
+                -- block forever.  Call it here to handle that case.
+                liftIO $ checkAndSignalDone ctx terminals
 
           go env dEdges terminals executableNodes
 
