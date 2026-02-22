@@ -25,6 +25,7 @@ library
     Eva.Engine.Dispatch
     Eva.Engine.Handlers.Action
     Eva.Engine.Handlers.Agent
+    Eva.Engine.Handlers.Connector
     Eva.Engine.Handlers.Trigger
     Eva.Engine.LLM
     Eva.Engine.Scheduler
@@ -97,6 +98,7 @@ test-suite eva-test
     Eva.Core.ValidationSpec
     Eva.Engine.Handlers.ActionSpec
     Eva.Engine.Handlers.AgentSpec
+    Eva.Engine.Handlers.ConnectorSpec
     Eva.Engine.Handlers.TriggerSpec
     Eva.Engine.LLMSpec
     Eva.Engine.RetrySpec

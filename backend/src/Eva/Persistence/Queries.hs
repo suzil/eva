@@ -35,6 +35,7 @@ module Eva.Persistence.Queries
   , insertCredential
   , listCredentials
   , deleteCredential
+  , getDecryptedCredential
   ) where
 
 import Control.Monad (forM_)
@@ -69,6 +70,7 @@ import Data.ByteString (ByteString)
 
 import Eva.App (AppEnv (..), AppM)
 import Eva.Core.Types
+import qualified Eva.Crypto as Crypto
 import Eva.Persistence.Schema
 
 -- ---------------------------------------------------------------------------
@@ -513,3 +515,13 @@ listCredentials = runDb $ do
 
 deleteCredential :: CredentialId -> AppM ()
 deleteCredential cid = runDb $ delete (toCredentialRowId cid)
+
+-- | Look up a credential by ID and return its decrypted secret bytes.
+-- Returns Left if the credential is not found or decryption fails.
+getDecryptedCredential :: CredentialId -> AppM (Either String ByteString)
+getDecryptedCredential cid = do
+  credKey <- asks envCredentialKey
+  mRow <- runDb $ get (toCredentialRowId cid)
+  case mRow of
+    Nothing  -> pure $ Left $ "credential not found: " <> T.unpack (let CredentialId t = cid in t)
+    Just row -> pure $ Crypto.decrypt credKey (credentialRowEncryptedData row)

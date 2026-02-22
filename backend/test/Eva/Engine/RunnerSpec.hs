@@ -277,50 +277,53 @@ spec = do
         Map.member ("n-k", "content") (rcMailboxes ctx) `shouldBe` False
 
   -- -------------------------------------------------------------------------
-  -- AC5: resolveResourceBindings — pure unit tests
+  -- AC5: resolveResourceBindings — monadic unit tests (needs AppEnv for cred lookup)
   -- -------------------------------------------------------------------------
 
   describe "resolveResourceBindings" $ do
 
-    it "AC5: returns Knowledge and Connector configs from resource edges" $ do
-      let nAgent     = agentNode     "n-agent"
-          nKnowledge = knowledgeNode "n-k"
-          nConnector = connectorNode "n-c"
-          eKnow      = resourceEdge "e1" "n-k" "content" "n-agent" "context"
-          eConn      = resourceEdge "e2" "n-c" "tools"   "n-agent" "tools"
-          graph = Graph
-            { graphNodes = Map.fromList
-                [ ("n-agent",     nAgent)
-                , ("n-k",         nKnowledge)
-                , ("n-c",         nConnector)
-                ]
-            , graphEdges = [eKnow, eConn]
-            }
-          bindings = resolveResourceBindings graph "n-agent"
-      length (rbKnowledge  bindings) `shouldBe` 1
-      length (rbConnectors bindings) `shouldBe` 1
+    it "AC5: returns Knowledge and Connector configs from resource edges" $
+      withTestEnv $ \env -> do
+        let nAgent     = agentNode     "n-agent"
+            nKnowledge = knowledgeNode "n-k"
+            nConnector = connectorNode "n-c"
+            eKnow      = resourceEdge "e1" "n-k" "content" "n-agent" "context"
+            eConn      = resourceEdge "e2" "n-c" "tools"   "n-agent" "tools"
+            graph = Graph
+              { graphNodes = Map.fromList
+                  [ ("n-agent",     nAgent)
+                  , ("n-k",         nKnowledge)
+                  , ("n-c",         nConnector)
+                  ]
+              , graphEdges = [eKnow, eConn]
+              }
+        bindings <- runAppM env $ resolveResourceBindings graph "n-agent"
+        length (rbKnowledge  bindings) `shouldBe` 1
+        length (rbConnectors bindings) `shouldBe` 1
 
-    it "AC5: data edges are ignored by resolveResourceBindings" $ do
-      let nTrigger = triggerNode "n-t"
-          nAgent   = agentNode   "n-a"
-          eData    = dataEdge "e1" "n-t" "event" "n-a" "instruction"
-          graph = Graph
-            { graphNodes = Map.fromList [("n-t", nTrigger), ("n-a", nAgent)]
-            , graphEdges = [eData]
-            }
-          bindings = resolveResourceBindings graph "n-a"
-      length (rbKnowledge  bindings) `shouldBe` 0
-      length (rbConnectors bindings) `shouldBe` 0
+    it "AC5: data edges are ignored by resolveResourceBindings" $
+      withTestEnv $ \env -> do
+        let nTrigger = triggerNode "n-t"
+            nAgent   = agentNode   "n-a"
+            eData    = dataEdge "e1" "n-t" "event" "n-a" "instruction"
+            graph = Graph
+              { graphNodes = Map.fromList [("n-t", nTrigger), ("n-a", nAgent)]
+              , graphEdges = [eData]
+              }
+        bindings <- runAppM env $ resolveResourceBindings graph "n-a"
+        length (rbKnowledge  bindings) `shouldBe` 0
+        length (rbConnectors bindings) `shouldBe` 0
 
-    it "AC5: returns empty bindings when no resource edges target the node" $ do
-      let nAgent = agentNode "n-a"
-          graph  = Graph
-            { graphNodes = Map.fromList [("n-a", nAgent)]
-            , graphEdges = []
-            }
-          bindings = resolveResourceBindings graph "n-a"
-      length (rbKnowledge  bindings) `shouldBe` 0
-      length (rbConnectors bindings) `shouldBe` 0
+    it "AC5: returns empty bindings when no resource edges target the node" $
+      withTestEnv $ \env -> do
+        let nAgent = agentNode "n-a"
+            graph  = Graph
+              { graphNodes = Map.fromList [("n-a", nAgent)]
+              , graphEdges = []
+              }
+        bindings <- runAppM env $ resolveResourceBindings graph "n-a"
+        length (rbKnowledge  bindings) `shouldBe` 0
+        length (rbConnectors bindings) `shouldBe` 0
 
 -- ---------------------------------------------------------------------------
 -- Helpers

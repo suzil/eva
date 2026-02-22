@@ -56,8 +56,9 @@ import Eva.Api.WebSocket
   , runStateEvent
   , stepStateEvent
   )
-import Eva.App (AppEnv, AppM, broadcastEvent, registerRun, runAppM, unregisterRun)
+import Eva.App (AppEnv, AppM, broadcastEvent, logMsg, registerRun, runAppM, unregisterRun)
 import qualified Eva.App as App
+import Eva.Config (LogLevel (..))
 import Eva.Core.Graph
   ( dataEdgesOf
   , hasErrorEdge
@@ -68,6 +69,7 @@ import Eva.Core.Graph
   , terminalNodes
   )
 import Eva.Core.Types
+import Eva.Engine.Handlers.Connector (resolveConnectorRunner)
 import Eva.Engine.StateMachine
   ( RunContext (..)
   , markUnhandledError
@@ -263,8 +265,8 @@ executeNodeStep env ctx graph node inputs = do
   broadcastEvent (rcRunId ctx)
     (stepStateEvent (rcRunId ctx) (nodeId node) (stepId stepRunning) StepRunning now)
 
-  let bindings = resolveResourceBindings graph (nodeId node)
-      mPolicy  = nodeRetryPolicy (nodeType node)
+  bindings <- resolveResourceBindings graph (nodeId node)
+  let mPolicy  = nodeRetryPolicy (nodeType node)
 
   dispatch <- asks App.envDispatch
   result   <- liftIO $
@@ -469,10 +471,13 @@ collectReadyInputs ctx graph dispatched =
 -- Resource binding resolution
 -- ---------------------------------------------------------------------------
 
--- | Resolve static resource bindings for @nid@: collect Knowledge/Connector
--- configs from resource edges targeting this node. Pure graph traversal.
-resolveResourceBindings :: Graph -> NodeId -> ResourceBindings
-resolveResourceBindings graph nid =
+-- | Resolve resource bindings for @nid@: collect Knowledge/Connector configs
+-- from resource edges targeting this node, then resolve ConnectorRunners
+-- (credential lookup + runner construction) for each ConnectorConfig.
+-- Connector resolution errors are logged as warnings and the failed runner
+-- is omitted from rbConnectorRunners (the config is still in rbConnectors).
+resolveResourceBindings :: Graph -> NodeId -> AppM ResourceBindings
+resolveResourceBindings graph nid = do
   let resourceEdges =
         filter
           (\e -> edgeCategory e == PortResource && edgeTargetNode e == nid)
@@ -483,10 +488,26 @@ resolveResourceBindings graph nid =
           resourceEdges
       knowledge  = [cfg | KnowledgeNode cfg <- map nodeType sourceNodes]
       connectors = [cfg | ConnectorNode cfg  <- map nodeType sourceNodes]
-  in ResourceBindings
-       { rbKnowledge  = knowledge
-       , rbConnectors = connectors
-       }
+  runners <- resolveConnectors connectors
+  pure ResourceBindings
+         { rbKnowledge        = knowledge
+         , rbConnectors       = connectors
+         , rbConnectorRunners = runners
+         }
+
+-- | Attempt to resolve each ConnectorConfig into a live ConnectorRunner.
+-- Failed resolutions are logged at warn level and excluded from the result.
+resolveConnectors :: [ConnectorConfig] -> AppM [ConnectorRunner]
+resolveConnectors cfgs =
+  fmap (mapMaybe id) $
+    forM cfgs $ \cfg -> do
+      result <- resolveConnectorRunner cfg
+      case result of
+        Right runner -> pure (Just runner)
+        Left err     -> do
+          let msg = "connector resolution failed: " <> show err
+          logMsg LogWarn (T.pack msg)
+          pure Nothing
 
 -- ---------------------------------------------------------------------------
 -- Terminal detection
