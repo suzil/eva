@@ -13,7 +13,7 @@ import Eva.App (AppEnv (..), runAppM)
 import Eva.Config (AppConfig (..), LogLevel (..))
 import Eva.Core.Types
 import Eva.Engine.Dispatch (execute)
-import Eva.Engine.LLM (dummyLLMClient)
+import Eva.Engine.LLM
 import Eva.Engine.Runner (resolveResourceBindings, startRun, waitForRun)
 import Eva.Engine.StateMachine (RunContext (..))
 import Eva.Persistence.Migration (runMigrations)
@@ -22,6 +22,15 @@ import Eva.Persistence.Queries (insertProgram)
 -- ---------------------------------------------------------------------------
 -- Test environment
 -- ---------------------------------------------------------------------------
+
+-- | A mock LLM client that always returns a fixed success response.
+-- Used in RunnerSpec so that Agent nodes succeed when the production
+-- dispatch is exercised (the real handler calls the LLM client).
+mockLLMClient :: LLMClient
+mockLLMClient = LLMClient
+  { clientCall   = \_ -> pure (Right (LLMResponse "test response" (TokenUsage 1 1 2)))
+  , clientStream = \_ _ -> pure (Right (LLMResponse "test response" (TokenUsage 1 1 2)))
+  }
 
 withTestEnv :: (AppEnv -> IO ()) -> IO ()
 withTestEnv action = do
@@ -38,7 +47,7 @@ withTestEnv action = do
         , envDbPool    = pool
         , envLogger    = \_ -> pure ()
         , envDispatch  = execute
-        , envLLMClient = dummyLLMClient
+        , envLLMClient = mockLLMClient
         }
   action env
 
