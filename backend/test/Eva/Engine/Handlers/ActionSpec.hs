@@ -61,7 +61,12 @@ inputMsg payload = Message
   }
 
 emptyBindings :: ResourceBindings
-emptyBindings = ResourceBindings { rbKnowledge = [], rbConnectors = [], rbConnectorRunners = [] }
+emptyBindings = ResourceBindings
+  { rbKnowledge        = []
+  , rbKnowledgeDynamic = []
+  , rbConnectors       = []
+  , rbConnectorRunners = []
+  }
 
 -- ---------------------------------------------------------------------------
 -- Test environment

@@ -9,7 +9,7 @@ module Eva.Engine.Dispatch
   ) where
 
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (Value (..), toJSON)
+import Data.Aeson (toJSON)
 import Data.Map.Strict (Map)
 import Data.Time (getCurrentTime)
 import qualified Data.UUID as UUID
@@ -20,6 +20,7 @@ import Eva.Core.Types  -- includes ResourceBindings
 import qualified Eva.Engine.Handlers.Action    as Action
 import qualified Eva.Engine.Handlers.Agent     as Agent
 import qualified Eva.Engine.Handlers.Connector as Connector
+import qualified Eva.Engine.Handlers.Knowledge as Knowledge
 import qualified Eva.Engine.Handlers.Trigger   as Trigger
 
 -- ---------------------------------------------------------------------------
@@ -47,7 +48,7 @@ execute rid node inputs bindings = do
     AgentNode     _ -> Agent.handleAgent     rid node inputs bindings
     TriggerNode   _ -> Trigger.handleTrigger rid node inputs bindings
     ActionNode    _ -> Action.handleAction   rid node inputs bindings
-    KnowledgeNode _ -> pure $ Message "knowledge_content" Null meta
+    KnowledgeNode _ -> Knowledge.handleKnowledge rid node inputs bindings
     -- ConnectorNode is never dispatched by the graph walker (requiredDataInputs = []).
     -- resolveConnectorRunner is called in Runner.resolveResourceBindings instead.
     -- This case is unreachable in practice but must be exhaustive.

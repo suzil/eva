@@ -129,9 +129,14 @@ terminalNodes g =
 -- A node is ready to fire when all of these ports have received a message.
 -- Resource ports (context, tools) are not included — they are always
 -- available as static bindings and do not gate execution.
+-- Exception: KnowledgeNode with UpstreamPort source requires its "update"
+-- data-input port, which carries the dynamically-provided content.
 requiredDataInputs :: NodeType -> [PortName]
 requiredDataInputs (AgentNode _) = ["instruction"]
-requiredDataInputs (KnowledgeNode _) = []
+requiredDataInputs (KnowledgeNode cfg) =
+  case knowledgeSource cfg of
+    UpstreamPort -> ["update"]
+    _            -> []
 requiredDataInputs (ConnectorNode _) = []
 requiredDataInputs (ActionNode _) = ["input"]
 requiredDataInputs (TriggerNode _) = []
@@ -142,8 +147,9 @@ requiredDataInputs (TriggerNode _) = []
 -- A node is ready when every port in 'requiredDataInputs' for its type
 -- appears in the @filled@ set.
 --
--- Nodes with no required data inputs (Knowledge, Connector, Trigger) are
--- always included — they are ready by definition.
+-- Nodes with no required data inputs (InlineText Knowledge, Connector, Trigger)
+-- are always included — they are ready by definition.
+-- UpstreamPort Knowledge nodes have a required "update" input and are gated.
 readyNodes :: Graph -> Set (NodeId, PortName) -> [NodeId]
 readyNodes g filled =
   mapMaybe check (Map.toList (graphNodes g))

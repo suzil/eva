@@ -3,7 +3,9 @@
 -- | Agent node handler: prompt assembly, LLM invocation, output emission.
 -- Receives a populated 'ResourceBindings' (resolved by the Runner before dispatch)
 -- containing all wired Knowledge and Connector configs.
--- Tool use is STUBBED in M4 — real tool-call loop is EVA-33.
+-- InlineText Knowledge content comes via 'rbKnowledge'; UpstreamPort Knowledge
+-- content comes via 'rbKnowledgeDynamic' (populated from rcKnowledgeCache).
+-- Tool use is STUBBED — real tool-call loop is EVA-33.
 module Eva.Engine.Handlers.Agent
   ( handleAgent
   ) where
@@ -52,8 +54,12 @@ handleAgent rid node inputs bindings = do
     AgentNode c -> pure c
     _           -> liftIO $ throwIO $ userError "handleAgent called on a non-Agent node"
 
-  -- 3. Build context section from wired Knowledge nodes (inline content only in M4).
+  -- 3. Build context section from wired Knowledge nodes.
+  --    InlineText Knowledge → resolved statically via rbKnowledge.
+  --    UpstreamPort Knowledge → resolved dynamically via rbKnowledgeDynamic
+  --    (populated from rcKnowledgeCache after those nodes execute).
   let contextTexts   = mapMaybe resolveKnowledgeText (rbKnowledge bindings)
+                    ++ map extractText (rbKnowledgeDynamic bindings)
       contextSection = case contextTexts of
         [] -> ""
         ts -> "\n\n## Context\n\n" <> T.intercalate "\n\n---\n\n" ts
@@ -108,7 +114,8 @@ extractText (Aeson.String t) = t
 extractText v                = T.pack (show v)
 
 -- | Resolve a KnowledgeConfig to its inline text content.
--- Only 'InlineText' is handled in M4; file/URL/upstream sources return Nothing.
+-- Only 'InlineText' is resolved here; UpstreamPort content is handled via
+-- 'rbKnowledgeDynamic'; FileRef/UrlRef are deferred post-MLP.
 resolveKnowledgeText :: KnowledgeConfig -> Maybe Text
 resolveKnowledgeText cfg =
   case knowledgeSource cfg of

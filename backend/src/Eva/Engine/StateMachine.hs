@@ -128,6 +128,10 @@ data RunContext = RunContext
     -- Run to transition to Failed rather than Completed in 'finishRun'.
   , rcBroadcast         :: TChan Value
     -- ^ Broadcast channel for WebSocket events (consumed by EVA-26).
+  , rcKnowledgeCache    :: TVar (Map NodeId Value)
+    -- ^ Stores the resolved content payload for UpstreamPort Knowledge nodes
+    -- after they execute. Read by 'resolveResourceBindings' in Runner to populate
+    -- 'rbKnowledgeDynamic' for downstream Agent nodes.
   }
 
 -- | Allocate a fresh RunContext for the given Run.
@@ -135,13 +139,14 @@ data RunContext = RunContext
 -- typically all (nodeId, port) pairs from 'Eva.Core.Graph.requiredDataInputs'.
 newRunContext :: Run -> [(NodeId, PortName)] -> IO RunContext
 newRunContext run dataPorts = do
-  runTVar       <- newTVarIO run
-  stepsTVar     <- newTVarIO Map.empty
-  mailboxes     <- Map.fromList <$> mapM (\k -> (k,) <$> newEmptyTMVarIO) dataPorts
-  dispatched    <- newTVarIO Set.empty
-  allDone       <- newTVarIO False
-  unhandledErr  <- newTVarIO False
-  broadcast     <- newBroadcastTChanIO
+  runTVar        <- newTVarIO run
+  stepsTVar      <- newTVarIO Map.empty
+  mailboxes      <- Map.fromList <$> mapM (\k -> (k,) <$> newEmptyTMVarIO) dataPorts
+  dispatched     <- newTVarIO Set.empty
+  allDone        <- newTVarIO False
+  unhandledErr   <- newTVarIO False
+  broadcast      <- newBroadcastTChanIO
+  knowledgeCache <- newTVarIO Map.empty
   pure RunContext
     { rcRun               = runTVar
     , rcRunId             = runId run
@@ -151,6 +156,7 @@ newRunContext run dataPorts = do
     , rcAllDone           = allDone
     , rcHasUnhandledError = unhandledErr
     , rcBroadcast         = broadcast
+    , rcKnowledgeCache    = knowledgeCache
     }
 
 -- | Record that a branch has failed without a wired error port.
