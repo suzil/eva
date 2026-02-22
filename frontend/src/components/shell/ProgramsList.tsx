@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Plus, LayoutList } from 'lucide-react'
 import { usePrograms, useCreateProgram, usePatchProgram } from '../../api/hooks'
 import { useUiStore } from '../../store/uiStore'
+import { useCanvasStore } from '../../store/canvasStore'
 import type { ProgramState } from '../../types'
 
 // ---------------------------------------------------------------------------
@@ -128,9 +129,17 @@ export function ProgramsPanel() {
   const createProgram = useCreateProgram()
   const selectedProgramId = useUiStore((s) => s.selectedProgramId)
   const setSelectedProgramId = useUiStore((s) => s.setSelectedProgramId)
+  const isDirty = useCanvasStore((s) => s.isDirty)
 
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+
+  const handleSelectProgram = (id: string) => {
+    if (isDirty && selectedProgramId !== id) {
+      if (!window.confirm('You have unsaved changes. Switch programs anyway?')) return
+    }
+    setSelectedProgramId(id)
+  }
 
   const handleCreate = () => {
     createProgram.mutate(
@@ -197,7 +206,7 @@ export function ProgramsPanel() {
               isSelected={selectedProgramId === program.id}
               isRenaming={renamingId === program.id}
               renameValue={renamingId === program.id ? renameValue : program.name}
-              onSelect={() => setSelectedProgramId(program.id)}
+              onSelect={() => handleSelectProgram(program.id)}
               onRenameStart={() => {
                 setRenamingId(program.id)
                 setRenameValue(program.name)

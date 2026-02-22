@@ -10,123 +10,18 @@ import {
 import type { EvaNodeData, Graph, NodeType, PortCategory } from '../types'
 
 // ---------------------------------------------------------------------------
-// Demo nodes — one of each type. EVA-22 replaces this with backend load.
-// ---------------------------------------------------------------------------
-
-const DEMO_NODES: Node<EvaNodeData>[] = [
-  {
-    id: 'trigger-1',
-    type: 'trigger',
-    position: { x: 60, y: 160 },
-    data: {
-      label: 'Weekly Trigger',
-      nodeType: { type: 'trigger', config: { type: 'cron', schedule: '0 9 * * 1' } },
-    },
-  },
-  {
-    id: 'knowledge-1',
-    type: 'knowledge',
-    position: { x: 60, y: 300 },
-    data: {
-      label: 'Team Context',
-      nodeType: {
-        type: 'knowledge',
-        config: {
-          source: { type: '_inline_text', value: '' },
-          format: 'text',
-          refreshPolicy: { type: 'static' },
-        },
-      },
-    },
-  },
-  {
-    id: 'connector-1',
-    type: 'connector',
-    position: { x: 60, y: 420 },
-    data: {
-      label: 'Linear',
-      nodeType: { type: 'connector', config: { system: 'linear', actionFilter: [] } },
-    },
-  },
-  {
-    id: 'agent-1',
-    type: 'agent',
-    position: { x: 340, y: 200 },
-    data: {
-      label: 'Summarizer',
-      nodeType: {
-        type: 'agent',
-        config: {
-          model: 'gpt-4o',
-          systemPrompt: '',
-          responseFormat: 'text',
-          temperature: 0.7,
-          maxIterations: 5,
-        },
-      },
-      stepState: 'running',
-    },
-  },
-  {
-    id: 'action-1',
-    type: 'action',
-    position: { x: 600, y: 220 },
-    data: {
-      label: 'Format Report',
-      nodeType: {
-        type: 'action',
-        config: { operation: 'template', parameters: {}, errorHandling: { mode: 'fail' } },
-      },
-    },
-  },
-]
-
-const DEMO_EDGES: Edge[] = [
-  {
-    id: 'e1',
-    type: 'data',
-    source: 'trigger-1',
-    sourceHandle: 'event',
-    target: 'agent-1',
-    targetHandle: 'instruction',
-  },
-  {
-    id: 'e2',
-    type: 'resource',
-    source: 'knowledge-1',
-    sourceHandle: 'content',
-    target: 'agent-1',
-    targetHandle: 'context',
-  },
-  {
-    id: 'e3',
-    type: 'resource',
-    source: 'connector-1',
-    sourceHandle: 'tools',
-    target: 'agent-1',
-    targetHandle: 'tools',
-  },
-  {
-    id: 'e4',
-    type: 'data',
-    source: 'agent-1',
-    sourceHandle: 'output',
-    target: 'action-1',
-    targetHandle: 'input',
-  },
-]
-
-// ---------------------------------------------------------------------------
 // Store shape
 // ---------------------------------------------------------------------------
 
 interface CanvasState {
   nodes: Node<EvaNodeData>[]
   edges: Edge[]
+  currentProgramId: string | null
   selectedNodeId: string | null
   selectedEdgeId: string | null
   isDirty: boolean
 
+  loadGraph: (graph: Graph, programId: string) => void
   applyNodeChanges: (changes: NodeChange<Node<EvaNodeData>>[]) => void
   applyEdgeChanges: (changes: EdgeChange[]) => void
   addNode: (node: Node<EvaNodeData>) => void
@@ -143,11 +38,30 @@ interface CanvasState {
 }
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
-  nodes: DEMO_NODES,
-  edges: DEMO_EDGES,
+  nodes: [],
+  edges: [],
+  currentProgramId: null,
   selectedNodeId: null,
   selectedEdgeId: null,
   isDirty: false,
+
+  loadGraph: (graph, programId) => {
+    const nodes: Node<EvaNodeData>[] = Object.values(graph.nodes).map((n) => ({
+      id: n.id,
+      type: n.type.type,
+      position: { x: n.posX, y: n.posY },
+      data: { label: n.label, nodeType: n.type },
+    }))
+    const edges: Edge[] = graph.edges.map((e) => ({
+      id: e.id,
+      source: e.sourceNode,
+      sourceHandle: e.sourcePort,
+      target: e.targetNode,
+      targetHandle: e.targetPort,
+      type: e.category,
+    }))
+    set({ nodes, edges, currentProgramId: programId, isDirty: false, selectedNodeId: null, selectedEdgeId: null })
+  },
 
   applyNodeChanges: (changes) =>
     set((s) => ({
