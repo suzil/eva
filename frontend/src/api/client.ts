@@ -90,6 +90,10 @@ export function resumeProgram(id: string): Promise<Program> {
 // Runs
 // ---------------------------------------------------------------------------
 
+export function fetchRuns(programId: string, limit = 20): Promise<Run[]> {
+  return request<Run[]>(`/programs/${programId}/runs?limit=${limit}`)
+}
+
 export function createRun(programId: string, triggerPayload?: unknown): Promise<Run> {
   return request<Run>(`/programs/${programId}/runs`, {
     method: 'POST',

@@ -107,6 +107,8 @@ function CanvasInner() {
   const { screenToFlowPosition } = useReactFlow()
 
   const selectedProgramId = useUiStore((s) => s.selectedProgramId)
+  const mode = useUiStore((s) => s.mode)
+  const isOperate = mode === 'operate'
   const { data: program } = useProgram(selectedProgramId ?? '')
 
   useEffect(() => {
@@ -153,13 +155,18 @@ function CanvasInner() {
     [nodes, addEdgeToStore],
   )
 
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }, [])
+  const onDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (isOperate) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+    },
+    [isOperate],
+  )
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
+      if (isOperate) return
       e.preventDefault()
       const type = e.dataTransfer.getData('application/eva-node-type')
       if (!type || !NODE_TYPE_META[type]) return
@@ -167,7 +174,7 @@ function CanvasInner() {
       const id = crypto.randomUUID()
       addNodeToStore(buildDefaultNode(id, type, position))
     },
-    [screenToFlowPosition, addNodeToStore],
+    [isOperate, screenToFlowPosition, addNodeToStore],
   )
 
   const onNodeClick: NodeMouseHandler<Node<EvaNodeData>> = useCallback(
@@ -200,19 +207,22 @@ function CanvasInner() {
         edges={animatedEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
+        onNodesChange={isOperate ? undefined : onNodesChange}
+        onEdgesChange={isOperate ? undefined : onEdgesChange}
+        onConnect={isOperate ? undefined : onConnect}
         onDragOver={onDragOver}
         onDrop={onDrop}
         isValidConnection={isValidConnection}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
+        nodesDraggable={!isOperate}
+        nodesConnectable={!isOperate}
+        edgesUpdatable={!isOperate}
+        deleteKeyCode={isOperate ? null : ['Backspace', 'Delete']}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         className="bg-gray-950"
-        deleteKeyCode={['Backspace', 'Delete']}
       >
         <Background
           variant={BackgroundVariant.Dots}

@@ -9,6 +9,7 @@ import { KnowledgeForm } from './forms/KnowledgeForm'
 import { ConnectorForm } from './forms/ConnectorForm'
 import { ActionForm } from './forms/ActionForm'
 import { TriggerForm } from './forms/TriggerForm'
+import { StepInspector } from './StepInspector'
 import type { NodeType } from '../../types'
 
 // ---------------------------------------------------------------------------
@@ -73,7 +74,13 @@ export function NodePanel() {
   const markClean = useCanvasStore((s) => s.markClean)
 
   const selectedProgramId = useUiStore((s) => s.selectedProgramId)
+  const mode = useUiStore((s) => s.mode)
   const saveGraph = useSaveGraph(selectedProgramId ?? '')
+
+  // In Operate mode, show the step inspector instead of the config form
+  if (mode === 'operate') {
+    return <StepInspector />
+  }
 
   const node = nodes.find((n) => n.id === selectedNodeId)
 
