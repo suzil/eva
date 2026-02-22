@@ -20,6 +20,7 @@ library
     Eva.Core.Graph
     Eva.Core.Validation
     Eva.Engine.Runner
+    Eva.Engine.StateMachine
     Eva.Engine.Dispatch
     Eva.Engine.Handlers.Agent
     Eva.Engine.LLM
@@ -91,6 +92,7 @@ test-suite eva-test
     Eva.Core.GraphSpec
     Eva.Core.TypesSpec
     Eva.Core.ValidationSpec
+    Eva.Engine.StateMachineSpec
     Eva.Persistence.PersistenceSpec
     Eva.Api.ServerSpec
   build-depends:
@@ -109,3 +111,5 @@ test-suite eva-test
     , http-types        ^>=0.12
     , bytestring        ^>=0.12
     , wai-extra         ^>=3.1
+    , stm               ^>=2.5
+    , async             ^>=2.2

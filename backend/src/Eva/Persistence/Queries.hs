@@ -25,6 +25,7 @@ module Eva.Persistence.Queries
   , getStep
   , listStepsForRun
   , updateStep
+  , updateStepTransition
   ) where
 
 import Control.Monad (forM_)
@@ -398,4 +399,24 @@ updateStep sid st mErr mOut finishedAt = runDb $
     , StepRowError      =. mErr
     , StepRowOutput     =. fmap toJsonText mOut
     , StepRowFinishedAt =. Just finishedAt
+    ]
+
+-- | Update a step's state and all optional timestamp/payload fields.
+-- Used by the state machine to persist each atomic transition, including
+-- setting 'startedAt' on the first entry into 'running'.
+updateStepTransition
+  :: StepId
+  -> StepState
+  -> Maybe Text     -- ^ error message
+  -> Maybe Value    -- ^ output payload
+  -> Maybe UTCTime  -- ^ startedAt (set when pending→running)
+  -> Maybe UTCTime  -- ^ finishedAt (set on terminal states)
+  -> AppM ()
+updateStepTransition sid st mErr mOut mStarted mFinished = runDb $
+  update (toStepRowId sid)
+    [ StepRowState      =. encodeState st
+    , StepRowError      =. mErr
+    , StepRowOutput     =. fmap toJsonText mOut
+    , StepRowStartedAt  =. mStarted
+    , StepRowFinishedAt =. mFinished
     ]
