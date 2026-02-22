@@ -1,5 +1,8 @@
 import { useRef } from 'react'
+import { BookOpen, History, Settings } from 'lucide-react'
 import { useUiStore } from '../../store/uiStore'
+import { ProgramsPanel } from './ProgramsList'
+import { NodePalette } from './NodePalette'
 
 const ACTIVITY_LABELS: Record<string, string> = {
   programs: 'Programs',
@@ -7,6 +10,24 @@ const ACTIVITY_LABELS: Record<string, string> = {
   knowledge: 'Knowledge',
   runs: 'Runs',
   settings: 'Settings',
+}
+
+function StubPanel({
+  icon: Icon,
+  label,
+  note,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  note: string
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4">
+      <Icon className="h-7 w-7 text-gray-700" />
+      <p className="text-xs font-medium text-gray-500">{label}</p>
+      <p className="text-center text-[10px] text-gray-600">{note}</p>
+    </div>
+  )
 }
 
 export function SidePanel() {
@@ -48,14 +69,30 @@ export function SidePanel() {
         </span>
       </div>
 
-      {/* Placeholder content */}
-      <div className="flex flex-1 items-center justify-center p-4">
-        <p className="text-center text-xs text-gray-600">
-          {ACTIVITY_LABELS[activeActivity]} panel
-          <br />
-          (EVA-18 / EVA-21)
-        </p>
-      </div>
+      {/* Panel content — routed by active activity */}
+      {activeActivity === 'programs' && <ProgramsPanel />}
+      {activeActivity === 'nodes' && <NodePalette />}
+      {activeActivity === 'knowledge' && (
+        <StubPanel
+          icon={BookOpen}
+          label="Knowledge Library"
+          note="Shared knowledge sources across programs. Available in M5."
+        />
+      )}
+      {activeActivity === 'runs' && (
+        <StubPanel
+          icon={History}
+          label="Runs"
+          note="Execution history and active run indicators. Available in M6."
+        />
+      )}
+      {activeActivity === 'settings' && (
+        <StubPanel
+          icon={Settings}
+          label="Settings"
+          note="Credentials, integrations, preferences. Available in M5."
+        />
+      )}
 
       {/* Drag handle */}
       <div

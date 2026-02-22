@@ -1,20 +1,51 @@
 import { Play, Rocket, Command, ChevronRight } from 'lucide-react'
 import { type AppMode, useUiStore } from '../../store/uiStore'
+import { useProgram } from '../../api/hooks'
+import type { ProgramState } from '../../types'
+
+// ---------------------------------------------------------------------------
+// Breadcrumb badge — mirrors ProgramsList StateBadge but lighter weight
+// ---------------------------------------------------------------------------
+
+const BREADCRUMB_BADGE_STYLES: Record<ProgramState, string> = {
+  draft: 'border-gray-700 text-gray-500',
+  active: 'border-green-800 text-green-500',
+  paused: 'border-amber-800 text-amber-500',
+  archived: 'border-gray-700 text-gray-600',
+}
+
+// ---------------------------------------------------------------------------
+// Toolbar
+// ---------------------------------------------------------------------------
 
 export function Toolbar() {
   const mode = useUiStore((s) => s.mode)
   const setMode = useUiStore((s) => s.setMode)
+  const selectedProgramId = useUiStore((s) => s.selectedProgramId)
+
+  const { data: program } = useProgram(selectedProgramId ?? '')
 
   return (
     <header className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-gray-800 bg-gray-900 px-3">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1 text-sm text-gray-400" aria-label="Breadcrumb">
-        <span className="hover:text-white cursor-default">Programs</span>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-white font-medium">Untitled</span>
-        <span className="ml-1 rounded border border-gray-700 px-1.5 py-0.5 text-xs text-gray-500">
-          Draft
-        </span>
+        <span className="cursor-default hover:text-white">Programs</span>
+        {program ? (
+          <>
+            <ChevronRight className="h-3.5 w-3.5" />
+            <span className="font-medium text-white">{program.name}</span>
+            <span
+              className={`ml-1 rounded border px-1.5 py-0.5 text-xs ${BREADCRUMB_BADGE_STYLES[program.state]}`}
+            >
+              {program.state}
+            </span>
+          </>
+        ) : (
+          <>
+            <ChevronRight className="h-3.5 w-3.5" />
+            <span className="text-gray-600 italic">Select a program</span>
+          </>
+        )}
       </nav>
 
       <div className="flex-1" />
