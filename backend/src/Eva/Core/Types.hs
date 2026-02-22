@@ -56,6 +56,9 @@ module Eva.Core.Types
 
     -- * Program
   , Program (..)
+
+    -- * Validation
+  , ValidationError (..)
   ) where
 
 import Data.Aeson
@@ -624,6 +627,22 @@ instance ToJSON Step where
 
 instance FromJSON Step where
   parseJSON = genericParseJSON (dropPrefix "step")
+
+-- ---------------------------------------------------------------------------
+-- Validation
+-- ---------------------------------------------------------------------------
+
+data ValidationError = ValidationError
+  { veMessage :: Text
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON ValidationError where
+  toJSON e = object ["message" .= veMessage e]
+
+instance FromJSON ValidationError where
+  parseJSON = withObject "ValidationError" $ \o ->
+    ValidationError <$> o .: "message"
 
 -- ---------------------------------------------------------------------------
 -- Program

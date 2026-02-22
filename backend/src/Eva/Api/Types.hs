@@ -11,7 +11,6 @@ module Eva.Api.Types
     -- * Response bodies
   , HealthResponse (..)
   , ValidateResult (..)
-  , ValidationError (..)
 
     -- * Error response
   , ApiError (..)
@@ -19,6 +18,8 @@ module Eva.Api.Types
 
 import Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.:), (.:?), (.=))
 import Data.Text (Text)
+
+import Eva.Core.Types (ValidationError (..))
 
 -- ---------------------------------------------------------------------------
 -- Request bodies
@@ -52,13 +53,6 @@ newtype HealthResponse = HealthResponse
 
 instance ToJSON HealthResponse where
   toJSON r = object ["status" .= hrStatus r]
-
-data ValidationError = ValidationError
-  { veMessage :: Text
-  }
-
-instance ToJSON ValidationError where
-  toJSON e = object ["message" .= veMessage e]
 
 data ValidateResult = ValidateResult
   { vrValid  :: Bool

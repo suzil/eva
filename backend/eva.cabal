@@ -90,6 +90,7 @@ test-suite eva-test
   other-modules:
     Eva.Core.GraphSpec
     Eva.Core.TypesSpec
+    Eva.Core.ValidationSpec
     Eva.Persistence.PersistenceSpec
     Eva.Api.ServerSpec
   build-depends:

@@ -12,8 +12,6 @@ module Eva.Api.Server
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (encode)
 import qualified Data.Map.Strict as Map
-import Data.Set (Set)
-import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time (getCurrentTime)
@@ -31,6 +29,7 @@ import Servant
 import Eva.Api.Types
 import Eva.App (AppEnv, AppM, runAppM)
 import Eva.Core.Types
+import Eva.Core.Validation (validateGraph)
 import Eva.Persistence.Queries
 
 -- ---------------------------------------------------------------------------
@@ -184,7 +183,7 @@ programsHandlers env =
         validateH :: Handler ValidateResult
         validateH = do
           p <- requireProgram
-          let errs = validateStructural (programGraph p)
+          let errs = validateGraph (programGraph p)
           pure ValidateResult
             { vrValid  = null errs
             , vrErrors = errs
@@ -235,30 +234,3 @@ transitionName Deploy = "deploy"
 transitionName Pause  = "pause"
 transitionName Resume = "resume"
 
--- ---------------------------------------------------------------------------
--- Structural graph validation (M1)
--- EVA-12 replaces this with full semantic validation in Eva.Core.Validation.
--- ---------------------------------------------------------------------------
-
-validateStructural :: Graph -> [ValidationError]
-validateStructural g = nonEmptyCheck <> danglingEdgeCheck
-  where
-    nodeIds :: Set NodeId
-    nodeIds = Map.keysSet (graphNodes g)
-
-    nonEmptyCheck :: [ValidationError]
-    nonEmptyCheck
-      | Map.null (graphNodes g) =
-          [ValidationError "Graph must contain at least one node"]
-      | otherwise = []
-
-    danglingEdgeCheck :: [ValidationError]
-    danglingEdgeCheck =
-      [ ValidationError ("Edge references unknown node: " <> unNodeId nid)
-      | e   <- graphEdges g
-      , nid <- [edgeSourceNode e, edgeTargetNode e]
-      , nid `Set.notMember` nodeIds
-      ]
-
-unNodeId :: NodeId -> Text
-unNodeId (NodeId t) = t
