@@ -72,6 +72,7 @@ type DeployPhase = 'idle' | 'validating' | 'deploying' | 'error' | 'success'
 export function Toolbar() {
   const mode = useUiStore((s) => s.mode)
   const setMode = useUiStore((s) => s.setMode)
+  const activeActivity = useUiStore((s) => s.activeActivity)
   const selectedProgramId = useUiStore((s) => s.selectedProgramId)
   const activeRunId = useUiStore((s) => s.activeRunId)
   const setActiveRunId = useUiStore((s) => s.setActiveRunId)
@@ -129,13 +130,21 @@ export function Toolbar() {
     }
   }, [activeRunId])
 
-  // Reset deploy phase when program changes
+  // Reset UI state when program changes (including deselect)
   useEffect(() => {
     setDeployPhase('idle')
     setDeployErrors([])
-  }, [selectedProgramId])
+    clearRunState()
+    setInspectedRunId(null)
+    setActiveRunId(null)
+    clearRunOutput()
+    setMode('author')
+  }, [selectedProgramId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When switching to Operate: auto-select the most recent run if none selected
+  // When switching to Operate (or when runsData arrives after the switch):
+  // auto-select the most recent run if none is already selected.
+  // runsData must be in deps because the query only enables when mode === 'operate',
+  // so data isn't available on the first render after the mode change.
   useEffect(() => {
     if (mode === 'operate' && runsData && runsData.length > 0 && !inspectedRunId) {
       setInspectedRunId(runsData[0].id)
@@ -144,7 +153,7 @@ export function Toolbar() {
       clearRunState()
       setInspectedRunId(null)
     }
-  }, [mode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, runsData]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load step states onto canvas when the inspected run detail arrives or changes
   useEffect(() => {
@@ -152,6 +161,22 @@ export function Toolbar() {
       loadRunSteps(inspectedRunDetail.steps)
     }
   }, [inspectedRunDetail]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When a run is selected (auto or manual), switch to Operate so the RunSelector
+  // appears and the user can see which run is overlaid on the canvas.
+  useEffect(() => {
+    if (inspectedRunId && !activeRunId) {
+      setMode('operate')
+    }
+  }, [inspectedRunId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Navigating to the Programs sidebar resets to Author mode, hiding the
+  // RunSelector and clearing stale run overlays (via the mode-switch effect).
+  useEffect(() => {
+    if (activeActivity === 'programs') {
+      setMode('author')
+    }
+  }, [activeActivity]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Subscribe to the active run stream (no-op when activeRunId is null)
   useRunStream(activeRunId, selectedProgramId ?? '')
@@ -285,7 +310,12 @@ export function Toolbar() {
       <header className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-gray-800 bg-gray-900 px-3">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1 text-sm text-gray-400" aria-label="Breadcrumb">
-          <span className="cursor-default hover:text-white">Programs</span>
+          <button
+            onClick={() => setSelectedProgramId(null)}
+            className="transition-colors hover:text-white"
+          >
+            Programs
+          </button>
           {program ? (
             <>
               <ChevronRight className="h-3.5 w-3.5" />

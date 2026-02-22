@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { type BottomTab, useUiStore } from '../../store/uiStore'
 import { LogsPanel } from './LogsPanel'
@@ -9,19 +10,54 @@ const TABS: { key: BottomTab; label: string; disabled?: boolean }[] = [
   { key: 'timeline', label: 'Timeline', disabled: true },
 ]
 
-const BOTTOM_PANEL_HEIGHT = 200
-
 export function BottomPanel() {
   const open = useUiStore((s) => s.bottomPanelOpen)
   const toggle = useUiStore((s) => s.toggleBottomPanel)
   const activeTab = useUiStore((s) => s.activeBottomTab)
   const setActiveTab = useUiStore((s) => s.setActiveBottomTab)
+  const height = useUiStore((s) => s.bottomPanelHeight)
+  const setHeight = useUiStore((s) => s.setBottomPanelHeight)
+  const isDragging = useRef(false)
+
+  const handleDragStart = (e: React.PointerEvent) => {
+    e.preventDefault()
+    isDragging.current = true
+    const startY = e.clientY
+    const startHeight = height
+
+    const onMove = (ev: PointerEvent) => {
+      if (!isDragging.current) return
+      // Dragging up (decreasing Y) should increase the panel height
+      setHeight(startHeight + (startY - ev.clientY))
+    }
+
+    const onUp = () => {
+      isDragging.current = false
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+    }
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+  }
 
   return (
     <div
-      className="flex flex-shrink-0 flex-col border-t border-gray-800 bg-gray-900"
-      style={{ height: open ? BOTTOM_PANEL_HEIGHT : undefined }}
+      className="relative flex flex-shrink-0 flex-col bg-gray-900"
+      style={{ height: open ? height : undefined }}
     >
+      {/* Drag handle — sits at the very top edge, only shown when open */}
+      {open && (
+        <div
+          onPointerDown={handleDragStart}
+          className="absolute top-0 left-0 right-0 h-1 cursor-row-resize hover:bg-blue-500/40 transition-colors z-10"
+          aria-hidden
+        />
+      )}
+
+      {/* Top border */}
+      <div className="h-px flex-shrink-0 bg-gray-800" />
+
       {/* Tab bar */}
       <div className="flex h-9 flex-shrink-0 items-center border-b border-gray-800 px-2">
         <div className="flex flex-1 items-center gap-0.5">

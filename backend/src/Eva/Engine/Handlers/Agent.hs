@@ -69,15 +69,8 @@ handleAgent rid node inputs bindings = do
         [] -> ""
         ts -> "\n\n## Context\n\n" <> T.intercalate "\n\n---\n\n" ts
 
-  -- 4. Assemble initial chat messages.
-  let instructionText = extractText (msgPayload instructionMsg)
-      userContent     = instructionText <> contextSection
-      initMessages    =
-        [ ChatMessage "system" (agentSystemPrompt cfg)
-        , ChatMessage "user"   userContent
-        ]
-
-  -- 5. Collect ActionSpecs from wired ConnectorRunners.
+  -- 4. Collect ActionSpecs from wired ConnectorRunners (needed before building
+  --    the system prompt so we know whether to append failure instructions).
   runnersWithActions <- liftIO $
     mapM (\r -> (r,) <$> connectorAvailableActions r) (rbConnectorRunners bindings)
   let tools     = map actionSpecToTool $ concatMap snd runnersWithActions
@@ -85,6 +78,24 @@ handleAgent rid node inputs bindings = do
         [ (actionSpecName spec, runner)
         | (runner, specs) <- runnersWithActions
         , spec            <- specs
+        ]
+
+  -- 5. Assemble initial chat messages.
+  --    When connector tools are available, append a failure-signal instruction
+  --    so the LLM can mark the step as failed when it cannot work around an
+  --    API error (rather than producing a misleading "success" with an error
+  --    description buried in the output).
+  let connectorInstructions =
+        "\n\nIf a connector tool returns an error and you cannot complete the " <>
+        "task (e.g. authentication failure, service unavailable), respond with " <>
+        "exactly:\nTASK_FAILED: <one-line reason>\nDo not add any other text."
+      systemPrompt = agentSystemPrompt cfg <>
+        if null tools then "" else connectorInstructions
+      instructionText = extractText (msgPayload instructionMsg)
+      userContent     = instructionText <> contextSection
+      initMessages    =
+        [ ChatMessage "system" systemPrompt
+        , ChatMessage "user"   userContent
         ]
 
   -- 6. Select LLM client based on agentProvider config, then run tool-call loop.
@@ -197,13 +208,18 @@ runToolLoop env cfg rid node llmClient tools actionMap messages iteration cost =
       let outputText = if budgetBreached && T.null (llmContent resp)
                          then "[cost budget exceeded after " <> T.pack (show iteration) <> " iteration(s)]"
                          else llmContent resp
-          meta = MessageMeta
-            { metaTraceId    = traceId
-            , metaTimestamp  = now
-            , metaSourceNode = nodeId node
-            , metaRunId      = rid
-            }
-      pure $ Message "agent_output" (toJSON outputText) meta
+      -- If the LLM signalled an unrecoverable connector failure, fail the step
+      -- so the run is marked failed rather than producing a misleading success.
+      if "TASK_FAILED:" `T.isPrefixOf` T.stripStart outputText
+        then liftIO $ throwIO $ userError $ T.unpack outputText
+        else do
+          let meta = MessageMeta
+                { metaTraceId    = traceId
+                , metaTimestamp  = now
+                , metaSourceNode = nodeId node
+                , metaRunId      = rid
+                }
+          pure $ Message "agent_output" (toJSON outputText) meta
 
 -- ---------------------------------------------------------------------------
 -- Tool execution
@@ -216,9 +232,17 @@ executeToolCall actionMap tc = do
       pure $ toJSON $ ("unknown tool: " <> toolCallName tc :: Text)
     Just runner -> do
       res <- connectorExecuteAction runner (ActionName (toolCallName tc)) (toolCallArgs tc)
-      pure $ case res of
-        Right v  -> v
-        Left err -> toJSON (connectorErrorText err)
+      case res of
+        Right v  -> pure v
+        -- Hard failures: credential/config problems the LLM cannot fix.
+        -- Throw so the step is marked failed rather than producing a
+        -- misleadingly "successful" run with an error buried in the output.
+        Left err@(ConnectorMissingCredential _) -> throwIO (userError (T.unpack (connectorErrorText err)))
+        Left err@(ConnectorInvalidCredential _) -> throwIO (userError (T.unpack (connectorErrorText err)))
+        Left err@(ConnectorUnsupported _)       -> throwIO (userError (T.unpack (connectorErrorText err)))
+        -- Soft failures: API/network errors are passed back to the LLM as a
+        -- tool result so it can note the issue or adapt its response.
+        Left err                                -> pure (toJSON (connectorErrorText err))
 
 renderToolResult :: Value -> Text
 renderToolResult (Aeson.String t) = t

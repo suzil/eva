@@ -16,12 +16,13 @@ export function useRunStream(runId: RunId | null, programId: string): void {
   const queryClient = useQueryClient()
   const setNodeStepState = useCanvasStore((s) => s.setNodeStepState)
   const setNodeStepErrors = useCanvasStore((s) => s.setNodeStepErrors)
-  const clearRunState = useCanvasStore((s) => s.clearRunState)
   const setActiveRunId = useUiStore((s) => s.setActiveRunId)
+  const setInspectedRunId = useUiStore((s) => s.setInspectedRunId)
   const appendLlmToken = useUiStore((s) => s.appendLlmToken)
   const appendLogEntry = useUiStore((s) => s.appendLogEntry)
   const clearRunOutput = useUiStore((s) => s.clearRunOutput)
   const setRunError = useUiStore((s) => s.setRunError)
+  const setActiveBottomTab = useUiStore((s) => s.setActiveBottomTab)
 
   useEffect(() => {
     if (!runId) return
@@ -30,6 +31,10 @@ export function useRunStream(runId: RunId | null, programId: string): void {
     const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/ws`
     const ws = new WebSocket(wsUrl)
     let closed = false
+    // Maps tool_call_id → function name so result events can reference the function.
+    const toolCallNames = new Map<string, string>()
+    // Switch to Logs tab on the first tool call so the user sees connector activity.
+    let switchedToLogs = false
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ action: 'subscribe', topic: `run:${runId}` }))
@@ -61,6 +66,38 @@ export function useRunStream(runId: RunId | null, programId: string): void {
           })
           break
 
+        case 'tool_call': {
+          if (!switchedToLogs) {
+            setActiveBottomTab('logs')
+            switchedToLogs = true
+          }
+          const d = event.data
+          if (event.phase === 'invoke') {
+            const fn = String(d.function ?? '')
+            const id = String(d.tool_call_id ?? '')
+            if (id) toolCallNames.set(id, fn)
+            const args = d.arguments != null ? JSON.stringify(d.arguments).slice(0, 300) : '{}'
+            appendLogEntry({
+              stepId: event.nodeId,
+              level: 'info',
+              message: `→ ${fn} ${args}`,
+              timestamp: event.timestamp,
+            })
+          } else {
+            const id = String(d.tool_call_id ?? '')
+            const fn = toolCallNames.get(id) ?? 'tool'
+            const raw = String(d.result ?? '')
+            const truncated = raw.length > 400 ? raw.slice(0, 400) + '…' : raw
+            appendLogEntry({
+              stepId: event.nodeId,
+              level: 'debug',
+              message: `← ${fn}: ${truncated}`,
+              timestamp: event.timestamp,
+            })
+          }
+          break
+        }
+
         case 'run_state': {
           if (event.state === 'running') {
             // Clear stale output from a previous run when this run begins emitting
@@ -71,6 +108,7 @@ export function useRunStream(runId: RunId | null, programId: string): void {
           const terminal = event.state === 'completed' || event.state === 'failed' || event.state === 'canceled'
           if (terminal) {
             // Fetch full run detail to get per-step error messages
+            setActiveRunId(null)
             fetchRunDetail(event.runId)
               .then((detail) => {
                 const errors: Record<NodeId, string> = {}
@@ -88,13 +126,18 @@ export function useRunStream(runId: RunId | null, programId: string): void {
                     setRunError('Run failed — check the Logs tab for details')
                   }
                 }
+                // Populate RQ cache so useRunDetail returns immediately when
+                // inspectedRunId is set — avoids a second network round-trip.
+                queryClient.setQueryData(runKeys.detail(event.runId), detail)
+                // Auto-select the finished run so its step states stay visible
+                // on the canvas and it gets highlighted in RunsPanel.
+                setInspectedRunId(event.runId)
               })
               .catch(() => {
                 if (event.state === 'failed') {
                   setRunError('Run failed — check the Logs tab for details')
                 }
               })
-            setActiveRunId(null)
           }
           break
         }
@@ -112,8 +155,6 @@ export function useRunStream(runId: RunId | null, programId: string): void {
     return () => {
       closed = true
       ws.close()
-      // Clear overlays when we stop streaming (e.g. program switched)
-      clearRunState()
     }
-  }, [runId, programId, queryClient, setNodeStepState, setNodeStepErrors, clearRunState, setActiveRunId, appendLlmToken, appendLogEntry, clearRunOutput, setRunError])
+  }, [runId, programId, queryClient, setNodeStepState, setNodeStepErrors, setActiveRunId, setInspectedRunId, appendLlmToken, appendLogEntry, clearRunOutput, setRunError, setActiveBottomTab])
 }

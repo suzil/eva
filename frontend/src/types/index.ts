@@ -337,3 +337,4 @@ export type WsEvent =
   | { type: 'llm_token'; runId: RunId; nodeId: NodeId; token: string; timestamp: string }
   | { type: 'log_entry'; runId: RunId; stepId: StepId; level: LogLevel; message: string; timestamp: string }
   | { type: 'run_state'; runId: RunId; state: RunState; timestamp: string }
+  | { type: 'tool_call'; runId: RunId; nodeId: NodeId; phase: 'invoke' | 'result'; data: Record<string, unknown>; timestamp: string }

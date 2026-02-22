@@ -220,6 +220,7 @@ function CanvasInner() {
   return (
     <div className="relative flex flex-1 flex-col">
       <ReactFlow
+        proOptions={{ hideAttribution: true }}
         nodes={nodes}
         edges={animatedEdges}
         nodeTypes={nodeTypes}

@@ -4,6 +4,7 @@ import { useUiStore } from '../../store/uiStore'
 export function OutputPanel() {
   const llmOutput = useUiStore((s) => s.llmOutput)
   const activeRunId = useUiStore((s) => s.activeRunId)
+  const inspectedRunId = useUiStore((s) => s.inspectedRunId)
   const runError = useUiStore((s) => s.runError)
   const clearRunOutput = useUiStore((s) => s.clearRunOutput)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -14,7 +15,7 @@ export function OutputPanel() {
   }, [llmOutput])
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full w-full flex-col">
       {/* Toolbar */}
       <div className="flex flex-shrink-0 items-center justify-end border-b border-gray-800 px-2 py-1">
         <button
@@ -44,7 +45,11 @@ export function OutputPanel() {
           </div>
         ) : (
           <p className="text-xs text-gray-600">
-            {activeRunId ? 'Waiting for output…' : 'No output yet — click Run to execute the program'}
+            {activeRunId
+              ? 'Waiting for output…'
+              : inspectedRunId
+                ? 'Run completed with no text output — check the Logs tab for step details'
+                : 'No output yet — click Run to execute the program'}
           </p>
         )}
         <div ref={bottomRef} />

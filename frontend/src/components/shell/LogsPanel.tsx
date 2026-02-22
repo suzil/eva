@@ -34,7 +34,7 @@ export function LogsPanel() {
   }, [logEntries.length])
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full w-full flex-col">
       {/* Toolbar */}
       <div className="flex flex-shrink-0 items-center gap-1 border-b border-gray-800 px-2 py-1">
         {/* Level filter pills */}

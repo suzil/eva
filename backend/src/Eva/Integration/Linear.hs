@@ -26,6 +26,8 @@ import Data.Aeson
 import Data.Aeson.Types (Parser, parseMaybe)
 import qualified Data.ByteString.Lazy as BL
 import Data.ByteString (ByteString)
+import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
+import Data.Text.Encoding.Error (lenientDecode)
 import Data.Aeson.Key (fromText)
 import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Text (Text)
@@ -280,7 +282,12 @@ doGraphQL
 doGraphQL mgr apiKey query vars = do
   initReq <- parseRequest "POST https://api.linear.app/graphql"
   let body    = encode (object ["query" .= query, "variables" .= vars])
-      authHdr = "Bearer " <> apiKey
+      -- Normalise the stored key: strip whitespace and any accidental
+      -- "Bearer " prefix that users sometimes include when copying from docs.
+      rawKeyText  = T.strip (decodeUtf8With lenientDecode apiKey)
+      cleanKey    = maybe rawKeyText id (T.stripPrefix "Bearer " rawKeyText)
+      trimmedKey  = encodeUtf8 cleanKey
+      authHdr     = "Bearer " <> trimmedKey
       req     = initReq
         { method         = "POST"
         , requestBody    = RequestBodyLBS body
@@ -298,7 +305,8 @@ doGraphQL mgr apiKey query vars = do
     429 -> pure $ Left $ ConnectorApiError "Linear API rate limit exceeded (429)"
     200 -> parseGraphQLResponse body'
     _   -> pure $ Left $ ConnectorApiError $
-             "Linear API returned HTTP " <> T.pack (show status)
+             "Linear API returned HTTP " <> T.pack (show status) <> ": "
+             <> decodeUtf8With lenientDecode (BL.toStrict (BL.take 500 body'))
 
 -- | Parse a Linear GraphQL response body.
 -- Returns the @data@ field on success, or maps @errors@ to a 'ConnectorError'.

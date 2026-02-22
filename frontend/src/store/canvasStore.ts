@@ -124,18 +124,23 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   applyNodeChanges: (changes) => {
     const hasRemoval = changes.some((c) => c.type === 'remove')
     if (hasRemoval) get().snapshot()
+    // 'dimensions' (ReactFlow measuring nodes on mount) and 'select' are not
+    // user edits — only position drags and removals should dirty the graph.
+    const dirties = changes.some((c) => c.type === 'position' || c.type === 'remove')
     set((s) => ({
       nodes: applyNodeChanges(changes, s.nodes),
-      isDirty: true,
+      ...(dirties && { isDirty: true }),
     }))
   },
 
   applyEdgeChanges: (changes) => {
     const hasRemoval = changes.some((c) => c.type === 'remove')
     if (hasRemoval) get().snapshot()
+    // Only removals are user-initiated; 'select' changes must not dirty the graph.
+    const dirties = changes.some((c) => c.type === 'remove')
     set((s) => ({
       edges: applyEdgeChanges(changes, s.edges),
-      isDirty: true,
+      ...(dirties && { isDirty: true }),
     }))
   },
 
