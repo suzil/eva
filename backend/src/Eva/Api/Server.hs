@@ -231,8 +231,22 @@ programsHandlers env =
             }
 
         -- POST /api/programs/:id/deploy
+        -- Runs full validation before transitioning Draft -> Active.
+        -- Returns 409 if the program is not in Draft state.
+        -- Returns 422 with ValidateResult if the graph has validation errors.
         deployH :: Handler Program
-        deployH = runTransition Deploy
+        deployH = do
+          p <- requireProgram
+          case applyTransition Deploy (programState p) of
+            Left msg -> throwError err409 { errBody = encode (ApiError msg) }
+            Right _  -> pure ()
+          let errs = validateGraph (programGraph p)
+          unless (null errs) $
+            throwError err422 { errBody = encode (ValidateResult False errs) }
+          now <- liftIO getCurrentTime
+          let p' = p { programState = Active, programUpdatedAt = now }
+          run (updateProgram p')
+          pure p'
 
         -- POST /api/programs/:id/pause
         pauseH :: Handler Program

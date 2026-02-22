@@ -25,6 +25,7 @@ import Network.HTTP.Types
   , status400
   , status404
   , status409
+  , status422
   )
 import Network.Wai (Application, requestHeaders, requestMethod)
 import Network.Wai.Test
@@ -233,27 +234,68 @@ spec = before makeTestApp $ do
         body !? "valid" `shouldBe` Just (Bool False)
 
   describe "State transitions" $ do
+
+    -- A graph with a single manual trigger satisfies all validation checks.
+    -- Reused across deploy tests that need a valid program to transition.
+    let minimalGraph :: Value
+        minimalGraph = object
+          [ "nodes" .= object
+              [ "n1" .= object
+                  [ "id"    .= ("n1" :: Text)
+                  , "label" .= ("Start" :: Text)
+                  , "type"  .= object
+                      [ "type"   .= ("trigger" :: Text)
+                      , "config" .= object
+                          [ "type"            .= ("manual" :: Text)
+                          , "schedule"        .= Null
+                          , "eventFilter"     .= Null
+                          , "payloadTemplate" .= Null
+                          ]
+                      ]
+                  , "posX"  .= (0.0 :: Double)
+                  , "posY"  .= (0.0 :: Double)
+                  ]
+              ]
+          , "edges" .= ([] :: [Value])
+          ]
+
+    -- Helper: create a program, PUT the minimal valid graph, then deploy it.
+    let createAndDeploy :: Text -> Session BL.ByteString
+        createAndDeploy name = do
+          created <- doPostJson "/api/programs" (object ["name" .= name])
+          let Just pid = responseId created
+          _ <- doPutJson ("/api/programs/" <> pid <> "/graph") minimalGraph
+          _ <- doPostJson ("/api/programs/" <> pid <> "/deploy") (object [])
+          pure pid
+
     it "deploy: Draft → Active (200)" $ \app -> sess app $ do
       created <- doPostJson "/api/programs" (object ["name" .= ("Deployable" :: Text)])
       let Just pid = responseId created
+      _ <- doPutJson ("/api/programs/" <> pid <> "/graph") minimalGraph
       res <- doPostJson ("/api/programs/" <> pid <> "/deploy") (object [])
       liftIO $ do
         simpleStatus res `shouldBe` status200
         responseField "state" res `shouldBe` Just "active"
 
-    it "pause: Active → Paused (200)" $ \app -> sess app $ do
-      created <- doPostJson "/api/programs" (object ["name" .= ("Pausable" :: Text)])
+    it "deploy on invalid graph returns 422" $ \app -> sess app $ do
+      created <- doPostJson "/api/programs" (object ["name" .= ("Invalid" :: Text)])
       let Just pid = responseId created
-      _   <- doPostJson ("/api/programs/" <> pid <> "/deploy") (object [])
-      res <- doPostJson ("/api/programs/" <> pid <> "/pause")  (object [])
+      res <- doPostJson ("/api/programs/" <> pid <> "/deploy") (object [])
+      liftIO $ do
+        simpleStatus res `shouldBe` status422
+        let Just (Object body) = decode (simpleBody res) :: Maybe Value
+        body !? "valid"  `shouldBe` Just (Bool False)
+        isJust (body !? "errors") `shouldBe` True
+
+    it "pause: Active → Paused (200)" $ \app -> sess app $ do
+      pid <- createAndDeploy "Pausable"
+      res <- doPostJson ("/api/programs/" <> pid <> "/pause") (object [])
       liftIO $ do
         simpleStatus res `shouldBe` status200
         responseField "state" res `shouldBe` Just "paused"
 
     it "resume: Paused → Active (200)" $ \app -> sess app $ do
-      created <- doPostJson "/api/programs" (object ["name" .= ("Resumable" :: Text)])
-      let Just pid = responseId created
-      _   <- doPostJson ("/api/programs/" <> pid <> "/deploy") (object [])
+      pid <- createAndDeploy "Resumable"
       _   <- doPostJson ("/api/programs/" <> pid <> "/pause")  (object [])
       res <- doPostJson ("/api/programs/" <> pid <> "/resume") (object [])
       liftIO $ do
@@ -261,9 +303,7 @@ spec = before makeTestApp $ do
         responseField "state" res `shouldBe` Just "active"
 
     it "deploy on Active program returns 409" $ \app -> sess app $ do
-      created <- doPostJson "/api/programs" (object ["name" .= ("Double Deploy" :: Text)])
-      let Just pid = responseId created
-      _   <- doPostJson ("/api/programs/" <> pid <> "/deploy") (object [])
+      pid <- createAndDeploy "Double Deploy"
       res <- doPostJson ("/api/programs/" <> pid <> "/deploy") (object [])
       liftIO $ simpleStatus res `shouldBe` status409
 
@@ -274,9 +314,7 @@ spec = before makeTestApp $ do
       liftIO $ simpleStatus res `shouldBe` status409
 
     it "resume on Active program returns 409" $ \app -> sess app $ do
-      created <- doPostJson "/api/programs" (object ["name" .= ("Active Resume" :: Text)])
-      let Just pid = responseId created
-      _   <- doPostJson ("/api/programs/" <> pid <> "/deploy") (object [])
+      pid <- createAndDeploy "Active Resume"
       res <- doPostJson ("/api/programs/" <> pid <> "/resume") (object [])
       liftIO $ simpleStatus res `shouldBe` status409
 

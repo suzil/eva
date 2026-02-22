@@ -281,6 +281,7 @@ export interface PatchProgramReq {
 
 export interface ValidationError {
   message: string
+  nodeId?: string
 }
 
 export interface ValidateResult {

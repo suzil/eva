@@ -703,15 +703,19 @@ instance FromJSON Credential where
 
 data ValidationError = ValidationError
   { veMessage :: Text
+  , veNodeId  :: Maybe NodeId
   }
   deriving stock (Eq, Show, Generic)
 
 instance ToJSON ValidationError where
-  toJSON e = object ["message" .= veMessage e]
+  toJSON e =
+    object $
+      ["message" .= veMessage e]
+        <> maybe [] (\nid -> ["nodeId" .= nid]) (veNodeId e)
 
 instance FromJSON ValidationError where
   parseJSON = withObject "ValidationError" $ \o ->
-    ValidationError <$> o .: "message"
+    ValidationError <$> o .: "message" <*> o .:? "nodeId"
 
 -- ---------------------------------------------------------------------------
 -- Program
