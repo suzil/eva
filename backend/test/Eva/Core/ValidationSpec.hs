@@ -66,7 +66,8 @@ mkAgent :: Text -> Text -> NodeType
 mkAgent model prompt =
   AgentNode
     AgentConfig
-      { agentModel          = model
+      { agentProvider       = Nothing
+      , agentModel          = model
       , agentSystemPrompt   = prompt
       , agentResponseFormat = ResponseText
       , agentTemperature    = 0.7

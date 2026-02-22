@@ -42,18 +42,20 @@ withTestEnv action = do
   let cfg = AppConfig
         { configDbPath        = ":memory:"
         , configPort          = 8080
-        , configLlmApiKey     = Nothing
-        , configLogLevel      = LogError
-        , configCredentialKey = "test-key"
+        , configLlmApiKey       = Nothing
+        , configAnthropicApiKey = Nothing
+        , configLogLevel        = LogError
+        , configCredentialKey   = "test-key"
         }
   let env = AppEnv
-        { envConfig     = cfg
-        , envDbPool     = pool
-        , envLogger     = \_ -> pure ()
-        , envDispatch   = execute
-        , envLLMClient  = mockLLMClient
-        , envBroadcasts    = broadcasts
-        , envCredentialKey = Crypto.deriveKey "test-key"
+        { envConfig          = cfg
+        , envDbPool          = pool
+        , envLogger          = \_ -> pure ()
+        , envDispatch        = execute
+        , envLLMClient       = mockLLMClient
+        , envAnthropicClient = dummyLLMClient
+        , envBroadcasts      = broadcasts
+        , envCredentialKey   = Crypto.deriveKey "test-key"
         }
   action env
 
@@ -94,7 +96,8 @@ agentNode nid = Node
   { nodeId    = nid
   , nodeLabel = "Agent"
   , nodeType  = AgentNode AgentConfig
-      { agentModel          = "gpt-4o"
+      { agentProvider       = Nothing
+      , agentModel          = "gpt-4o"
       , agentSystemPrompt   = "You are a test agent."
       , agentResponseFormat = ResponseText
       , agentTemperature    = 0.7

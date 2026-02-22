@@ -38,18 +38,20 @@ withTestEnv action = do
   let cfg = AppConfig
         { configDbPath        = ":memory:"
         , configPort          = 8080
-        , configLlmApiKey     = Nothing
-        , configLogLevel      = LogError
-        , configCredentialKey = "test-credential-key"
+        , configLlmApiKey       = Nothing
+        , configAnthropicApiKey = Nothing
+        , configLogLevel        = LogError
+        , configCredentialKey   = "test-credential-key"
         }
       env = AppEnv
-        { envConfig        = cfg
-        , envDbPool        = pool
-        , envLogger        = \_ -> pure ()
-        , envDispatch      = \_ _ _ _ -> error "dispatch not used in connector tests"
-        , envLLMClient     = dummyLLMClient
-        , envBroadcasts    = broadcasts
-        , envCredentialKey = Crypto.deriveKey "test-credential-key"
+        { envConfig          = cfg
+        , envDbPool          = pool
+        , envLogger          = \_ -> pure ()
+        , envDispatch        = \_ _ _ _ -> error "dispatch not used in connector tests"
+        , envLLMClient       = dummyLLMClient
+        , envAnthropicClient = dummyLLMClient
+        , envBroadcasts      = broadcasts
+        , envCredentialKey   = Crypto.deriveKey "test-credential-key"
         }
   action env
 

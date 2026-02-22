@@ -11,6 +11,7 @@ module Eva.Engine.LLM
   ( -- * Client
     LLMClient (..)
   , mkOpenAIClient
+  , mkAnthropicClient
   , dummyLLMClient
 
     -- * Request / Response types
@@ -447,6 +448,345 @@ parseStreamChunk = Aeson.withObject "StreamChunk" $ \o -> do
         , usageTotalTokens      = totalTok
         }
   pure (mTok, mUsage)
+
+-- ---------------------------------------------------------------------------
+-- Anthropic — client constructor
+-- ---------------------------------------------------------------------------
+
+-- | Build an Anthropic-backed 'LLMClient' from an API key.
+mkAnthropicClient :: Text -> IO LLMClient
+mkAnthropicClient apiKey = do
+  mgr <- newTlsManager
+  pure LLMClient
+    { clientCall   = anthropicCall   apiKey mgr
+    , clientStream = anthropicStream apiKey mgr
+    }
+
+-- ---------------------------------------------------------------------------
+-- Anthropic — non-streaming
+-- ---------------------------------------------------------------------------
+
+anthropicCall :: Text -> Manager -> LLMRequest -> IO (Either LLMError LLMResponse)
+anthropicCall apiKey mgr req = do
+  result <- try (doAnthropicCall apiKey mgr req)
+  case result of
+    Left (e :: SomeException) -> pure (Left (LLMApiError 0 (T.pack (show e))))
+    Right v                   -> pure v
+
+doAnthropicCall :: Text -> Manager -> LLMRequest -> IO (Either LLMError LLMResponse)
+doAnthropicCall apiKey mgr req = do
+  httpReq  <- buildAnthropicRequest apiKey req False
+  response <- httpLbs httpReq mgr
+  let status = statusCode (responseStatus response)
+      body   = responseBody response
+  case classifyAnthropicStatus status body of
+    Left err -> pure (Left err)
+    Right () -> parseAnthropicBody body
+
+-- ---------------------------------------------------------------------------
+-- Anthropic — streaming (SSE)
+-- ---------------------------------------------------------------------------
+
+anthropicStream
+  :: Text
+  -> Manager
+  -> LLMRequest
+  -> (Text -> IO ())
+  -> IO (Either LLMError LLMResponse)
+anthropicStream apiKey mgr req onToken = do
+  result <- try (doAnthropicStream apiKey mgr req onToken)
+  case result of
+    Left (e :: SomeException) -> pure (Left (LLMApiError 0 (T.pack (show e))))
+    Right v                   -> pure v
+
+doAnthropicStream
+  :: Text
+  -> Manager
+  -> LLMRequest
+  -> (Text -> IO ())
+  -> IO (Either LLMError LLMResponse)
+doAnthropicStream apiKey mgr req onToken = do
+  httpReq <- buildAnthropicRequest apiKey req True
+  withResponse httpReq mgr $ \response -> do
+    let status     = statusCode (responseStatus response)
+        bodyReader = responseBody response
+    if status /= 200
+      then do
+        errBody <- BL.fromStrict <$> readAll bodyReader
+        case classifyAnthropicStatus status errBody of
+          Left err -> pure (Left err)
+          Right () -> pure (Left (LLMApiError status "unexpected non-200 response"))
+      else do
+        tokensRef    <- newIORef ([] :: [Text])
+        inputTokRef  <- newIORef (0 :: Int)
+        outputTokRef <- newIORef (0 :: Int)
+        leftoverRef  <- newIORef BS.empty
+        let loop = do
+              chunk <- bodyReader
+              unless (BS.null chunk) $ do
+                prev <- readIORef leftoverRef
+                let combined         = prev <> chunk
+                    (ls, remainder) = splitOnNewlines combined
+                writeIORef leftoverRef remainder
+                mapM_ (processAnthropicLine tokensRef inputTokRef outputTokRef onToken) ls
+                loop
+        loop
+        remaining <- readIORef leftoverRef
+        unless (BS.null remaining) $
+          processAnthropicLine tokensRef inputTokRef outputTokRef onToken remaining
+        tokens    <- readIORef tokensRef
+        inputTok  <- readIORef inputTokRef
+        outputTok <- readIORef outputTokRef
+        let content = T.concat (reverse tokens)
+            usage   = TokenUsage inputTok outputTok (inputTok + outputTok)
+        pure (Right (LLMResponse content Nothing usage))
+
+processAnthropicLine
+  :: IORef [Text]
+  -> IORef Int
+  -> IORef Int
+  -> (Text -> IO ())
+  -> ByteString
+  -> IO ()
+processAnthropicLine tokensRef inputTokRef outputTokRef onToken raw =
+  case parseSseLine (TE.decodeUtf8Lenient raw) of
+    Nothing  -> pure ()
+    Just val ->
+      case parseMaybe parseAnthropicStreamChunk val of
+        Nothing                            -> pure ()
+        Just (mTok, mInputTok, mOutputTok) -> do
+          case mTok of
+            Just t  -> do modifyIORef' tokensRef (t :); onToken t
+            Nothing -> pure ()
+          case mInputTok of
+            Just n  -> writeIORef inputTokRef n
+            Nothing -> pure ()
+          case mOutputTok of
+            Just n  -> writeIORef outputTokRef n
+            Nothing -> pure ()
+
+-- | Parse an Anthropic SSE data chunk.
+-- Returns (optional text delta, optional input_tokens, optional output_tokens).
+parseAnthropicStreamChunk :: Value -> Parser (Maybe Text, Maybe Int, Maybe Int)
+parseAnthropicStreamChunk = Aeson.withObject "AnthropicChunk" $ \o -> do
+  eventType <- o .: "type" :: Parser Text
+  case eventType of
+    "content_block_delta" -> do
+      delta     <- o .: "delta"
+      deltaType <- delta .: "type" :: Parser Text
+      mTok <- if deltaType == "text_delta"
+                then Just <$> (delta .: "text")
+                else pure Nothing
+      pure (mTok, Nothing, Nothing)
+    "message_start" -> do
+      msg   <- o .: "message"
+      usage <- msg .: "usage"
+      inputTok <- usage .: "input_tokens"
+      pure (Nothing, Just inputTok, Nothing)
+    "message_delta" -> do
+      usage     <- o .: "usage"
+      outputTok <- usage .: "output_tokens"
+      pure (Nothing, Nothing, Just outputTok)
+    _ -> pure (Nothing, Nothing, Nothing)
+
+-- ---------------------------------------------------------------------------
+-- Anthropic — request building
+-- ---------------------------------------------------------------------------
+
+-- | Build an http-client 'Request' for the Anthropic messages endpoint.
+buildAnthropicRequest :: Text -> LLMRequest -> Bool -> IO Request
+buildAnthropicRequest apiKey req streaming = do
+  baseReq <- parseRequest "POST https://api.anthropic.com/v1/messages"
+  pure baseReq
+    { requestHeaders =
+        [ ("Content-Type",      "application/json")
+        , ("x-api-key",         TE.encodeUtf8 apiKey)
+        , ("anthropic-version", "2023-06-01")
+        ]
+    , requestBody = RequestBodyLBS (buildAnthropicRequestBody req streaming)
+    }
+
+-- | Serialize an 'LLMRequest' to the Anthropic messages request body.
+-- Extracts the system message (role=="system") and places it at top level;
+-- the remaining messages are serialized in Anthropic format.
+-- Groups consecutive 'ToolResultMsg' entries into a single user message.
+buildAnthropicRequestBody :: LLMRequest -> Bool -> BL.ByteString
+buildAnthropicRequestBody req streaming =
+  let allMsgs     = llmMessages req
+      systemText  = extractSystemText allMsgs
+      otherMsgs   = filter (not . isSystemMsg) allMsgs
+      msgValues   = buildAnthropicMessages otherMsgs
+      maxTok      = maybe 4096 id (llmMaxTokens req)
+  in encode $
+       object $
+         [ "model"       .= llmModel req
+         , "max_tokens"  .= maxTok
+         , "messages"    .= msgValues
+         , "stream"      .= streaming
+         ]
+         ++ maybe [] (\s -> ["system" .= s]) systemText
+         ++ anthropicToolsField (llmTools req)
+
+isSystemMsg :: ChatMessage -> Bool
+isSystemMsg (ChatMessage role _) = role == "system"
+isSystemMsg _                    = False
+
+extractSystemText :: [ChatMessage] -> Maybe Text
+extractSystemText msgs =
+  case [c | ChatMessage "system" c <- msgs] of
+    []    -> Nothing
+    (t:_) -> Just t
+
+-- | Convert a list of 'ChatMessage' to Anthropic message JSON, combining
+-- consecutive 'ToolResultMsg' entries into a single user message.
+buildAnthropicMessages :: [ChatMessage] -> [Value]
+buildAnthropicMessages = go
+  where
+    go [] = []
+    go (ToolResultMsg callId content : rest) =
+      let (moreResults, after) = span isToolResult rest
+          allResults = ToolResultMsg callId content : moreResults
+          block = object
+            [ "role"    .= ("user" :: Text)
+            , "content" .= map toolResultToContent allResults
+            ]
+      in block : go after
+    go (msg : rest) = anthropicMessageToJson msg : go rest
+
+    isToolResult (ToolResultMsg _ _) = True
+    isToolResult _                   = False
+
+    toolResultToContent (ToolResultMsg callId content) =
+      object
+        [ "type"        .= ("tool_result" :: Text)
+        , "tool_use_id" .= callId
+        , "content"     .= content
+        ]
+    toolResultToContent _ = Null
+
+anthropicMessageToJson :: ChatMessage -> Value
+anthropicMessageToJson (ChatMessage role content) =
+  object ["role" .= role, "content" .= content]
+anthropicMessageToJson (ToolCallMsg calls) =
+  object
+    [ "role"    .= ("assistant" :: Text)
+    , "content" .= map anthropicToolUseBlock calls
+    ]
+anthropicMessageToJson (ToolResultMsg callId content) =
+  object
+    [ "role"    .= ("user" :: Text)
+    , "content" .=
+        [ object
+            [ "type"        .= ("tool_result" :: Text)
+            , "tool_use_id" .= callId
+            , "content"     .= content
+            ]
+        ]
+    ]
+
+anthropicToolUseBlock :: ToolCall -> Value
+anthropicToolUseBlock tc = object
+  [ "type"  .= ("tool_use" :: Text)
+  , "id"    .= toolCallId tc
+  , "name"  .= toolCallName tc
+  , "input" .= toolCallArgs tc
+  ]
+
+anthropicToolsField :: [ToolSpec] -> [Pair]
+anthropicToolsField [] = []
+anthropicToolsField ts = ["tools" .= map anthropicToolSpecToJson ts]
+
+anthropicToolSpecToJson :: ToolSpec -> Value
+anthropicToolSpecToJson t = object
+  [ "name"         .= toolName t
+  , "description"  .= toolDescription t
+  , "input_schema" .= toolParameters t
+  ]
+
+-- ---------------------------------------------------------------------------
+-- Anthropic — response parsing
+-- ---------------------------------------------------------------------------
+
+-- | Parse a complete (non-streaming) Anthropic messages response.
+parseAnthropicBody :: BL.ByteString -> IO (Either LLMError LLMResponse)
+parseAnthropicBody body =
+  case decode body of
+    Nothing  -> pure (Left (LLMParseError "failed to decode Anthropic JSON response"))
+    Just val -> case parseMaybe parseAnthropicCompletion val of
+      Nothing   -> pure (Left (LLMParseError "unexpected Anthropic response structure"))
+      Just resp -> pure (Right resp)
+
+parseAnthropicCompletion :: Value -> Parser LLMResponse
+parseAnthropicCompletion = Aeson.withObject "AnthropicMessage" $ \o -> do
+  contentBlocks <- o .: "content" :: Parser [Value]
+  stopReason    <- o .:? "stop_reason" :: Parser (Maybe Text)
+  usage         <- o .: "usage"
+  inputTok      <- usage .: "input_tokens"
+  outputTok     <- usage .: "output_tokens"
+  let tokenUsage = TokenUsage
+        { usagePromptTokens     = inputTok
+        , usageCompletionTokens = outputTok
+        , usageTotalTokens      = inputTok + outputTok
+        }
+  if stopReason == Just "tool_use"
+    then do
+      calls <- mapM parseAnthropicToolUse
+                 [ b | b@(Object bo) <- contentBlocks
+                     , parseMaybe (.: "type") bo == Just ("tool_use" :: Text)
+                 ]
+      pure LLMResponse
+        { llmContent   = ""
+        , llmToolCalls = if null calls then Nothing else Just calls
+        , llmUsage     = tokenUsage
+        }
+    else do
+      let textContent = T.concat
+            [ t
+            | block <- contentBlocks
+            , Just t <- [parseMaybe extractBlockText block]
+            ]
+      pure LLMResponse
+        { llmContent   = textContent
+        , llmToolCalls = Nothing
+        , llmUsage     = tokenUsage
+        }
+
+extractBlockText :: Value -> Parser Text
+extractBlockText = Aeson.withObject "ContentBlock" $ \o -> do
+  blockType <- o .: "type" :: Parser Text
+  case blockType of
+    "text" -> o .: "text"
+    _      -> fail "not a text block"
+
+parseAnthropicToolUse :: Value -> Parser ToolCall
+parseAnthropicToolUse = Aeson.withObject "ToolUseBlock" $ \o -> do
+  callId <- o .: "id"
+  name   <- o .: "name"
+  input  <- o .: "input"  -- already a JSON object, no decoding needed
+  pure ToolCall { toolCallId = callId, toolCallName = name, toolCallArgs = input }
+
+-- ---------------------------------------------------------------------------
+-- Anthropic — status classification
+-- ---------------------------------------------------------------------------
+
+classifyAnthropicStatus :: Int -> BL.ByteString -> Either LLMError ()
+classifyAnthropicStatus 200 _    = Right ()
+classifyAnthropicStatus 401 body = Left (LLMAuthError     (extractAnthropicMessage body))
+classifyAnthropicStatus 403 body = Left (LLMAuthError     (extractAnthropicMessage body))
+classifyAnthropicStatus 429 body = Left (LLMRateLimitError (extractAnthropicMessage body))
+classifyAnthropicStatus n   body = Left (LLMApiError n    (extractAnthropicMessage body))
+
+-- | Pull the @error.message@ string from an Anthropic error body.
+extractAnthropicMessage :: BL.ByteString -> Text
+extractAnthropicMessage body =
+  case decode body of
+    Just (Object o) ->
+      case parseMaybe (\obj -> (obj .: "error") >>= (.: "message")) o of
+        Just msg -> msg
+        Nothing  -> excerpt
+    _ -> excerpt
+  where
+    excerpt = T.take 200 (TE.decodeUtf8Lenient (BL.toStrict body))
 
 -- ---------------------------------------------------------------------------
 -- ByteString utilities

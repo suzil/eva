@@ -99,6 +99,9 @@ instance Arbitrary PortSpec where
 -- Arbitrary instances — config sub-types
 -- ---------------------------------------------------------------------------
 
+instance Arbitrary LLMProvider where
+  arbitrary = elements [minBound .. maxBound]
+
 instance Arbitrary ResponseFormat where
   arbitrary = elements [minBound .. maxBound]
 
@@ -153,7 +156,8 @@ instance Arbitrary BackoffStrategy where
 instance Arbitrary AgentConfig where
   arbitrary =
     AgentConfig
-      <$> arbitraryText
+      <$> oneof [pure Nothing, Just <$> arbitrary]
+      <*> arbitraryText
       <*> arbitraryText
       <*> arbitrary
       <*> choose (0.0, 2.0)
@@ -352,7 +356,8 @@ sampleProgram =
                       , nodeType =
                           AgentNode
                             AgentConfig
-                              { agentModel = "gpt-4o"
+                              { agentProvider = Nothing
+                              , agentModel = "gpt-4o"
                               , agentSystemPrompt = "Summarize the sprint progress."
                               , agentResponseFormat = ResponseText
                               , agentTemperature = 0.7

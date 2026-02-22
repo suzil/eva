@@ -63,18 +63,20 @@ makeTestApp = do
   broadcasts <- newTVarIO Map.empty
   let env = AppEnv
         { envConfig = AppConfig
-            { configDbPath        = ":memory:"
-            , configPort          = 8080
-            , configLlmApiKey     = Nothing
-            , configLogLevel      = LogError
-            , configCredentialKey = "test-key"
+            { configDbPath          = ":memory:"
+            , configPort            = 8080
+            , configLlmApiKey       = Nothing
+            , configAnthropicApiKey = Nothing
+            , configLogLevel        = LogError
+            , configCredentialKey   = "test-key"
             }
-        , envDbPool        = pool
-        , envLogger        = \_ -> pure ()
-        , envDispatch      = execute
-        , envLLMClient     = dummyLLMClient
-        , envBroadcasts    = broadcasts
-        , envCredentialKey = Crypto.deriveKey "test-key"
+        , envDbPool          = pool
+        , envLogger          = \_ -> pure ()
+        , envDispatch        = execute
+        , envLLMClient       = dummyLLMClient
+        , envAnthropicClient = dummyLLMClient
+        , envBroadcasts      = broadcasts
+        , envCredentialKey   = Crypto.deriveKey "test-key"
         }
   pure (makeApp env)
 
