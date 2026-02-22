@@ -17,6 +17,7 @@ import Test.Hspec
 
 import Eva.App (AppEnv (..), AppM, runAppM)
 import Eva.Config (AppConfig (..), LogLevel (..))
+import qualified Eva.Crypto as Crypto
 import Eva.Core.Types
 import Eva.Engine.Dispatch (execute)
 import Eva.Engine.LLM (dummyLLMClient)
@@ -33,10 +34,11 @@ withTestEnv action = do
   pool <- runNoLoggingT $ createSqlitePool ":memory:" 1
   runMigrations pool
   let cfg = AppConfig
-        { configDbPath    = ":memory:"
-        , configPort      = 8080
-        , configLlmApiKey = Nothing
-        , configLogLevel  = LogError
+        { configDbPath        = ":memory:"
+        , configPort          = 8080
+        , configLlmApiKey     = Nothing
+        , configLogLevel      = LogError
+        , configCredentialKey = "test-key"
         }
   broadcasts <- newTVarIO Map.empty
   let env = AppEnv
@@ -45,7 +47,8 @@ withTestEnv action = do
         , envLogger     = \_ -> pure ()
         , envDispatch   = execute
         , envLLMClient  = dummyLLMClient
-        , envBroadcasts = broadcasts
+        , envBroadcasts    = broadcasts
+        , envCredentialKey = Crypto.deriveKey "test-key"
         }
   action env
 

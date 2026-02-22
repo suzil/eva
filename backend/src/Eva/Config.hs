@@ -40,10 +40,11 @@ readLogLevel s = case s of
 -- ---------------------------------------------------------------------------
 
 data AppConfig = AppConfig
-  { configDbPath    :: FilePath
-  , configPort      :: Int
-  , configLlmApiKey :: Maybe Text
-  , configLogLevel  :: LogLevel
+  { configDbPath        :: FilePath
+  , configPort          :: Int
+  , configLlmApiKey     :: Maybe Text
+  , configLogLevel      :: LogLevel
+  , configCredentialKey :: Text
   }
   deriving stock (Show)
 
@@ -54,10 +55,11 @@ data AppConfig = AppConfig
 configParser :: Parser Error AppConfig
 configParser =
   AppConfig
-    <$> var Env.str   "EVA_DB_PATH"    (def "eva.db" <> help "SQLite database file path")
-    <*> var auto      "EVA_PORT"       (def 8080 <> help "HTTP server port")
+    <$> var Env.str      "EVA_DB_PATH"        (def "eva.db" <> help "SQLite database file path")
+    <*> var auto         "EVA_PORT"           (def 8080 <> help "HTTP server port")
     <*> optional (var Env.str "EVA_LLM_API_KEY" (help "LLM provider API key"))
-    <*> var readLogLevel "EVA_LOG_LEVEL"  (def LogInfo <> help "Log level: debug, info, warn, error")
+    <*> var readLogLevel "EVA_LOG_LEVEL"      (def LogInfo <> help "Log level: debug, info, warn, error")
+    <*> var Env.str      "EVA_CREDENTIAL_KEY" (help "Master key for credential encryption (required)")
 
 -- ---------------------------------------------------------------------------
 -- YAML fallback

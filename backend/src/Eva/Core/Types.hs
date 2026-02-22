@@ -10,6 +10,7 @@ module Eva.Core.Types
   , EdgeId (..)
   , RunId (..)
   , StepId (..)
+  , CredentialId (..)
 
     -- * State machines
   , ProgramState (..)
@@ -20,6 +21,10 @@ module Eva.Core.Types
   , PortCategory (..)
   , PortName (..)
   , PortSpec (..)
+
+    -- * Credentials
+  , CredentialType (..)
+  , Credential (..)
 
     -- * Config sub-types
   , ResponseFormat (..)
@@ -118,6 +123,10 @@ newtype RunId = RunId Text
   deriving newtype (ToJSON, FromJSON, ToJSONKey, FromJSONKey, IsString)
 
 newtype StepId = StepId Text
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving newtype (ToJSON, FromJSON, ToJSONKey, FromJSONKey, IsString)
+
+newtype CredentialId = CredentialId Text
   deriving stock (Eq, Ord, Show, Generic)
   deriving newtype (ToJSON, FromJSON, ToJSONKey, FromJSONKey, IsString)
 
@@ -638,6 +647,40 @@ instance ToJSON Step where
 
 instance FromJSON Step where
   parseJSON = genericParseJSON (dropPrefix "step")
+
+-- ---------------------------------------------------------------------------
+-- Credentials
+-- ---------------------------------------------------------------------------
+
+data CredentialType = CredentialApiKey | CredentialOAuthToken
+  deriving stock (Eq, Show, Generic, Enum, Bounded)
+
+instance ToJSON CredentialType where
+  toJSON CredentialApiKey    = "api_key"
+  toJSON CredentialOAuthToken = "oauth_token"
+
+instance FromJSON CredentialType where
+  parseJSON = withText "CredentialType" $ \case
+    "api_key"     -> pure CredentialApiKey
+    "oauth_token" -> pure CredentialOAuthToken
+    other         -> fail $ "Unknown CredentialType: " <> show other
+
+-- | Safe credential view — never includes the encrypted secret.
+data Credential = Credential
+  { credentialId        :: CredentialId
+  , credentialName      :: Text
+  , credentialSystem    :: SystemType
+  , credentialType      :: CredentialType
+  , credentialCreatedAt :: UTCTime
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON Credential where
+  toJSON = genericToJSON (dropPrefix "credential")
+  toEncoding = genericToEncoding (dropPrefix "credential")
+
+instance FromJSON Credential where
+  parseJSON = genericParseJSON (dropPrefix "credential")
 
 -- ---------------------------------------------------------------------------
 -- Validation

@@ -20,6 +20,7 @@ import Test.Hspec
 
 import Eva.App (AppEnv (..), runAppM)
 import Eva.Config (AppConfig (..), LogLevel (..))
+import qualified Eva.Crypto as Crypto
 import Eva.Core.Types
 import Eva.Engine.Handlers.Agent (handleAgent)
 import Eva.Engine.LLM
@@ -114,18 +115,20 @@ withTestEnv llmClient action = do
   runMigrations pool
   broadcasts <- newTVarIO Map.empty
   let cfg = AppConfig
-        { configDbPath    = ":memory:"
-        , configPort      = 8080
-        , configLlmApiKey = Nothing
-        , configLogLevel  = LogError
+        { configDbPath        = ":memory:"
+        , configPort          = 8080
+        , configLlmApiKey     = Nothing
+        , configLogLevel      = LogError
+        , configCredentialKey = "test-key"
         }
       env = AppEnv
-        { envConfig     = cfg
-        , envDbPool     = pool
-        , envLogger     = \_ -> pure ()
-        , envDispatch   = \_ _ _ _ -> error "dispatch not used in handler unit tests"
-        , envLLMClient  = llmClient
-        , envBroadcasts = broadcasts
+        { envConfig        = cfg
+        , envDbPool        = pool
+        , envLogger        = \_ -> pure ()
+        , envDispatch      = \_ _ _ _ -> error "dispatch not used in handler unit tests"
+        , envLLMClient     = llmClient
+        , envBroadcasts    = broadcasts
+        , envCredentialKey = Crypto.deriveKey "test-key"
         }
   action env
 

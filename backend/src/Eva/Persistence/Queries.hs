@@ -30,6 +30,11 @@ module Eva.Persistence.Queries
 
     -- * Log entries
   , insertLogEntry
+
+    -- * Credentials
+  , insertCredential
+  , listCredentials
+  , deleteCredential
   ) where
 
 import Control.Monad (forM_)
@@ -59,6 +64,8 @@ import Database.Persist.Sql
   , (=.)
   , (==.)
   )
+
+import Data.ByteString (ByteString)
 
 import Eva.App (AppEnv (..), AppM)
 import Eva.Core.Types
@@ -129,6 +136,12 @@ toStepRowId (StepId t) = StepRowKey t
 
 fromStepRowId :: StepRowId -> StepId
 fromStepRowId (StepRowKey t) = StepId t
+
+toCredentialRowId :: CredentialId -> CredentialRowId
+toCredentialRowId (CredentialId t) = CredentialRowKey t
+
+fromCredentialRowId :: CredentialRowId -> CredentialId
+fromCredentialRowId (CredentialRowKey t) = CredentialId t
 
 -- | Extract the discriminator string for a NodeType (matches JSON "type" field).
 nodeTypeTag :: NodeType -> Text
@@ -458,3 +471,45 @@ insertLogEntry sid level msg mData = do
     , logEntryRowEntryData = fmap toJsonText mData
     , logEntryRowCreatedAt = now
     }
+
+-- ---------------------------------------------------------------------------
+-- Credentials
+-- ---------------------------------------------------------------------------
+
+credentialFromRow :: Entity CredentialRow -> Either String Credential
+credentialFromRow (Entity k row) = do
+  sys <- decodeState (credentialRowSystemType row)
+  ct  <- case credentialRowCredType row of
+           Nothing -> Right CredentialApiKey
+           Just t  -> decodeState t
+  pure Credential
+    { credentialId        = fromCredentialRowId k
+    , credentialName      = credentialRowName row
+    , credentialSystem    = sys
+    , credentialType      = ct
+    , credentialCreatedAt = credentialRowCreatedAt row
+    }
+
+-- | Insert an encrypted credential. Takes the domain value plus the
+-- pre-encrypted secret bytes (caller encrypts using 'Eva.Crypto.encrypt').
+insertCredential :: Credential -> ByteString -> AppM ()
+insertCredential c encBytes = runDb $
+  insertKey (toCredentialRowId (credentialId c)) CredentialRow
+    { credentialRowName          = credentialName c
+    , credentialRowSystemType    = encodeState (credentialSystem c)
+    , credentialRowCredType      = Just (encodeState (credentialType c))
+    , credentialRowEncryptedData = encBytes
+    , credentialRowCreatedAt     = credentialCreatedAt c
+    }
+
+listCredentials :: AppM [Credential]
+listCredentials = runDb $ do
+  entities <- selectList [] [Asc CredentialRowCreatedAt]
+  traverse decode entities
+  where
+    decode e = case credentialFromRow e of
+      Left err -> fail $ "listCredentials: " <> err
+      Right c  -> pure c
+
+deleteCredential :: CredentialId -> AppM ()
+deleteCredential cid = runDb $ delete (toCredentialRowId cid)

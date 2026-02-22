@@ -44,6 +44,7 @@ import qualified Data.Map.Strict as Map
 import Eva.Api.Server (makeApp)
 import Eva.App (AppEnv (..))
 import Eva.Config (AppConfig (..), LogLevel (..))
+import qualified Eva.Crypto as Crypto
 import Eva.Engine.Dispatch (execute)
 import Eva.Engine.LLM (dummyLLMClient)
 import Eva.Persistence.Migration (runMigrations)
@@ -61,16 +62,18 @@ makeTestApp = do
   broadcasts <- newTVarIO Map.empty
   let env = AppEnv
         { envConfig = AppConfig
-            { configDbPath    = ":memory:"
-            , configPort      = 8080
-            , configLlmApiKey = Nothing
-            , configLogLevel  = LogError
+            { configDbPath        = ":memory:"
+            , configPort          = 8080
+            , configLlmApiKey     = Nothing
+            , configLogLevel      = LogError
+            , configCredentialKey = "test-key"
             }
-        , envDbPool     = pool
-        , envLogger     = \_ -> pure ()
-        , envDispatch   = execute
-        , envLLMClient  = dummyLLMClient
-        , envBroadcasts = broadcasts
+        , envDbPool        = pool
+        , envLogger        = \_ -> pure ()
+        , envDispatch      = execute
+        , envLLMClient     = dummyLLMClient
+        , envBroadcasts    = broadcasts
+        , envCredentialKey = Crypto.deriveKey "test-key"
         }
   pure (makeApp env)
 
@@ -403,3 +406,83 @@ spec = before makeTestApp $ do
       liftIO $
         lookup "Access-Control-Allow-Origin" (simpleHeaders res)
           `shouldBe` Just "*"
+
+  -- -------------------------------------------------------------------------
+  -- Credentials (EVA-32)
+  -- -------------------------------------------------------------------------
+
+  describe "GET /api/credentials" $ do
+    it "returns empty list initially" $ \app -> sess app $ do
+      res <- doGet "/api/credentials"
+      liftIO $ do
+        simpleStatus res `shouldBe` status200
+        let Just arr = decode (simpleBody res) :: Maybe [Value]
+        arr `shouldBe` []
+
+  describe "POST /api/credentials" $ do
+    it "creates a credential and returns 201 with safe fields only" $ \app -> sess app $ do
+      res <- doPostJson "/api/credentials" $ object
+        [ "name"   .= ("Linear API Key" :: Text)
+        , "system" .= ("linear" :: Text)
+        , "type"   .= ("api_key" :: Text)
+        , "secret" .= ("lin_api_secret" :: Text)
+        ]
+      liftIO $ do
+        simpleStatus res `shouldBe` status201
+        let Just (Object body) = decode (simpleBody res) :: Maybe Value
+        body !? "id"        `shouldSatisfy` isJust
+        body !? "name"      `shouldBe` Just (String "Linear API Key")
+        body !? "system"    `shouldBe` Just (String "linear")
+        body !? "type"      `shouldBe` Just (String "api_key")
+        body !? "createdAt" `shouldSatisfy` isJust
+        body !? "secret"    `shouldBe` Nothing
+
+    it "response never contains the raw secret field" $ \app -> sess app $ do
+      res <- doPostJson "/api/credentials" $ object
+        [ "name"   .= ("My Key" :: Text)
+        , "system" .= ("github" :: Text)
+        , "type"   .= ("oauth_token" :: Text)
+        , "secret" .= ("ghp_supersecret" :: Text)
+        ]
+      liftIO $ do
+        let Just (Object body) = decode (simpleBody res) :: Maybe Value
+        body !? "secret" `shouldBe` Nothing
+
+    it "created credential appears in GET list" $ \app -> sess app $ do
+      _ <- doPostJson "/api/credentials" $ object
+        [ "name"   .= ("My Key" :: Text)
+        , "system" .= ("linear" :: Text)
+        , "type"   .= ("api_key" :: Text)
+        , "secret" .= ("secret123" :: Text)
+        ]
+      res <- doGet "/api/credentials"
+      liftIO $ do
+        simpleStatus res `shouldBe` status200
+        let Just arr = decode (simpleBody res) :: Maybe [Value]
+        length arr `shouldBe` 1
+
+  describe "DELETE /api/credentials/:id" $ do
+    it "deletes an existing credential (204)" $ \app -> sess app $ do
+      createRes <- doPostJson "/api/credentials" $ object
+        [ "name"   .= ("My Key" :: Text)
+        , "system" .= ("linear" :: Text)
+        , "type"   .= ("api_key" :: Text)
+        , "secret" .= ("secret123" :: Text)
+        ]
+      let Just cid = responseId createRes
+      delRes <- doDelete ("/api/credentials/" <> cid)
+      liftIO $ simpleStatus delRes `shouldBe` status204
+
+    it "deleted credential no longer appears in list" $ \app -> sess app $ do
+      createRes <- doPostJson "/api/credentials" $ object
+        [ "name"   .= ("My Key" :: Text)
+        , "system" .= ("linear" :: Text)
+        , "type"   .= ("api_key" :: Text)
+        , "secret" .= ("secret123" :: Text)
+        ]
+      let Just cid = responseId createRes
+      _ <- doDelete ("/api/credentials/" <> cid)
+      listRes <- doGet "/api/credentials"
+      liftIO $ do
+        let Just arr = decode (simpleBody listRes) :: Maybe [Value]
+        arr `shouldBe` []

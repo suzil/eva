@@ -7,6 +7,8 @@ import type {
   ApiError,
   Run,
   RunDetail,
+  Credential,
+  CreateCredentialReq,
 } from '../types/index.ts'
 
 const BASE = '/api'
@@ -101,4 +103,23 @@ export function fetchRunDetail(runId: string): Promise<RunDetail> {
 
 export function cancelRun(runId: string): Promise<Run> {
   return request<Run>(`/runs/${runId}/cancel`, { method: 'POST' })
+}
+
+// ---------------------------------------------------------------------------
+// Credentials (EVA-32)
+// ---------------------------------------------------------------------------
+
+export function fetchCredentials(): Promise<Credential[]> {
+  return request<Credential[]>('/credentials')
+}
+
+export function createCredential(body: CreateCredentialReq): Promise<Credential> {
+  return request<Credential>('/credentials', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function deleteCredential(id: string): Promise<void> {
+  return request<void>(`/credentials/${id}`, { method: 'DELETE' })
 }

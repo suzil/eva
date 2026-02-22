@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Graph, CreateProgramReq, PatchProgramReq } from '../types/index.ts'
+import type { Graph, CreateProgramReq, PatchProgramReq, CreateCredentialReq } from '../types/index.ts'
 import {
   cancelRun,
+  createCredential,
   createProgram,
   createRun,
+  deleteCredential,
   deleteProgram,
   deployProgram,
+  fetchCredentials,
   fetchProgram,
   fetchPrograms,
   fetchRunDetail,
@@ -156,6 +159,41 @@ export function useRunDetail(runId: string | null) {
 export function useCancelRun() {
   return useMutation({
     mutationFn: (runId: string) => cancelRun(runId),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Credentials (EVA-32)
+// ---------------------------------------------------------------------------
+
+export const credentialKeys = {
+  all: ['credentials'] as const,
+}
+
+export function useCredentials() {
+  return useQuery({
+    queryKey: credentialKeys.all,
+    queryFn: fetchCredentials,
+  })
+}
+
+export function useCreateCredential() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateCredentialReq) => createCredential(body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: credentialKeys.all })
+    },
+  })
+}
+
+export function useDeleteCredential() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteCredential(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: credentialKeys.all })
+    },
   })
 }
 

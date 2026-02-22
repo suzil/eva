@@ -8,6 +8,7 @@ module Eva.Api.Types
     CreateProgramReq (..)
   , PatchProgramReq (..)
   , CreateRunReq (..)
+  , CreateCredentialReq (..)
 
     -- * Response bodies
   , HealthResponse (..)
@@ -21,7 +22,7 @@ module Eva.Api.Types
 import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
 import Data.Text (Text)
 
-import Eva.Core.Types (Run, Step, ValidationError (..))
+import Eva.Core.Types (Run, Step, ValidationError (..), CredentialType (..), SystemType (..))
 
 -- ---------------------------------------------------------------------------
 -- Request bodies
@@ -73,6 +74,23 @@ newtype CreateRunReq = CreateRunReq
 instance FromJSON CreateRunReq where
   parseJSON = withObject "CreateRunReq" $ \o ->
     CreateRunReq <$> o .:? "triggerPayload"
+
+-- | Request body for POST /api/credentials.
+-- 'secret' is the raw credential value (API key, token, etc.) — encrypted before storage.
+data CreateCredentialReq = CreateCredentialReq
+  { ccrName   :: Text
+  , ccrSystem :: SystemType
+  , ccrType   :: CredentialType
+  , ccrSecret :: Text
+  }
+
+instance FromJSON CreateCredentialReq where
+  parseJSON = withObject "CreateCredentialReq" $ \o ->
+    CreateCredentialReq
+      <$> o .: "name"
+      <*> o .: "system"
+      <*> o .: "type"
+      <*> o .: "secret"
 
 -- | Response body for GET /api/runs/:id — embeds the Run and its Steps.
 data RunDetail = RunDetail
