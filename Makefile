@@ -5,6 +5,7 @@
 # Sources .env automatically if present (sets EVA_* vars for the backend).
 dev:
 	@set -a; [ -f .env ] && . ./.env || true; set +a; \
+	lsof -ti :$${EVA_PORT:-8080} | xargs kill -9 2>/dev/null || true; \
 	trap 'kill 0' INT; \
 	(cd backend && ghcid) & \
 	(cd frontend && npm run dev) & \
