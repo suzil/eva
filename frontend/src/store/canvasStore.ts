@@ -7,7 +7,7 @@ import {
   type NodeChange,
   type EdgeChange,
 } from '@xyflow/react'
-import type { EvaNodeData, Graph, NodeId, NodeType, PortCategory, StepState } from '../types'
+import type { EvaNodeData, Graph, NodeId, NodeType, PortCategory, Step, StepState } from '../types'
 
 // ---------------------------------------------------------------------------
 // Store shape
@@ -42,6 +42,8 @@ interface CanvasState {
   setNodeStepState: (nodeId: NodeId, state: StepState) => void
   /** Bulk-set step errors (keyed by nodeId) after fetching RunDetail. */
   setNodeStepErrors: (errors: Record<NodeId, string>) => void
+  /** Load step states from a completed RunDetail into the canvas overlay. Clears previous states first. */
+  loadRunSteps: (steps: Step[]) => void
   /** Reset all run-time overlays (step states + errors) after a run finishes or a new graph loads. */
   clearRunState: () => void
 
@@ -141,6 +143,29 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     })),
 
   setNodeStepErrors: (errors) => set({ nodeStepErrors: errors }),
+
+  loadRunSteps: (steps) =>
+    set((s) => {
+      const newStepStates: Record<NodeId, StepState> = {}
+      const newStepErrors: Record<NodeId, string> = {}
+      for (const step of steps) {
+        newStepStates[step.nodeId] = step.state
+        if (step.error) newStepErrors[step.nodeId] = step.error
+      }
+      return {
+        nodeStepStates: newStepStates,
+        nodeStepErrors: newStepErrors,
+        nodes: s.nodes.map((n) => {
+          const state = newStepStates[n.id]
+          if (state === undefined) {
+            if (n.data.stepState === undefined) return n
+            const { stepState: _, ...rest } = n.data
+            return { ...n, data: rest as EvaNodeData }
+          }
+          return { ...n, data: { ...n.data, stepState: state } }
+        }),
+      }
+    }),
 
   clearRunState: () =>
     set((s) => ({

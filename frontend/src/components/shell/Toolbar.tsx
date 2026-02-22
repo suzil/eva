@@ -14,6 +14,8 @@ import {
 import { type AppMode, useUiStore } from '../../store/uiStore'
 import {
   useProgram,
+  useRuns,
+  useRunDetail,
   useSaveGraph,
   useValidateProgram,
   useCreateRun,
@@ -24,7 +26,7 @@ import {
 } from '../../api/hooks'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useRunStream } from '../../hooks/useRunStream'
-import type { ProgramState, ValidationError } from '../../types'
+import type { ProgramState, Run, ValidationError } from '../../types'
 
 // ---------------------------------------------------------------------------
 // Breadcrumb badge — mirrors ProgramsList StateBadge but lighter weight
@@ -69,8 +71,12 @@ export function Toolbar() {
   const selectedProgramId = useUiStore((s) => s.selectedProgramId)
   const activeRunId = useUiStore((s) => s.activeRunId)
   const setActiveRunId = useUiStore((s) => s.setActiveRunId)
+  const inspectedRunId = useUiStore((s) => s.inspectedRunId)
+  const setInspectedRunId = useUiStore((s) => s.setInspectedRunId)
 
   const { data: program } = useProgram(selectedProgramId ?? '')
+  const { data: runsData } = useRuns(mode === 'operate' ? selectedProgramId : null)
+  const { data: inspectedRunDetail } = useRunDetail(inspectedRunId)
 
   const setBottomPanelOpen = useUiStore((s) => s.setBottomPanelOpen)
   const setActiveBottomTab = useUiStore((s) => s.setActiveBottomTab)
@@ -79,6 +85,7 @@ export function Toolbar() {
   const buildGraph = useCanvasStore((s) => s.buildGraph)
   const markClean = useCanvasStore((s) => s.markClean)
   const clearRunState = useCanvasStore((s) => s.clearRunState)
+  const loadRunSteps = useCanvasStore((s) => s.loadRunSteps)
   const setSelectedNode = useCanvasStore((s) => s.setSelectedNode)
   const saveMutation = useSaveGraph(selectedProgramId ?? '')
 
@@ -113,6 +120,24 @@ export function Toolbar() {
     setDeployPhase('idle')
     setDeployErrors([])
   }, [selectedProgramId])
+
+  // When switching to Operate: auto-select the most recent run if none selected
+  useEffect(() => {
+    if (mode === 'operate' && runsData && runsData.length > 0 && !inspectedRunId) {
+      setInspectedRunId(runsData[0].id)
+    }
+    if (mode === 'author') {
+      clearRunState()
+      setInspectedRunId(null)
+    }
+  }, [mode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load step states onto canvas when the inspected run detail arrives or changes
+  useEffect(() => {
+    if (inspectedRunDetail) {
+      loadRunSteps(inspectedRunDetail.steps)
+    }
+  }, [inspectedRunDetail]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Subscribe to the active run stream (no-op when activeRunId is null)
   useRunStream(activeRunId, selectedProgramId ?? '')
@@ -245,6 +270,15 @@ export function Toolbar() {
 
         {/* Author / Operate toggle */}
         <ModeToggle mode={mode} onChange={setMode} />
+
+        {/* Run selector — shown in Operate mode */}
+        {mode === 'operate' && selectedProgramId && (
+          <RunSelector
+            runs={runsData ?? []}
+            selectedRunId={inspectedRunId}
+            onSelect={setInspectedRunId}
+          />
+        )}
 
         {/* Action buttons — adapt to program state */}
         <div className="flex items-center gap-1">
@@ -432,6 +466,61 @@ export function Toolbar() {
         </div>
       )}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// RunSelector — dropdown to pick which historical run to inspect
+// ---------------------------------------------------------------------------
+
+function formatRunLabel(run: Run): string {
+  const date = run.startedAt ? new Date(run.startedAt) : null
+  const dateStr = date
+    ? date.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : 'Pending'
+  const stateEmoji = {
+    completed: '✓',
+    failed: '✗',
+    running: '●',
+    canceled: '○',
+    waiting: '⧗',
+    pending: '○',
+  }[run.state] ?? ''
+  return `${stateEmoji} ${dateStr}`
+}
+
+function RunSelector({
+  runs,
+  selectedRunId,
+  onSelect,
+}: {
+  runs: Run[]
+  selectedRunId: string | null
+  onSelect: (id: string | null) => void
+}) {
+  if (runs.length === 0) {
+    return (
+      <span className="text-[11px] text-gray-600 italic">No runs yet</span>
+    )
+  }
+  return (
+    <select
+      value={selectedRunId ?? ''}
+      onChange={(e) => onSelect(e.target.value || null)}
+      className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[11px] text-gray-300 focus:border-gray-500 focus:outline-none"
+      aria-label="Select run to inspect"
+    >
+      {runs.map((run) => (
+        <option key={run.id} value={run.id}>
+          {formatRunLabel(run)}
+        </option>
+      ))}
+    </select>
   )
 }
 

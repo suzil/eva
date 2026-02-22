@@ -12,6 +12,7 @@ import {
   fetchProgram,
   fetchPrograms,
   fetchRunDetail,
+  fetchRuns,
   patchProgram,
   pauseProgram,
   putGraph,
@@ -139,7 +140,16 @@ export function useResumeProgram(id: string) {
 // ---------------------------------------------------------------------------
 
 export const runKeys = {
+  list: (programId: string) => ['runs', 'list', programId] as const,
   detail: (id: string) => ['runs', id] as const,
+}
+
+export function useRuns(programId: string | null) {
+  return useQuery({
+    queryKey: runKeys.list(programId ?? ''),
+    queryFn: () => fetchRuns(programId!),
+    enabled: Boolean(programId),
+  })
 }
 
 export function useCreateRun(programId: string) {

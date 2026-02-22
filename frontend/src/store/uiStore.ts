@@ -15,6 +15,8 @@ interface UiState {
   selectedProgramId: string | null
   /** The run currently being streamed, or null when idle. */
   activeRunId: RunId | null
+  /** The run whose step states are overlaid on the canvas in Operate mode. */
+  inspectedRunId: RunId | null
   /** Accumulated LLM tokens from the active (or most recent) run. */
   llmOutput: string
   /** Accumulated log entries from the active (or most recent) run. */
@@ -29,6 +31,7 @@ interface UiState {
   setDetailPanelWidth: (width: number) => void
   setSelectedProgramId: (id: string | null) => void
   setActiveRunId: (id: RunId | null) => void
+  setInspectedRunId: (id: RunId | null) => void
   appendLlmToken: (token: string) => void
   appendLogEntry: (entry: LogEntry) => void
   /** Reset output and logs — called when a new run starts. */
@@ -44,6 +47,7 @@ export const useUiStore = create<UiState>((set) => ({
   detailPanelWidth: 360,
   selectedProgramId: null,
   activeRunId: null,
+  inspectedRunId: null,
   llmOutput: '',
   logEntries: [],
 
@@ -56,6 +60,7 @@ export const useUiStore = create<UiState>((set) => ({
   setDetailPanelWidth: (width) => set({ detailPanelWidth: Math.min(600, Math.max(280, width)) }),
   setSelectedProgramId: (id) => set({ selectedProgramId: id }),
   setActiveRunId: (id) => set({ activeRunId: id }),
+  setInspectedRunId: (id) => set({ inspectedRunId: id }),
   appendLlmToken: (token) => set((s) => ({ llmOutput: s.llmOutput + token })),
   appendLogEntry: (entry) => set((s) => ({ logEntries: [...s.logEntries, entry] })),
   clearRunOutput: () => set({ llmOutput: '', logEntries: [] }),
