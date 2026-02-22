@@ -11,6 +11,7 @@ interface UiState {
   activeBottomTab: BottomTab
   sidePanelWidth: number
   detailPanelWidth: number
+  selectedProgramId: string | null
 
   setActiveActivity: (activity: ActivityKey) => void
   setMode: (mode: AppMode) => void
@@ -19,6 +20,7 @@ interface UiState {
   setActiveBottomTab: (tab: BottomTab) => void
   setSidePanelWidth: (width: number) => void
   setDetailPanelWidth: (width: number) => void
+  setSelectedProgramId: (id: string | null) => void
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -28,6 +30,7 @@ export const useUiStore = create<UiState>((set) => ({
   activeBottomTab: 'logs',
   sidePanelWidth: 240,
   detailPanelWidth: 360,
+  selectedProgramId: null,
 
   setActiveActivity: (activity) => set({ activeActivity: activity }),
   setMode: (mode) => set({ mode }),
@@ -36,4 +39,5 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveBottomTab: (tab) => set({ activeBottomTab: tab }),
   setSidePanelWidth: (width) => set({ sidePanelWidth: Math.min(500, Math.max(180, width)) }),
   setDetailPanelWidth: (width) => set({ detailPanelWidth: Math.min(600, Math.max(280, width)) }),
+  setSelectedProgramId: (id) => set({ selectedProgramId: id }),
 }))
