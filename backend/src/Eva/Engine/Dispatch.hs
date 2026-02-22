@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Node dispatch: pattern-match on NodeType to route to the appropriate handler.
--- EVA-14 provides stub handlers that echo inputs; real implementations follow in
--- EVA-23 (LLM client), EVA-24 (Agent handler), EVA-25 (Action/Trigger handlers).
+-- EVA-14: stub handlers echo inputs. EVA-24: real Agent handler.
+-- EVA-25: real Action/Trigger handlers.
 module Eva.Engine.Dispatch
   ( -- * Dispatch
     execute
@@ -19,6 +19,7 @@ import Data.UUID.V4 (nextRandom)
 
 import Eva.App (AppM)
 import Eva.Core.Types  -- includes ResourceBindings
+import qualified Eva.Engine.Handlers.Agent as Agent
 
 -- ---------------------------------------------------------------------------
 -- Dispatch
@@ -26,32 +27,28 @@ import Eva.Core.Types  -- includes ResourceBindings
 
 -- | Route execution to the appropriate handler based on node type.
 -- Returns the output Message that will be placed into downstream mailboxes.
---
--- EVA-14: all handlers are stubs that echo the first data input payload
--- (or emit an empty object for nodes with no data inputs).
--- Real handlers are implemented in EVA-23/24/25.
 execute
   :: RunId
   -> Node
   -> Map PortName Message  -- ^ Consumed data inputs (from mailboxes)
   -> ResourceBindings
   -> AppM Message
-execute rid node inputs _bindings = do
+execute rid node inputs bindings = do
   now     <- liftIO getCurrentTime
   traceId <- liftIO (UUID.toText <$> nextRandom)
   let meta = MessageMeta
-        { metaTraceId   = traceId
-        , metaTimestamp = now
+        { metaTraceId    = traceId
+        , metaTimestamp  = now
         , metaSourceNode = nodeId node
-        , metaRunId     = rid
+        , metaRunId      = rid
         }
       firstPayload = firstInputPayload inputs
-  pure $ case nodeType node of
-    TriggerNode   _ -> Message "event"             firstPayload meta
-    ActionNode    _ -> Message "action_output"     firstPayload meta
-    AgentNode     _ -> Message "agent_output"      firstPayload meta
-    KnowledgeNode _ -> Message "knowledge_content" Null         meta
-    ConnectorNode _ -> Message "connector_response" Null        meta
+  case nodeType node of
+    AgentNode     _ -> Agent.handleAgent rid node inputs bindings
+    TriggerNode   _ -> pure $ Message "event"              firstPayload meta
+    ActionNode    _ -> pure $ Message "action_output"      firstPayload meta
+    KnowledgeNode _ -> pure $ Message "knowledge_content"  Null         meta
+    ConnectorNode _ -> pure $ Message "connector_response" Null         meta
 
 -- ---------------------------------------------------------------------------
 -- Helpers
