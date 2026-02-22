@@ -18,6 +18,7 @@ import qualified Eva.Engine.RunnerSpec
 import qualified Eva.Engine.StateMachineSpec
 import qualified Eva.Integration.LinearSpec
 import qualified Eva.Persistence.PersistenceSpec
+import qualified Eva.Engine.SchedulerSpec
 
 main :: IO ()
 main = hspec $ do
@@ -37,3 +38,4 @@ main = hspec $ do
   Eva.Engine.StateMachineSpec.spec
   Eva.Integration.LinearSpec.spec
   Eva.Persistence.PersistenceSpec.spec
+  Eva.Engine.SchedulerSpec.spec
