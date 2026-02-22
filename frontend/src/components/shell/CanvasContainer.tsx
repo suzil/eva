@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -7,90 +7,21 @@ import {
   MiniMap,
   BackgroundVariant,
   useReactFlow,
-  addEdge,
   type Node,
   type Edge,
   type OnNodesChange,
   type OnEdgesChange,
   type Connection,
   type IsValidConnection,
-  applyNodeChanges,
-  applyEdgeChanges,
+  type NodeMouseHandler,
+  type EdgeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { nodeTypes } from '../nodes'
 import { NODE_TYPE_META } from '../nodes/constants'
 import { edgeTypes } from '../edges'
 import type { EvaNodeData, NodeType } from '../../types'
-
-// ---------------------------------------------------------------------------
-// Demo nodes — one of each type for visual verification.
-// EVA-22 replaces this with Zustand + TanStack Query once graph state
-// management is wired up.
-// ---------------------------------------------------------------------------
-const DEMO_NODES: Node<EvaNodeData>[] = [
-  {
-    id: 'trigger-1',
-    type: 'trigger',
-    position: { x: 60, y: 160 },
-    data: { label: 'Weekly Trigger', nodeType: { type: 'trigger', config: { type: 'cron', schedule: '0 9 * * 1' } } },
-  },
-  {
-    id: 'knowledge-1',
-    type: 'knowledge',
-    position: { x: 60, y: 300 },
-    data: { label: 'Team Context', nodeType: { type: 'knowledge', config: { source: { type: '_inline_text', value: '' }, format: 'text', refreshPolicy: { type: 'static' } } } },
-  },
-  {
-    id: 'connector-1',
-    type: 'connector',
-    position: { x: 60, y: 420 },
-    data: { label: 'Linear', nodeType: { type: 'connector', config: { system: 'linear', actionFilter: [] } } },
-  },
-  {
-    id: 'agent-1',
-    type: 'agent',
-    position: { x: 340, y: 200 },
-    data: {
-      label: 'Summarizer',
-      nodeType: {
-        type: 'agent',
-        config: {
-          model: 'gpt-4o',
-          systemPrompt: '',
-          responseFormat: 'text',
-          temperature: 0.7,
-          maxIterations: 5,
-        },
-      },
-      // Demo: show a stepState overlay for one node
-      stepState: 'running',
-    },
-  },
-  {
-    id: 'action-1',
-    type: 'action',
-    position: { x: 600, y: 220 },
-    data: {
-      label: 'Format Report',
-      nodeType: {
-        type: 'action',
-        config: {
-          operation: 'template',
-          parameters: {},
-          errorHandling: { mode: 'fail' },
-        },
-      },
-    },
-  },
-]
-
-const DEMO_EDGES: Edge[] = [
-  { id: 'e1', type: 'data', source: 'trigger-1', sourceHandle: 'event', target: 'agent-1', targetHandle: 'instruction' },
-  { id: 'e2', type: 'resource', source: 'knowledge-1', sourceHandle: 'content', target: 'agent-1', targetHandle: 'context' },
-  { id: 'e3', type: 'resource', source: 'connector-1', sourceHandle: 'tools', target: 'agent-1', targetHandle: 'tools' },
-  { id: 'e4', type: 'data', source: 'agent-1', sourceHandle: 'output', target: 'action-1', targetHandle: 'input' },
-]
+import { useCanvasStore } from '../../store/canvasStore'
 
 // ---------------------------------------------------------------------------
 // Default configs for newly dropped nodes
@@ -159,17 +90,26 @@ function buildDefaultNode(
 // ---------------------------------------------------------------------------
 
 function CanvasInner() {
-  const [nodes, setNodes] = useState<Node<EvaNodeData>[]>(DEMO_NODES)
-  const [edges, setEdges] = useState<Edge[]>(DEMO_EDGES)
+  const nodes = useCanvasStore((s) => s.nodes)
+  const edges = useCanvasStore((s) => s.edges)
+  const applyNodes = useCanvasStore((s) => s.applyNodeChanges)
+  const applyEdges = useCanvasStore((s) => s.applyEdgeChanges)
+  const addEdgeToStore = useCanvasStore((s) => s.addEdge)
+  const addNodeToStore = useCanvasStore((s) => s.addNode)
+  // nodes/edges passed to ReactFlow directly from store
+  const setSelectedNode = useCanvasStore((s) => s.setSelectedNode)
+  const setSelectedEdge = useCanvasStore((s) => s.setSelectedEdge)
+  const clearSelection = useCanvasStore((s) => s.clearSelection)
   const { screenToFlowPosition } = useReactFlow()
 
   const onNodesChange: OnNodesChange<Node<EvaNodeData>> = useCallback(
-    (changes) => setNodes((ns) => applyNodeChanges(changes, ns)),
-    [],
+    (changes) => applyNodes(changes),
+    [applyNodes],
   )
+
   const onEdgesChange: OnEdgesChange = useCallback(
-    (changes) => setEdges((es) => applyEdgeChanges(changes, es)),
-    [],
+    (changes) => applyEdges(changes),
+    [applyEdges],
   )
 
   const isValidConnection = useCallback<IsValidConnection>(
@@ -187,9 +127,17 @@ function CanvasInner() {
     (conn: Connection) => {
       const srcMeta = NODE_TYPE_META[nodes.find((n) => n.id === conn.source)?.type ?? '']
       const cat = srcMeta?.outputs.find((p) => p.name === conn.sourceHandle)?.category ?? 'data'
-      setEdges((es) => addEdge({ ...conn, id: crypto.randomUUID(), type: cat }, es))
+      const newEdge: Edge = {
+        id: crypto.randomUUID(),
+        source: conn.source,
+        target: conn.target,
+        sourceHandle: conn.sourceHandle ?? null,
+        targetHandle: conn.targetHandle ?? null,
+        type: cat,
+      }
+      addEdgeToStore(newEdge)
     },
-    [nodes],
+    [nodes, addEdgeToStore],
   )
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -204,10 +152,22 @@ function CanvasInner() {
       if (!type || !NODE_TYPE_META[type]) return
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
       const id = crypto.randomUUID()
-      setNodes((ns) => [...ns, buildDefaultNode(id, type, position)])
+      addNodeToStore(buildDefaultNode(id, type, position))
     },
-    [screenToFlowPosition],
+    [screenToFlowPosition, addNodeToStore],
   )
+
+  const onNodeClick: NodeMouseHandler<Node<EvaNodeData>> = useCallback(
+    (_e, node) => setSelectedNode(node.id),
+    [setSelectedNode],
+  )
+
+  const onEdgeClick: EdgeMouseHandler = useCallback(
+    (_e, edge) => setSelectedEdge(edge.id),
+    [setSelectedEdge],
+  )
+
+  const onPaneClick = useCallback(() => clearSelection(), [clearSelection])
 
   return (
     <div className="relative flex flex-1 flex-col">
@@ -222,6 +182,9 @@ function CanvasInner() {
         onDragOver={onDragOver}
         onDrop={onDrop}
         isValidConnection={isValidConnection}
+        onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={onPaneClick}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         className="bg-gray-950"
@@ -253,7 +216,7 @@ function CanvasInner() {
         />
       </ReactFlow>
 
-      {/* Empty canvas hint — shown when canvas has no nodes */}
+      {/* Empty canvas hint */}
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <p className="rounded-md border border-dashed border-gray-700 px-4 py-2 text-xs text-gray-500">
