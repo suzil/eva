@@ -1,0 +1,8 @@
+packages: .
+
+-- Disable optimization for faster incremental builds during development.
+-- Remove or set to True for release builds.
+optimization: False
+
+-- Always include test suites in the build plan.
+tests: True

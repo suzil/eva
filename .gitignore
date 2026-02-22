@@ -1,3 +1,4 @@
+# Haskell
 dist
 dist-*
 cabal-dev
@@ -21,3 +22,25 @@ cabal.project.local
 cabal.project.local~
 .HTF/
 .ghc.environment.*
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/build/
+.parcel-cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Editor
+.DS_Store
+*.swp
+*.swo

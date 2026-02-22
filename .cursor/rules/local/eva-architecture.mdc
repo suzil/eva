@@ -1,0 +1,250 @@
+---
+description: Eva system architecture — Haskell backend, React frontend, API boundary, data model, technology choices. The technical blueprint for all Eva implementation.
+globs: []
+---
+
+# Eva System Architecture
+
+Haskell backend (Servant/Warp), React+TypeScript frontend (react-flow, Monaco),
+REST + WebSocket API, SQLite (local) / PostgreSQL (deployed). Single process,
+single repo (`backend/` + `frontend/`), no microservices for MLP.
+
+## System Components
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Frontend (React SPA — Vite)                                    │
+│  ┌───────────┐ ┌──────────┐ ┌────────┐ ┌────────────────────┐  │
+│  │ ReactFlow │ │  Monaco  │ │ Panels │ │  WebSocket Client  │  │
+│  │  Canvas   │ │ Editors  │ │ (UI)   │ │  (useRunStream)    │  │
+│  └─────┬─────┘ └────┬─────┘ └───┬────┘ └─────────┬──────────┘  │
+│        │ REST        │ REST      │ REST           │ WS          │
+└────────┼─────────────┼───────────┼────────────────┼─────────────┘
+         │             │           │                │
+┌────────┼─────────────┼───────────┼────────────────┼─────────────┐
+│  Haskell Backend (Warp + Servant)│                │             │
+│  ┌─────┴─────────────┴───────────┴──┐  ┌─────────┴───────────┐ │
+│  │         REST API (Servant)       │  │  WebSocket Server   │ │
+│  └──────────────┬───────────────────┘  └─────────┬───────────┘ │
+│        ┌────────┴────────┐                       │             │
+│  ┌─────┴─────┐  ┌────────┴────────┐  ┌──────────┴──────────┐  │
+│  │   Graph   │  │    Execution    │  │     Scheduler       │  │
+│  │   Engine  │  │     Engine      │  │  (cron/webhook/poll) │  │
+│  └─────┬─────┘  └───┬────────┬───┘  └──────────────────────┘  │
+│        │             │        │                                 │
+│  ┌─────┴─────┐  ┌────┴────┐ ┌┴──────────────────┐             │
+│  │Persistence│  │   LLM   │ │   Integration FW  │             │
+│  │  Layer    │  │  Client  │ │ (Linear/GH/HTTP)  │             │
+│  └─────┬─────┘  └────┬────┘ └────────┬──────────┘             │
+└────────┼──────────────┼───────────────┼─────────────────────────┘
+         │              │               │
+    ┌────┴────┐    ┌────┴─────┐   ┌─────┴──────┐
+    │ SQLite/ │    │   LLM    │   │  External  │
+    │ Postgres│    │ Providers│   │   APIs     │
+    └─────────┘    └──────────┘   └────────────┘
+```
+
+## Haskell Backend
+
+### Module Hierarchy (single cabal package)
+
+```
+Eva/
+  Core/
+    Types.hs          -- Program, Node, NodeType, Edge, Port, Message, Run, Step
+    Graph.hs          -- Topological sort, readiness check, port compatibility
+    Validation.hs     -- Program validation (ports wired, configs complete, DAG)
+  Engine/
+    Runner.hs         -- Graph walker: create Run, dispatch steps, propagate messages
+    Dispatch.hs       -- Pattern-match on NodeType → handler
+    Handlers/         -- Agent, Action, Gate, Collector, Checkpoint, Trigger
+    LLM.hs            -- Provider abstraction (OpenAI, Anthropic) via http-client
+    Scheduler.hs      -- Cron loop + webhook listener + event poller
+  Api/
+    Server.hs         -- Servant API type + handlers
+    Types.hs          -- Request/response JSON types
+    WebSocket.hs      -- Connection manager, topic subscriptions, broadcast
+  Integration/
+    Types.hs          -- Connector typeclass + ActionSpec
+    Linear.hs         -- Linear API connector
+    GitHub.hs         -- GitHub API connector
+    Http.hs           -- Generic REST connector
+  Persistence/
+    Schema.hs         -- Persistent model definitions (TH)
+    Queries.hs        -- DB query functions
+    Migration.hs      -- Auto-migration on startup
+  Config.hs           -- App config (DB path, LLM keys, port)
+  App.hs              -- AppM monad (ReaderT env IO)
+  Main.hs             -- Entry point
+```
+
+### Core Types
+
+```haskell
+data Program = Program
+  { programId :: ProgramId, name :: Text, state :: ProgramState, graph :: Graph }
+
+data Graph = Graph { nodes :: Map NodeId Node, edges :: [Edge] }
+
+data NodeType                         -- sum type, one variant per primitive
+  = AgentNode AgentConfig | KnowledgeNode KnowledgeConfig
+  | ConnectorNode ConnectorConfig | ActionNode ActionConfig
+  | TriggerNode TriggerConfig | GateNode GateConfig
+  | CollectorNode CollectorConfig | CheckpointNode CheckpointConfig
+
+data Edge = Edge
+  { edgeId :: EdgeId, sourceNode :: NodeId, sourcePort :: PortName
+  , targetNode :: NodeId, targetPort :: PortName, category :: PortCategory }
+
+data Message = Message { msgType :: Text, payload :: Value, meta :: MessageMeta }
+```
+
+Run/Step types mirror the concept model state machines. `TVar` during execution,
+persisted to DB on transitions.
+
+### Execution Engine
+
+Push-based concurrent graph walker using STM + async:
+
+1. Trigger fires → `Runner.startRun` creates `RunContext` (TVar Run, mailbox
+   per input port, broadcast channel)
+2. Initial message placed in first downstream mailbox
+3. STM readiness check: node ready when all required input mailboxes non-empty
+4. Ready nodes forked via `async`; `Dispatch.execute` routes to handler
+5. Handler output placed in downstream mailboxes (edges). STM atomicity.
+6. Parallel branches as independent async tasks. Per-step exception/retry.
+7. All terminal nodes done → Run completes
+
+LLM streaming: http-client streaming body → tokens accumulated AND broadcast
+to WebSocket subscribers. Checkpoint: step → `waiting`, persisted; resumed
+via REST approve/reject/modify → message re-enters readiness loop.
+
+### Integration Framework
+
+Compiled-in for MLP. Typeclass-based:
+
+```haskell
+class Monad m => Connector c m where
+  type ConnConfig c
+  availableActions :: ConnConfig c -> m [ActionSpec]
+  executeAction    :: ConnConfig c -> ActionName -> Value -> m Value
+```
+
+Credentials: AES-256-GCM at rest (crypton), master key from env var.
+### Scheduling
+
+In-process, no external deps. Cron: `cron` lib + sleep loop. Webhooks: Servant
+endpoint. Event triggers: polling for MLP. Manual: `POST .../runs`.
+
+## Frontend (React + TypeScript)
+
+### Component Hierarchy
+
+```
+<App>
+  <AppShell>
+    <ActivityBar />           -- P/N/K/R/S icon rail
+    <MainLayout>
+      <Toolbar />             -- breadcrumb, Author|Operate, Run/Deploy
+      <ContentArea>
+        <SidePanel />         -- programs, palette, knowledge, runs, settings
+        <CanvasContainer>
+          <ReactFlowProvider> -- custom nodeTypes + edgeTypes
+        </CanvasContainer>
+        <DetailPanel />       -- node config (Author) / step inspector (Operate)
+      </ContentArea>
+      <BottomPanel />         -- Logs | Output | Timeline
+    </MainLayout>
+  </AppShell>
+  <CommandPalette />          -- Cmd+K (cmdk)
+</App>
+```
+
+### Custom Node Types (8) and Edge Types (2)
+
+One component per primitive (AgentNode, KnowledgeNode, ConnectorNode,
+ActionNode, TriggerNode, GateNode, CollectorNode, CheckpointNode). Port
+shapes: circle = data, diamond = resource. Execution overlay: colored borders
++ badges per step state. DataEdge (solid Bezier, animated dots) and
+ResourceEdge (dashed, muted).
+
+### State Management
+
+- **Zustand**: UI state (selection, active panel, mode, viewport)
+- **TanStack Query v5**: server state (programs, runs, knowledge, credentials)
+- Source of truth is always the server; edits → `PUT /graph` → invalidate
+- WebSocket events trigger targeted query invalidation
+
+## API Design
+
+### REST Endpoints
+
+| Group | Endpoints |
+|-------|-----------|
+| Programs | `GET/POST /api/programs`, `GET/PATCH/DELETE /api/programs/:id`, `PUT /api/programs/:id/graph`, `POST .../validate`, `POST .../deploy`, `POST .../pause`, `POST .../resume` |
+| Execution | `POST /api/programs/:id/runs`, `GET /api/programs/:id/runs`, `GET /api/runs/:id`, `POST /api/runs/:id/cancel`, `POST /api/runs/:runId/steps/:stepId/resolve` |
+| Knowledge | CRUD on `/api/knowledge` |
+| Credentials | `GET/POST/DELETE /api/credentials` |
+| Webhooks | `POST /api/webhooks/:programId/:triggerId` |
+
+### WebSocket (`/api/ws`)
+
+Topic-based multiplexing. Subscribe: `{ action: "subscribe", topic: "run:<id>" }`.
+Events: `step_state`, `llm_token`, `log_entry`, `run_state`.
+
+### Auth
+
+Local: none (bind 127.0.0.1). Deployed (post-MLP): JWT bearer + WS token param.
+
+## Data Model
+
+### Schema (7 tables)
+
+| Table | Key columns |
+|-------|------------|
+| `programs` | id, name, state, created_at, updated_at |
+| `nodes` | id, program_id FK, type_tag, config (JSON), label, pos_x, pos_y |
+| `edges` | id, program_id FK, src_node, src_port, tgt_node, tgt_port, category |
+| `runs` | id, program_id FK, state, trigger_info (JSON), started_at, finished_at |
+| `steps` | id, run_id FK, node_id, state, input (JSON), output (JSON), error, retry_count, started_at, finished_at |
+| `log_entries` | id, step_id FK, level, message, data (JSON), created_at |
+| `credentials` | id, name, system_type, encrypted_data, created_at |
+
+Knowledge stored in node config JSON (inline) or file refs. Version history deferred.
+Graph save: full-graph PUT (no per-node CRUD for MLP).
+
+## Technology Choices
+
+### Backend (Haskell)
+
+| Area | Choice | Alternatives | Rationale |
+|------|--------|-------------|-----------|
+| HTTP | Servant + Warp | Scotty, Yesod | Type-safe API; best JSON API ecosystem |
+| WebSocket | wai-websockets | standalone websockets | Shares Warp port |
+| JSON | aeson | — | Standard |
+| ORM | persistent + esqueleto | hasql, beam | SQLite + Postgres same schema; auto-migration |
+| Local DB | SQLite | — | Zero-config single-file |
+| Deployed DB | PostgreSQL | MySQL | JSON columns, robust concurrency |
+| Concurrency | stm + async | — | STM for Run state, async for branches |
+| Streaming | conduit | pipes, streaming | Best persistent/http-client integration |
+| LLM client | Custom (http-client) | openai-hs | ~200 LOC/provider; multi-provider |
+| Cron | cron (hackage) | custom | Small, well-tested |
+| Encryption | crypton | cryptonite (deprecated) | AES-256-GCM for credentials |
+| Config | envparse + YAML | dhall, toml | 12-factor; env for secrets |
+| Build | cabal + GHC 9.10.1 | stack | Current standard |
+
+### Frontend + Cross-cutting
+
+| Area | Choice | Alternatives | Rationale |
+|------|--------|-------------|-----------|
+| Build | Vite | webpack, Next.js | Fast HMR; SPA sufficient |
+| Graph | @xyflow/react v12 | cytoscape.js, dagre-d3 | Purpose-built node editor |
+| Editor | @monaco-editor/react | CodeMirror 6 | VS Code heritage; custom tokenizers |
+| UI state | Zustand | Redux, Jotai | Minimal boilerplate |
+| Server state | TanStack Query v5 | SWR, Apollo | Cache + invalidation for REST |
+| Styling | Tailwind CSS | styled-components | Rapid prototyping |
+| Cmd palette | cmdk | kbar | Unstyled, composable |
+| Icons | Lucide React | heroicons | Tree-shakeable, consistent |
+| Repo layout | `backend/` + `frontend/` | separate repos | Simpler dev; codegen later |
+| API protocol | REST + WebSocket | GraphQL, gRPC | REST for CRUD, WS for streaming |
+| Graph save | Full-graph PUT | per-node CRUD | Avoids sync; per-node ops post-MLP |
