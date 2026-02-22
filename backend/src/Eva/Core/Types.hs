@@ -50,6 +50,7 @@ module Eva.Core.Types
   , Message (..)
 
     -- * Execution
+  , ResourceBindings (..)
   , RetryPolicy (..)
   , Run (..)
   , Step (..)
@@ -394,6 +395,7 @@ data AgentConfig = AgentConfig
   , agentMaxTokens :: Maybe Int
   , agentMaxIterations :: Int
   , agentCostBudgetUsd :: Maybe Double
+  , agentRetryPolicy :: Maybe RetryPolicy
   }
   deriving stock (Eq, Show, Generic)
 
@@ -438,6 +440,7 @@ data ActionConfig = ActionConfig
   { actionOperation :: ActionOperation
   , actionParameters :: Value
   , actionErrorHandling :: ErrorHandlingMode
+  , actionRetryPolicy :: Maybe RetryPolicy
   }
   deriving stock (Eq, Show, Generic)
 
@@ -575,6 +578,14 @@ instance FromJSON Message where
 -- ---------------------------------------------------------------------------
 -- Execution
 -- ---------------------------------------------------------------------------
+
+-- | Resolved resource connections for a node at dispatch time.
+-- Knowledge content sources and Connector capability configs, collected
+-- from resource edges pointing at the node. Static grants — not runtime messages.
+data ResourceBindings = ResourceBindings
+  { rbKnowledge  :: [KnowledgeConfig]
+  , rbConnectors :: [ConnectorConfig]
+  }
 
 data RetryPolicy = RetryPolicy
   { retryMaxAttempts :: Int

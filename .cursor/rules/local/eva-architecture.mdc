@@ -107,13 +107,23 @@ persisted to DB on transitions.
 Push-based concurrent graph walker using STM + async:
 
 1. Trigger fires → `Runner.startRun` creates `RunContext` (TVar Run, mailbox
-   per input port, broadcast channel)
-2. Initial message placed in first downstream mailbox
+   per input port, broadcast channel, `rcHasUnhandledError` flag)
+2. Trigger nodes execute synchronously; output seeds downstream mailboxes
 3. STM readiness check: node ready when all required input mailboxes non-empty
-4. Ready nodes forked via `async`; `Dispatch.execute` routes to handler
-5. Handler output placed in downstream mailboxes (edges). STM atomicity.
-6. Parallel branches as independent async tasks. Per-step exception/retry.
-7. All terminal nodes done → Run completes
+4. Ready nodes forked via `async`; `AppEnv.envDispatch` routes to handler
+   (injectable — defaults to `Dispatch.execute`; tests inject custom handlers)
+5. `executeNodeStep` runs dispatch with per-node `RetryPolicy` (maxAttempts,
+   backoff, timeout). Each retry attempt logs to `log_entries` and persists
+   `stepRetryCount`. On timeout, `System.Timeout.timeout` triggers failure.
+6. Error handling after retries exhausted:
+   - Wired `error` output edge → error `Message` propagated downstream; branch
+     continues; Run eventually `RunCompleted`
+   - No wired error edge → `NodeStepFailure` thrown; walker calls
+     `skipDescendants` (all reachable descendants → `StepSkipped`); sets
+     `rcHasUnhandledError = True`; continues other branches (branch isolation)
+7. `finishRun` reads `rcHasUnhandledError`: `RunFailed` if set, else `RunCompleted`
+8. Resource bindings (Knowledge/Connector configs) resolved from resource edges
+   at dispatch time — static grants, not runtime messages
 
 LLM streaming: http-client streaming body → tokens accumulated AND broadcast
 to WebSocket subscribers. Checkpoint: step → `waiting`, persisted; resumed

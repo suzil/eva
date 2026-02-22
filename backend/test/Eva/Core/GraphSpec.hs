@@ -58,22 +58,24 @@ agentNode :: NodeType
 agentNode =
   AgentNode
     AgentConfig
-      { agentModel = "gpt-4o"
-      , agentSystemPrompt = "test"
+      { agentModel          = "gpt-4o"
+      , agentSystemPrompt   = "test"
       , agentResponseFormat = ResponseText
-      , agentTemperature = 0.5
-      , agentMaxTokens = Nothing
-      , agentMaxIterations = 3
-      , agentCostBudgetUsd = Nothing
+      , agentTemperature    = 0.5
+      , agentMaxTokens      = Nothing
+      , agentMaxIterations  = 3
+      , agentCostBudgetUsd  = Nothing
+      , agentRetryPolicy    = Nothing
       }
 
 actionNode :: NodeType
 actionNode =
   ActionNode
     ActionConfig
-      { actionOperation = OpTemplate
-      , actionParameters = Null
+      { actionOperation    = OpTemplate
+      , actionParameters   = Null
       , actionErrorHandling = ErrFail
+      , actionRetryPolicy  = Nothing
       }
 
 triggerNode :: NodeType

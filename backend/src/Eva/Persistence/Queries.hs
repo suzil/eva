@@ -26,6 +26,10 @@ module Eva.Persistence.Queries
   , listStepsForRun
   , updateStep
   , updateStepTransition
+  , updateStepRetryCount
+
+    -- * Log entries
+  , insertLogEntry
   ) where
 
 import Control.Monad (forM_)
@@ -38,7 +42,9 @@ import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import Data.Time (UTCTime)
+import Data.Time (UTCTime, getCurrentTime)
+import qualified Data.UUID as UUID
+import Data.UUID.V4 (nextRandom)
 import Database.Persist.Sql
   ( Entity (..)
   , SelectOpt (..)
@@ -422,3 +428,33 @@ updateStepTransition sid st mErr mOut mStarted mFinished = runDb $
     , StepRowStartedAt  =. mStarted
     , StepRowFinishedAt =. mFinished
     ]
+
+-- | Persist the current retry count on a step mid-execution.
+-- Called inside the retry loop after each failed attempt, while the step
+-- remains in Running state.
+updateStepRetryCount :: StepId -> Int -> AppM ()
+updateStepRetryCount sid count = runDb $
+  update (toStepRowId sid) [StepRowRetryCount =. count]
+
+-- ---------------------------------------------------------------------------
+-- Log entries
+-- ---------------------------------------------------------------------------
+
+-- | Append a log entry for a step. Used by the retry loop to record each
+-- failed attempt with its attempt number and error message.
+insertLogEntry
+  :: StepId
+  -> Text       -- ^ log level (e.g. "warn", "error")
+  -> Text       -- ^ human-readable message
+  -> Maybe Value -- ^ optional structured data (e.g. attempt number, error)
+  -> AppM ()
+insertLogEntry sid level msg mData = do
+  eid <- liftIO $ LogEntryRowKey . UUID.toText <$> nextRandom
+  now <- liftIO getCurrentTime
+  runDb $ insertKey eid LogEntryRow
+    { logEntryRowStepId    = toStepRowId sid
+    , logEntryRowLevel     = level
+    , logEntryRowMessage   = msg
+    , logEntryRowEntryData = fmap toJsonText mData
+    , logEntryRowCreatedAt = now
+    }

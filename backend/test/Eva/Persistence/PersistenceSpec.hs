@@ -13,6 +13,7 @@ import Test.Hspec
 import Eva.App (AppEnv (..), AppM, runAppM)
 import Eva.Config (AppConfig (..), LogLevel (..))
 import Eva.Core.Types
+import Eva.Engine.Dispatch (execute)
 import Eva.Persistence.Migration (runMigrations)
 import Eva.Persistence.Queries
 import Eva.Persistence.Schema
@@ -34,9 +35,10 @@ withTestEnv action = do
         , configLogLevel  = LogError
         }
   let env = AppEnv
-        { envConfig = cfg
-        , envDbPool = pool
-        , envLogger = \_ -> pure ()
+        { envConfig   = cfg
+        , envDbPool   = pool
+        , envLogger   = \_ -> pure ()
+        , envDispatch = execute
         }
   action env
 
@@ -74,6 +76,7 @@ sampleProgram =
                       , agentMaxTokens      = Just 1024
                       , agentMaxIterations  = 3
                       , agentCostBudgetUsd  = Nothing
+                      , agentRetryPolicy    = Nothing
                       }
                   , nodePosX  = 100
                   , nodePosY  = 200
@@ -124,6 +127,7 @@ allNodeTypesProgram =
                   , agentResponseFormat = ResponseText, agentTemperature = 0.5
                   , agentMaxTokens = Just 512, agentMaxIterations = 1
                   , agentCostBudgetUsd = Just 1.0
+                  , agentRetryPolicy = Nothing
                   })
             , mk "n-knowledge"
                 (KnowledgeNode KnowledgeConfig
@@ -141,9 +145,10 @@ allNodeTypesProgram =
                   })
             , mk "n-action"
                 (ActionNode ActionConfig
-                  { actionOperation   = OpTemplate
-                  , actionParameters  = "{}"
+                  { actionOperation    = OpTemplate
+                  , actionParameters   = "{}"
                   , actionErrorHandling = ErrFail
+                  , actionRetryPolicy  = Nothing
                   })
             , mk "n-trigger"
                 (TriggerNode TriggerConfig

@@ -21,6 +21,11 @@ module Eva.Core.Graph
     -- * Readiness
   , requiredDataInputs
   , readyNodes
+
+    -- * Error handling helpers
+  , nodeDataOutputPort
+  , reachableFrom
+  , hasErrorEdge
   ) where
 
 import Data.Graph (SCC (..), stronglyConnComp)
@@ -148,3 +153,40 @@ readyNodes g filled =
       in if all (\port -> Set.member (nid, port) filled) required
            then Just nid
            else Nothing
+
+-- ---------------------------------------------------------------------------
+-- Error handling helpers
+-- ---------------------------------------------------------------------------
+
+-- | The standard data output port name for a node type.
+-- Used to route the success message through the correct outgoing edge.
+nodeDataOutputPort :: NodeType -> PortName
+nodeDataOutputPort (TriggerNode _)   = "event"
+nodeDataOutputPort (AgentNode _)     = "output"
+nodeDataOutputPort (ActionNode _)    = "output"
+nodeDataOutputPort (KnowledgeNode _) = "content"
+nodeDataOutputPort (ConnectorNode _) = "tools"
+
+-- | All nodes reachable from @start@ via directed data edges (BFS).
+-- Does not include @start@ itself.
+reachableFrom :: Graph -> NodeId -> Set NodeId
+reachableFrom g start = go (Set.singleton start) Set.empty
+  where
+    dEdges = dataEdgesOf g
+    outgoing nid = [edgeTargetNode e | e <- dEdges, edgeSourceNode e == nid]
+    go frontier visited
+      | Set.null frontier = visited
+      | otherwise =
+          let frontier' = Set.fromList
+                [ t | nid <- Set.toList frontier, t <- outgoing nid
+                    , not (Set.member t visited) ]
+              visited'  = Set.union visited frontier
+          in go frontier' visited'
+
+-- | True if the node has at least one outgoing data edge labelled @"error"@.
+hasErrorEdge :: Graph -> NodeId -> Bool
+hasErrorEdge g nid =
+  any (\e -> edgeSourceNode e == nid
+          && edgeSourcePort e == "error"
+          && edgeCategory e == PortData)
+      (graphEdges g)

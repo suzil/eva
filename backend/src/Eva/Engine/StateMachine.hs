@@ -19,6 +19,7 @@ module Eva.Engine.StateMachine
   , RunContext (..)
   , newRunContext
   , waitForRun
+  , markUnhandledError
 
     -- * Effectful transitions
   , transitionRun
@@ -74,6 +75,7 @@ allowedRunTransitions = Set.fromList
 allowedStepTransitions :: Set (StepState, StepState)
 allowedStepTransitions = Set.fromList
   [ (StepPending,  StepRunning)
+  , (StepPending,  StepSkipped)   -- for skipDescendants: unreachable nodes
   , (StepRunning,  StepCompleted)
   , (StepRunning,  StepFailed)
   , (StepRunning,  StepSkipped)
@@ -111,17 +113,20 @@ showState = T.pack . show
 
 -- | Per-Run execution context. Holds all mutable state for one graph execution.
 data RunContext = RunContext
-  { rcRun        :: TVar Run
-  , rcRunId      :: RunId
+  { rcRun               :: TVar Run
+  , rcRunId             :: RunId
     -- ^ Immutable convenience copy of the RunId (avoids STM reads for logging/meta).
-  , rcSteps      :: TVar (Map NodeId (TVar Step))
-  , rcMailboxes  :: Map (NodeId, PortName) (TMVar Message)
+  , rcSteps             :: TVar (Map NodeId (TVar Step))
+  , rcMailboxes         :: Map (NodeId, PortName) (TMVar Message)
     -- ^ One empty TMVar per data-input port. Resource ports are excluded.
-  , rcDispatched :: TVar (Set NodeId)
+  , rcDispatched        :: TVar (Set NodeId)
     -- ^ Nodes whose async worker has already been forked (prevents double-dispatch).
-  , rcAllDone    :: TVar Bool
+  , rcAllDone           :: TVar Bool
     -- ^ Set to True by the walker when all terminal nodes have completed/failed.
-  , rcBroadcast  :: TChan Value
+  , rcHasUnhandledError :: TVar Bool
+    -- ^ Set to True when a step fails with no wired error port. Causes the
+    -- Run to transition to Failed rather than Completed in 'finishRun'.
+  , rcBroadcast         :: TChan Value
     -- ^ Broadcast channel for WebSocket events (consumed by EVA-26).
   }
 
@@ -130,21 +135,28 @@ data RunContext = RunContext
 -- typically all (nodeId, port) pairs from 'Eva.Core.Graph.requiredDataInputs'.
 newRunContext :: Run -> [(NodeId, PortName)] -> IO RunContext
 newRunContext run dataPorts = do
-  runTVar    <- newTVarIO run
-  stepsTVar  <- newTVarIO Map.empty
-  mailboxes  <- Map.fromList <$> mapM (\k -> (k,) <$> newEmptyTMVarIO) dataPorts
-  dispatched <- newTVarIO Set.empty
-  allDone    <- newTVarIO False
-  broadcast  <- newBroadcastTChanIO
+  runTVar       <- newTVarIO run
+  stepsTVar     <- newTVarIO Map.empty
+  mailboxes     <- Map.fromList <$> mapM (\k -> (k,) <$> newEmptyTMVarIO) dataPorts
+  dispatched    <- newTVarIO Set.empty
+  allDone       <- newTVarIO False
+  unhandledErr  <- newTVarIO False
+  broadcast     <- newBroadcastTChanIO
   pure RunContext
-    { rcRun        = runTVar
-    , rcRunId      = runId run
-    , rcSteps      = stepsTVar
-    , rcMailboxes  = mailboxes
-    , rcDispatched = dispatched
-    , rcAllDone    = allDone
-    , rcBroadcast  = broadcast
+    { rcRun               = runTVar
+    , rcRunId             = runId run
+    , rcSteps             = stepsTVar
+    , rcMailboxes         = mailboxes
+    , rcDispatched        = dispatched
+    , rcAllDone           = allDone
+    , rcHasUnhandledError = unhandledErr
+    , rcBroadcast         = broadcast
     }
+
+-- | Record that a branch has failed without a wired error port.
+-- The Run will transition to Failed rather than Completed when done.
+markUnhandledError :: RunContext -> IO ()
+markUnhandledError ctx = atomically $ writeTVar (rcHasUnhandledError ctx) True
 
 -- | Block until the Run has reached a terminal state (Completed, Failed, or Canceled).
 -- This is safe to call from any thread and guarantees the Run record is fully
