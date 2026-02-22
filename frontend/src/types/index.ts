@@ -260,6 +260,16 @@ export interface ApiError {
 }
 
 // ---------------------------------------------------------------------------
+// Canvas node data (react-flow v12 — must extend Record<string, unknown>)
+// ---------------------------------------------------------------------------
+
+export interface EvaNodeData extends Record<string, unknown> {
+  label: string
+  nodeType: NodeType
+  stepState?: StepState
+}
+
+// ---------------------------------------------------------------------------
 // WebSocket event types (for M4 useRunStream)
 // ---------------------------------------------------------------------------
 
