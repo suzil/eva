@@ -2,7 +2,7 @@
 
 module Eva.Engine.RunnerSpec (spec) where
 
-import Control.Concurrent.STM (TVar, readTVarIO)
+import Control.Concurrent.STM (TVar, newTVarIO, readTVarIO)
 import Control.Monad.Logger (runNoLoggingT)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isJust)
@@ -35,8 +35,9 @@ mockLLMClient = LLMClient
 
 withTestEnv :: (AppEnv -> IO ()) -> IO ()
 withTestEnv action = do
-  pool <- runNoLoggingT $ createSqlitePool ":memory:" 4
+  pool       <- runNoLoggingT $ createSqlitePool ":memory:" 4
   runMigrations pool
+  broadcasts <- newTVarIO Map.empty
   let cfg = AppConfig
         { configDbPath    = ":memory:"
         , configPort      = 8080
@@ -44,11 +45,12 @@ withTestEnv action = do
         , configLogLevel  = LogError
         }
   let env = AppEnv
-        { envConfig    = cfg
-        , envDbPool    = pool
-        , envLogger    = \_ -> pure ()
-        , envDispatch  = execute
-        , envLLMClient = mockLLMClient
+        { envConfig     = cfg
+        , envDbPool     = pool
+        , envLogger     = \_ -> pure ()
+        , envDispatch   = execute
+        , envLLMClient  = mockLLMClient
+        , envBroadcasts = broadcasts
         }
   action env
 

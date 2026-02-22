@@ -103,6 +103,7 @@ test-suite eva-test
     Eva.Engine.StateMachineSpec
     Eva.Persistence.PersistenceSpec
     Eva.Api.ServerSpec
+    Eva.Api.WebSocketSpec
   build-depends:
       base              ^>=4.20
     , eva
@@ -121,3 +122,6 @@ test-suite eva-test
     , wai-extra         ^>=3.1
     , stm               ^>=2.5
     , async             ^>=2.2
+    , websockets        ^>=0.13
+    , warp              ^>=3.4
+    , network           ^>=3.2

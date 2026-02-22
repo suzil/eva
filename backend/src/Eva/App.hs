@@ -13,17 +13,24 @@ module Eva.App
     -- * Startup
   , makeAppEnv
 
+    -- * Broadcast helpers
+  , broadcastEvent
+  , registerRun
+  , unregisterRun
+
     -- * Logging
   , logMsg
   , logMsgData
   ) where
 
+import Control.Concurrent.STM
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Logger (runNoLoggingT)
 import Control.Monad.Reader (ReaderT, asks, runReaderT)
 import Data.Aeson (ToJSON (..), Value (..), encode, object, (.=))
 import qualified Data.ByteString.Lazy.Char8 as BLC
 import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import System.IO (hFlush, stdout)
 import qualified Data.Text as T
@@ -77,11 +84,14 @@ type DispatchFn =
   RunId -> Node -> Map PortName Message -> ResourceBindings -> AppM Message
 
 data AppEnv = AppEnv
-  { envConfig    :: AppConfig
-  , envDbPool    :: ConnectionPool
-  , envLogger    :: LogEntry -> IO ()
-  , envDispatch  :: DispatchFn
-  , envLLMClient :: LLMClient
+  { envConfig     :: AppConfig
+  , envDbPool     :: ConnectionPool
+  , envLogger     :: LogEntry -> IO ()
+  , envDispatch   :: DispatchFn
+  , envLLMClient  :: LLMClient
+  , envBroadcasts :: TVar (Map RunId (TChan Value))
+    -- ^ Registry of active run broadcast channels. Keyed by RunId.
+    -- Engine writes events; WebSocket clients dupTChan and read.
   }
 
 -- ---------------------------------------------------------------------------
@@ -110,17 +120,47 @@ makeAppEnv cfg dispatch = do
   llmClient <- case configLlmApiKey cfg of
     Just key -> mkOpenAIClient key
     Nothing  -> pure dummyLLMClient
+  broadcasts <- newTVarIO Map.empty
   let minLevel = configLogLevel cfg
       logger entry
         | leLevel entry < minLevel = pure ()
         | otherwise = BLC.putStrLn (encode entry) >> hFlush stdout
   pure AppEnv
-    { envConfig    = cfg
-    , envDbPool    = pool
-    , envLogger    = logger
-    , envDispatch  = dispatch
-    , envLLMClient = llmClient
+    { envConfig     = cfg
+    , envDbPool     = pool
+    , envLogger     = logger
+    , envDispatch   = dispatch
+    , envLLMClient  = llmClient
+    , envBroadcasts = broadcasts
     }
+
+-- ---------------------------------------------------------------------------
+-- Broadcast helpers
+-- ---------------------------------------------------------------------------
+
+-- | Register a run's broadcast channel so WebSocket clients can subscribe.
+-- Called by the engine in 'startRun'.
+registerRun :: RunId -> TChan Value -> AppM ()
+registerRun rid ch = do
+  broadcasts <- asks envBroadcasts
+  liftIO $ atomically $ modifyTVar broadcasts (Map.insert rid ch)
+
+-- | Remove a run's broadcast channel. Called after the run reaches a
+-- terminal state so the registry doesn't grow unboundedly.
+unregisterRun :: RunId -> AppM ()
+unregisterRun rid = do
+  broadcasts <- asks envBroadcasts
+  liftIO $ atomically $ modifyTVar broadcasts (Map.delete rid)
+
+-- | Write an event to the broadcast channel for the given run.
+-- No-op if the run is not in the registry (already finished or not started).
+broadcastEvent :: RunId -> Value -> AppM ()
+broadcastEvent rid event = do
+  broadcasts <- asks envBroadcasts
+  mCh <- liftIO $ Map.lookup rid <$> readTVarIO broadcasts
+  case mCh of
+    Nothing -> pure ()
+    Just ch -> liftIO $ atomically $ writeTChan ch event
 
 -- ---------------------------------------------------------------------------
 -- Logging helpers
