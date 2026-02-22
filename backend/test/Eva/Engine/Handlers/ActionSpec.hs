@@ -148,6 +148,14 @@ spec = do
           Right _  -> expectationFailure "expected exception, got success"
           Left err -> show err `shouldContain` "name"
 
+    it "treats a plain-string input as {input: text} for template substitution" $ do
+      withTestEnv $ \env -> do
+        let node   = templateNode (NodeId "action-6") "# Report\n\n{{input}}\n\n---"
+            inputs = Map.fromList
+              [("input", inputMsg (Aeson.String "Agent summary here."))]
+        result <- runAppM env $ handleAction testRunId node inputs emptyBindings
+        msgPayload result `shouldBe` Aeson.String "# Report\n\nAgent summary here.\n\n---"
+
     it "fails with a clear error for non-template operations" $ do
       withTestEnv $ \env -> do
         let node   = actionNodeWith (NodeId "action-5") OpCode

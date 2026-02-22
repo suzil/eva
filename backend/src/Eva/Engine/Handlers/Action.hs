@@ -104,11 +104,15 @@ extractTemplate other = Left $
   "Action parameters must be a string or object, got: " <> show other
 
 -- | Extract substitution variables from a message payload.
--- Only JSON objects contribute variables; other payload shapes yield an
--- empty map (template with no {{markers}} still succeeds).
+-- JSON objects contribute their fields as variables.
+-- JSON strings are exposed as the single variable @input@, so a template
+-- like @{{input}}@ works naturally when the upstream node (e.g. Agent)
+-- emits a plain-text output.
+-- Other payload shapes yield an empty map (templates with no markers succeed).
 extractVars :: Value -> Map Text Value
 extractVars (Aeson.Object obj) =
   Map.fromList [(K.toText k, v) | (k, v) <- KM.toList obj]
+extractVars (Aeson.String t) = Map.fromList [("input", Aeson.String t)]
 extractVars _ = Map.empty
 
 -- | Pure template substitution.
