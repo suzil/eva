@@ -38,6 +38,7 @@ import Eva.Core.Types
   , ResourceBindings
   , RunId
   )
+import Eva.Engine.LLM (LLMClient, dummyLLMClient, mkOpenAIClient)
 import Eva.Persistence.Migration (runMigrations)
 
 -- ---------------------------------------------------------------------------
@@ -76,10 +77,11 @@ type DispatchFn =
   RunId -> Node -> Map PortName Message -> ResourceBindings -> AppM Message
 
 data AppEnv = AppEnv
-  { envConfig   :: AppConfig
-  , envDbPool   :: ConnectionPool
-  , envLogger   :: LogEntry -> IO ()
-  , envDispatch :: DispatchFn
+  { envConfig    :: AppConfig
+  , envDbPool    :: ConnectionPool
+  , envLogger    :: LogEntry -> IO ()
+  , envDispatch  :: DispatchFn
+  , envLLMClient :: LLMClient
   }
 
 -- ---------------------------------------------------------------------------
@@ -105,15 +107,19 @@ makeAppEnv cfg dispatch = do
   pool <- runNoLoggingT $
     createSqlitePool (T.pack (configDbPath cfg)) 10
   runMigrations pool
+  llmClient <- case configLlmApiKey cfg of
+    Just key -> mkOpenAIClient key
+    Nothing  -> pure dummyLLMClient
   let minLevel = configLogLevel cfg
       logger entry
         | leLevel entry < minLevel = pure ()
         | otherwise = BLC.putStrLn (encode entry) >> hFlush stdout
   pure AppEnv
-    { envConfig   = cfg
-    , envDbPool   = pool
-    , envLogger   = logger
-    , envDispatch = dispatch
+    { envConfig    = cfg
+    , envDbPool    = pool
+    , envLogger    = logger
+    , envDispatch  = dispatch
+    , envLLMClient = llmClient
     }
 
 -- ---------------------------------------------------------------------------

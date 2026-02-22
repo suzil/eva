@@ -92,6 +92,7 @@ test-suite eva-test
     Eva.Core.GraphSpec
     Eva.Core.TypesSpec
     Eva.Core.ValidationSpec
+    Eva.Engine.LLMSpec
     Eva.Engine.RetrySpec
     Eva.Engine.RunnerSpec
     Eva.Engine.StateMachineSpec
