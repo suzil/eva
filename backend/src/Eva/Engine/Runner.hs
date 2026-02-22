@@ -265,7 +265,9 @@ executeNodeStep env ctx graph node inputs = do
   broadcastEvent (rcRunId ctx)
     (stepStateEvent (rcRunId ctx) (nodeId node) (stepId stepRunning) StepRunning now)
 
-  bindings <- resolveResourceBindings graph (nodeId node)
+  bindings0 <- resolveResourceBindings graph (nodeId node)
+  cache     <- liftIO $ readTVarIO (rcKnowledgeCache ctx)
+  let bindings = bindings0 { rbKnowledgeDynamic = dynamicKnowledge graph cache (nodeId node) }
   let mPolicy  = nodeRetryPolicy (nodeType node)
 
   dispatch <- asks App.envDispatch
@@ -275,8 +277,15 @@ executeNodeStep env ctx graph node inputs = do
   case result of
     Right outMsg -> do
       now2 <- liftIO getCurrentTime
-      liftIO $ atomically $
+      liftIO $ atomically $ do
         modifyTVar stepTVar (\s -> s { stepOutput = Just (toJSON outMsg) })
+        -- Cache resolved content for Knowledge nodes so that downstream Agents
+        -- can include it via rbKnowledgeDynamic (populated in executeNodeStep).
+        case nodeType node of
+          KnowledgeNode _ ->
+            modifyTVar (rcKnowledgeCache ctx)
+              (Map.insert (nodeId node) (msgPayload outMsg))
+          _ -> pure ()
       stepDone <- transitionStep stepTVar StepCompleted now2
       broadcastEvent (rcRunId ctx)
         (stepStateEvent (rcRunId ctx) (nodeId node) (stepId stepDone) StepCompleted now2)
@@ -476,6 +485,8 @@ collectReadyInputs ctx graph dispatched =
 -- (credential lookup + runner construction) for each ConnectorConfig.
 -- Connector resolution errors are logged as warnings and the failed runner
 -- is omitted from rbConnectorRunners (the config is still in rbConnectors).
+-- Note: 'rbKnowledgeDynamic' is left empty here; it is populated in
+-- 'executeNodeStep' by reading 'rcKnowledgeCache' after this call.
 resolveResourceBindings :: Graph -> NodeId -> AppM ResourceBindings
 resolveResourceBindings graph nid = do
   let resourceEdges =
@@ -491,9 +502,31 @@ resolveResourceBindings graph nid = do
   runners <- resolveConnectors connectors
   pure ResourceBindings
          { rbKnowledge        = knowledge
+         , rbKnowledgeDynamic = []
          , rbConnectors       = connectors
          , rbConnectorRunners = runners
          }
+
+-- | Build the dynamic Knowledge content list for @targetNid@ by looking up
+-- completed UpstreamPort Knowledge steps in the per-run cache.
+-- Only Knowledge nodes wired via resource edges to @targetNid@ with an
+-- UpstreamPort source are considered.
+dynamicKnowledge :: Graph -> Map NodeId Value -> NodeId -> [Value]
+dynamicKnowledge graph cache targetNid =
+  let resourceEdges =
+        filter
+          (\e -> edgeCategory e == PortResource && edgeTargetNode e == targetNid)
+          (graphEdges graph)
+      sourceNodes =
+        mapMaybe
+          (\e -> (edgeSourceNode e,) <$> Map.lookup (edgeSourceNode e) (graphNodes graph))
+          resourceEdges
+  in [ v
+     | (srcNid, srcNode) <- sourceNodes
+     , KnowledgeNode cfg <- [nodeType srcNode]
+     , knowledgeSource cfg == UpstreamPort
+     , Just v <- [Map.lookup srcNid cache]
+     ]
 
 -- | Attempt to resolve each ConnectorConfig into a live ConnectorRunner.
 -- Failed resolutions are logged at warn level and excluded from the result.

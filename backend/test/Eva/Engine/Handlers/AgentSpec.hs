@@ -74,7 +74,12 @@ knowledgeCfg content = KnowledgeConfig
   }
 
 emptyBindings :: ResourceBindings
-emptyBindings = ResourceBindings { rbKnowledge = [], rbConnectors = [], rbConnectorRunners = [] }
+emptyBindings = ResourceBindings
+  { rbKnowledge        = []
+  , rbKnowledgeDynamic = []
+  , rbConnectors       = []
+  , rbConnectorRunners = []
+  }
 
 -- ---------------------------------------------------------------------------
 -- Mock LLM clients
@@ -156,8 +161,10 @@ spec = do
         let nid      = NodeId "agent-2"
             inputs   = Map.fromList [("instruction", instructionMsg)]
             bindings = ResourceBindings
-              { rbKnowledge  = [knowledgeCfg "Team goal: ship Eva by June."]
-              , rbConnectors = []
+              { rbKnowledge        = [knowledgeCfg "Team goal: ship Eva by June."]
+              , rbKnowledgeDynamic = []
+              , rbConnectors       = []
+              , rbConnectorRunners = []
               }
         _ <- runAppM env $ handleAgent testRunId (agentNode nid) inputs bindings
         mReq <- readIORef ref
@@ -174,10 +181,12 @@ spec = do
         let nid      = NodeId "agent-3"
             inputs   = Map.fromList [("instruction", instructionMsg)]
             bindings = ResourceBindings
-              { rbKnowledge  = [ knowledgeCfg "Fact A"
-                               , knowledgeCfg "Fact B"
-                               ]
-              , rbConnectors = []
+              { rbKnowledge        = [ knowledgeCfg "Fact A"
+                                     , knowledgeCfg "Fact B"
+                                     ]
+              , rbKnowledgeDynamic = []
+              , rbConnectors       = []
+              , rbConnectorRunners = []
               }
         _ <- runAppM env $ handleAgent testRunId (agentNode nid) inputs bindings
         mReq <- readIORef ref
@@ -223,16 +232,18 @@ spec = do
           Right _  -> expectationFailure "expected exception, got success"
           Left err -> show err `shouldContain` "invalid api key"
 
-    it "ignores non-inline Knowledge sources (file/url/upstream) in M4" $ do
+    it "ignores non-inline Knowledge sources (FileRef/UrlRef) in rbKnowledge" $ do
       ref <- newIORef Nothing
       withTestEnv (capturingLLMClient ref "ok") $ \env -> do
         let inputs   = Map.fromList [("instruction", instructionMsg)]
             bindings = ResourceBindings
-              { rbKnowledge  = [ KnowledgeConfig (FileRef "/some/file.txt")   FormatText RefreshStatic
-                               , KnowledgeConfig (UrlRef  "https://example.com") FormatText RefreshStatic
-                               , KnowledgeConfig (InlineText "Only this")    FormatText RefreshStatic
-                               ]
-              , rbConnectors = []
+              { rbKnowledge        = [ KnowledgeConfig (FileRef "/some/file.txt")      FormatText RefreshStatic
+                                     , KnowledgeConfig (UrlRef  "https://example.com") FormatText RefreshStatic
+                                     , KnowledgeConfig (InlineText "Only this")        FormatText RefreshStatic
+                                     ]
+              , rbKnowledgeDynamic = []
+              , rbConnectors       = []
+              , rbConnectorRunners = []
               }
         _ <- runAppM env $
           handleAgent testRunId (agentNode (NodeId "agent-7")) inputs bindings

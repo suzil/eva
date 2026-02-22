@@ -26,6 +26,7 @@ library
     Eva.Engine.Handlers.Action
     Eva.Engine.Handlers.Agent
     Eva.Engine.Handlers.Connector
+    Eva.Engine.Handlers.Knowledge
     Eva.Engine.Handlers.Trigger
     Eva.Engine.LLM
     Eva.Engine.Scheduler
@@ -99,6 +100,7 @@ test-suite eva-test
     Eva.Engine.Handlers.ActionSpec
     Eva.Engine.Handlers.AgentSpec
     Eva.Engine.Handlers.ConnectorSpec
+    Eva.Engine.Handlers.KnowledgeSpec
     Eva.Engine.Handlers.TriggerSpec
     Eva.Engine.LLMSpec
     Eva.Engine.RetrySpec

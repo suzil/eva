@@ -599,8 +599,14 @@ instance FromJSON Message where
 -- Static grants — not runtime messages.
 -- 'rbConnectorRunners' is populated by 'Eva.Engine.Handlers.Connector.resolveConnectorRunner'
 -- after credential lookup; used by the Agent tool-use loop (EVA-33).
+-- 'rbKnowledgeDynamic' holds pre-resolved content for UpstreamPort Knowledge nodes
+-- (populated from 'rcKnowledgeCache' in the Runner after the Knowledge step executes).
 data ResourceBindings = ResourceBindings
   { rbKnowledge        :: [KnowledgeConfig]
+  , rbKnowledgeDynamic :: [Value]
+    -- ^ Resolved content values for UpstreamPort Knowledge nodes wired to this node.
+    -- Empty for nodes that have no UpstreamPort Knowledge inputs or whose Knowledge
+    -- steps have not yet completed.
   , rbConnectors       :: [ConnectorConfig]
   , rbConnectorRunners :: [ConnectorRunner]
   }
