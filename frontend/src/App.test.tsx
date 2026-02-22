@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, it, expect } from 'vitest'
 import App from './App.tsx'
@@ -17,11 +17,13 @@ describe('App', () => {
 
   it('renders all activity bar navigation items', () => {
     render(<App />, { wrapper })
-    expect(screen.getByRole('button', { name: 'Programs' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Node Palette' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Knowledge' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Runs' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
+    // Scope to the ActivityBar <aside> to avoid matching the Toolbar breadcrumb 'Programs' button
+    const aside = screen.getByRole('complementary')
+    expect(within(aside).getByRole('button', { name: 'Programs' })).toBeInTheDocument()
+    expect(within(aside).getByRole('button', { name: 'Node Palette' })).toBeInTheDocument()
+    expect(within(aside).getByRole('button', { name: 'Knowledge' })).toBeInTheDocument()
+    expect(within(aside).getByRole('button', { name: 'Runs' })).toBeInTheDocument()
+    expect(within(aside).getByRole('button', { name: 'Settings' })).toBeInTheDocument()
   })
 
   it('renders the Author/Operate mode toggle', () => {
