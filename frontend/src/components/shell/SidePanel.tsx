@@ -1,9 +1,10 @@
 import { useRef } from 'react'
-import { BookOpen, History } from 'lucide-react'
+import { BookOpen } from 'lucide-react'
 import { useUiStore } from '../../store/uiStore'
 import { CredentialsPanel } from './CredentialsPanel'
 import { ProgramsPanel } from './ProgramsList'
 import { NodePalette } from './NodePalette'
+import { RunsPanel } from './RunsPanel'
 
 const ACTIVITY_LABELS: Record<string, string> = {
   programs: 'Programs',
@@ -80,13 +81,7 @@ export function SidePanel() {
           note="Shared knowledge sources across programs. Available in M5."
         />
       )}
-      {activeActivity === 'runs' && (
-        <StubPanel
-          icon={History}
-          label="Runs"
-          note="Execution history and active run indicators. Available in M6."
-        />
-      )}
+      {activeActivity === 'runs' && <RunsPanel />}
       {activeActivity === 'settings' && <CredentialsPanel />}
 
       {/* Drag handle */}

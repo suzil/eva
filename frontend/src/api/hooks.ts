@@ -153,8 +153,12 @@ export function useRuns(programId: string | null) {
 }
 
 export function useCreateRun(programId: string) {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (triggerPayload?: unknown) => createRun(programId, triggerPayload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: runKeys.list(programId) })
+    },
   })
 }
 
