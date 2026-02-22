@@ -9,8 +9,30 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('App', () => {
-  it('renders Eva heading', () => {
+  it('renders the app shell with activity bar', () => {
     render(<App />, { wrapper })
-    expect(screen.getByRole('heading', { name: 'Eva' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary')).toBeInTheDocument() // ActivityBar aside
+    expect(screen.getByRole('banner')).toBeInTheDocument()        // Toolbar header
+  })
+
+  it('renders all activity bar navigation items', () => {
+    render(<App />, { wrapper })
+    expect(screen.getByRole('button', { name: 'Programs' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Node Palette' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Knowledge' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Runs' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
+  })
+
+  it('renders the Author/Operate mode toggle', () => {
+    render(<App />, { wrapper })
+    expect(screen.getByRole('button', { name: 'author' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'operate' })).toBeInTheDocument()
+  })
+
+  it('renders the bottom panel tab bar', () => {
+    render(<App />, { wrapper })
+    expect(screen.getByRole('button', { name: 'Logs' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Output' })).toBeInTheDocument()
   })
 })
