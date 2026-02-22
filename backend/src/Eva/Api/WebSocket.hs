@@ -16,6 +16,7 @@
 -- * @run_state@   — run transitioned (running→completed/failed/canceled)
 -- * @llm_token@   — individual LLM streaming token from an Agent node
 -- * @log_entry@   — retry warning or structured log from the engine
+-- * @tool_call@   — LLM invoked a connector tool (tool name, args, result)
 module Eva.Api.WebSocket
   ( -- * WAI server app
     wsServerApp
@@ -25,6 +26,7 @@ module Eva.Api.WebSocket
   , runStateEvent
   , llmTokenEvent
   , logEntryEvent
+  , toolCallEvent
 
     -- * Exported for testing
   , SubscribeMsg (..)
@@ -180,5 +182,18 @@ logEntryEvent rid sid level msg ts =
     , "stepId"    .= sid
     , "level"     .= level
     , "message"   .= msg
+    , "timestamp" .= ts
+    ]
+
+-- | Build a @tool_call@ event for broadcast.
+-- Emitted once per tool call and once per tool result during an Agent run.
+toolCallEvent :: RunId -> NodeId -> Text -> Value -> UTCTime -> Value
+toolCallEvent rid nid phase payload ts =
+  object
+    [ "type"      .= ("tool_call" :: Text)
+    , "runId"     .= rid
+    , "nodeId"    .= nid
+    , "phase"     .= phase   -- "invoke" or "result"
+    , "data"      .= payload
     , "timestamp" .= ts
     ]

@@ -30,8 +30,8 @@ import Eva.Persistence.Queries (insertProgram)
 -- dispatch is exercised (the real handler calls the LLM client).
 mockLLMClient :: LLMClient
 mockLLMClient = LLMClient
-  { clientCall   = \_ -> pure (Right (LLMResponse "test response" (TokenUsage 1 1 2)))
-  , clientStream = \_ _ -> pure (Right (LLMResponse "test response" (TokenUsage 1 1 2)))
+  { clientCall   = \_ -> pure (Right (LLMResponse "test response" Nothing (TokenUsage 1 1 2)))
+  , clientStream = \_ _ -> pure (Right (LLMResponse "test response" Nothing (TokenUsage 1 1 2)))
   }
 
 withTestEnv :: (AppEnv -> IO ()) -> IO ()

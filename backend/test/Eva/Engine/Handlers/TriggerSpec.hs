@@ -97,8 +97,8 @@ withTestEnv action = do
         , configCredentialKey = "test-key"
         }
       placeholderLLMClient = LLMClient
-        { clientCall   = \_ -> pure (Right (LLMResponse "unused" (TokenUsage 0 0 0)))
-        , clientStream = \_ _ -> pure (Right (LLMResponse "unused" (TokenUsage 0 0 0)))
+        { clientCall   = \_ -> pure (Right (LLMResponse "unused" Nothing (TokenUsage 0 0 0)))
+        , clientStream = \_ _ -> pure (Right (LLMResponse "unused" Nothing (TokenUsage 0 0 0)))
         }
       env = AppEnv
         { envConfig     = cfg
