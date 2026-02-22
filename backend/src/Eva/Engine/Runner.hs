@@ -34,8 +34,10 @@ module Eva.Engine.Runner
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (async, waitCatch)
 import Control.Concurrent.STM
-import Control.Exception (Exception, SomeException, displayException, fromException, throwIO, toException, try)
+import Control.Exception (Exception, SomeException, displayException, toException, try)
 import Control.Monad (forM, forM_, when)
+import Control.Monad.Except (ExceptT (..), catchError, runExceptT, throwError)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask, asks)
 import Data.Aeson (Value, object, toJSON, (.=))
@@ -145,9 +147,17 @@ startRun program triggerPayload = do
       Nothing   -> pure ()
       Just node -> case nodeType node of
         TriggerNode _ -> do
-          mOutMsg <- executeNodeStep env ctx graph node Map.empty
-          forM_ mOutMsg $ \outMsg ->
-            liftIO $ placeMessages ctx dEdges nid (nodeDataOutputPort (nodeType node)) outMsg
+          eResult <- runExceptT $ executeNodeStep env ctx graph node Map.empty
+          case eResult of
+            Right mOutMsg ->
+              forM_ mOutMsg $ \outMsg ->
+                liftIO $ placeMessages ctx dEdges nid (nodeDataOutputPort (nodeType node)) outMsg
+            Left _ ->
+              -- Trigger failed before the walker started; signal all-done so
+              -- the walker terminates immediately rather than blocking forever.
+              liftIO $ do
+                markUnhandledError ctx
+                atomically $ writeTVar (rcAllDone ctx) True
         _ -> pure ()
 
   _ <- liftIO $ async $ runAppM env $ graphWalkerLoop ctx graph
@@ -191,28 +201,32 @@ graphWalkerLoop ctx graph = do
               case Map.lookup nid (graphNodes graph) of
                 Nothing   -> pure ()
                 Just node -> do
-                  mOutMsg <- executeNodeStep env ctx graph node inputs
-                  forM_ mOutMsg $ \outMsg ->
-                    liftIO $ placeMessages ctx dEdges nid
-                               (nodeDataOutputPort (nodeType node)) outMsg
-                  liftIO $ checkAndSignalDone ctx terminals)
+                  eResult <- runExceptT $ executeNodeStep env ctx graph node inputs
+                  case eResult of
+                    Right mOutMsg -> do
+                      forM_ mOutMsg $ \outMsg ->
+                        liftIO $ placeMessages ctx dEdges nid
+                                   (nodeDataOutputPort (nodeType node)) outMsg
+                      liftIO $ checkAndSignalDone ctx terminals
+                    Left (NodeStepFailure failNid _) -> do
+                      skipDescendants ctx graph executableNodes failNid
+                      liftIO $ markUnhandledError ctx
+                      -- If the failed node is itself a terminal, checkAndSignalDone
+                      -- inside skipDescendants was never called; call it here so
+                      -- the STM retry in the next iteration doesn't block forever.
+                      liftIO $ checkAndSignalDone ctx terminals)
 
+          -- Wait for all node threads; unexpected panics are the only failure
+          -- mode here since NodeStepFailure is handled via ExceptT above.
           results <- liftIO $ mapM (\(nid, a) -> (nid,) <$> waitCatch a) asyncsWithIds
 
           forM_ results $ \(walkerNid, outcome) ->
             case outcome of
               Right () -> pure ()
-              Left e   -> do
-                -- Use node ID from NodeStepFailure if available, else walkerNid.
-                let nid = case fromException e of
-                            Just (NodeStepFailure failNid _) -> failNid
-                            Nothing                          -> walkerNid
-                skipDescendants ctx graph executableNodes nid
+              Left _unexpectedErr -> do
+                -- An exception escaped executeNodeStep — treat as unhandled.
+                skipDescendants ctx graph executableNodes walkerNid
                 liftIO $ markUnhandledError ctx
-                -- If the failed node is itself a terminal (no descendants were
-                -- skipped), checkAndSignalDone inside skipDescendants was never
-                -- called, and the STM retry in the next `go` iteration would
-                -- block forever.  Call it here to handle that case.
                 liftIO $ checkAndSignalDone ctx terminals
 
           go env dEdges terminals executableNodes
@@ -240,14 +254,14 @@ graphWalkerLoop ctx graph = do
 -- | Execute a single node within a run.
 -- Returns 'Just outMsg' on success, or 'Nothing' if the error was propagated
 -- via the node's wired "error" output port.
--- Throws 'NodeStepFailure' if the node fails with no wired error port.
+-- Raises 'NodeStepFailure' via 'throwError' if the node fails with no wired error port.
 executeNodeStep
   :: AppEnv
   -> RunContext
   -> Graph
   -> Node
   -> Map PortName Message
-  -> AppM (Maybe Message)
+  -> ExceptT NodeStepFailure AppM (Maybe Message)
 executeNodeStep env ctx graph node inputs = do
   sid <- liftIO $ StepId . UUID.toText <$> nextRandom
   now <- liftIO getCurrentTime
@@ -267,14 +281,14 @@ executeNodeStep env ctx graph node inputs = do
     tv <- newTVarIO step
     atomically $ modifyTVar (rcSteps ctx) (Map.insert (nodeId node) tv)
     pure tv
-  insertStep step
+  lift $ insertStep step
 
-  stepRunning <- transitionStep stepTVar StepRunning now
-  broadcastEvent (rcRunId ctx)
+  stepRunning <- lift $ transitionStep stepTVar StepRunning now
+  lift $ broadcastEvent (rcRunId ctx)
     (stepStateEvent (rcRunId ctx) (nodeId node) (stepId stepRunning) StepRunning now)
 
-  eBindings <- resolveResourceBindings graph (nodeId node)
-  result <- case eBindings of
+  eBindings <- lift $ resolveResourceBindings graph (nodeId node)
+  eResult <- case eBindings of
     Left connErr ->
       let msg = "Node '" <> T.unpack (nodeLabel node)
                 <> "': connector resolution failed — "
@@ -285,9 +299,9 @@ executeNodeStep env ctx graph node inputs = do
       let bindings = bindings0 { rbKnowledgeDynamic = dynamicKnowledge graph cache (nodeId node) }
       let mPolicy  = nodeRetryPolicy (nodeType node)
       dispatch <- asks App.envDispatch
-      liftIO $ dispatchWithRetry env dispatch mPolicy sid ctx node inputs bindings
+      liftIO $ runExceptT $ dispatchWithRetry env dispatch mPolicy sid ctx node inputs bindings
 
-  case result of
+  case eResult of
     Right outMsg -> do
       now2 <- liftIO getCurrentTime
       liftIO $ atomically $ do
@@ -299,8 +313,8 @@ executeNodeStep env ctx graph node inputs = do
             modifyTVar (rcKnowledgeCache ctx)
               (Map.insert (nodeId node) (msgPayload outMsg))
           _ -> pure ()
-      stepDone <- transitionStep stepTVar StepCompleted now2
-      broadcastEvent (rcRunId ctx)
+      stepDone <- lift $ transitionStep stepTVar StepCompleted now2
+      lift $ broadcastEvent (rcRunId ctx)
         (stepStateEvent (rcRunId ctx) (nodeId node) (stepId stepDone) StepCompleted now2)
       pure (Just outMsg)
 
@@ -309,8 +323,8 @@ executeNodeStep env ctx graph node inputs = do
       let errText = T.pack (displayException finalErr)
       liftIO $ atomically $
         modifyTVar stepTVar (\s -> s { stepError = Just errText })
-      stepFailed <- transitionStep stepTVar StepFailed now2
-      broadcastEvent (rcRunId ctx)
+      stepFailed <- lift $ transitionStep stepTVar StepFailed now2
+      lift $ broadcastEvent (rcRunId ctx)
         (stepStateEvent (rcRunId ctx) (nodeId node) (stepId stepFailed) StepFailed now2)
 
       if hasErrorEdge graph (nodeId node)
@@ -328,7 +342,7 @@ executeNodeStep env ctx graph node inputs = do
           liftIO $ placeMessages ctx dEdges (nodeId node) "error" errMsg
           pure Nothing
         else
-          liftIO $ throwIO (NodeStepFailure (nodeId node) finalErr)
+          throwError (NodeStepFailure (nodeId node) finalErr)
 
 -- ---------------------------------------------------------------------------
 -- Dispatch with retry
@@ -336,7 +350,7 @@ executeNodeStep env ctx graph node inputs = do
 
 -- | Dispatch a node's handler, applying the optional retry policy.
 -- Logs each failed attempt to log_entries and updates stepRetryCount in the DB.
--- Returns 'Right msg' on success or 'Left err' after all attempts exhausted.
+-- Raises the final exception via 'throwError' after all attempts are exhausted.
 dispatchWithRetry
   :: AppEnv
   -> (RunId -> Node -> Map PortName Message -> ResourceBindings -> AppM Message)
@@ -346,7 +360,7 @@ dispatchWithRetry
   -> Node
   -> Map PortName Message
   -> ResourceBindings
-  -> IO (Either SomeException Message)
+  -> ExceptT SomeException IO Message
 dispatchWithRetry env dispatch mPolicy sid ctx node inputs bindings =
   go 0
   where
@@ -354,8 +368,9 @@ dispatchWithRetry env dispatch mPolicy sid ctx node inputs bindings =
       Nothing     -> (0, Nothing, BackoffFixed 0)
       Just policy -> (retryMaxAttempts policy, retryTimeoutMs policy, retryBackoff policy)
 
-    runDispatch :: IO (Either SomeException Message)
-    runDispatch = try $ case mTimeoutMs of
+    -- Run one dispatch attempt, converting exceptions into 'throwError'.
+    runDispatch :: ExceptT SomeException IO Message
+    runDispatch = ExceptT $ try $ case mTimeoutMs of
       Nothing -> runAppM env $ dispatch (rcRunId ctx) node inputs bindings
       Just ms -> do
         mResult <- timeout (ms * 1000) $
@@ -364,67 +379,63 @@ dispatchWithRetry env dispatch mPolicy sid ctx node inputs bindings =
           Just r  -> pure r
           Nothing -> ioError (userError ("timeout after " <> show ms <> "ms"))
 
-    go :: Int -> IO (Either SomeException Message)
-    go n = do
-      result <- runDispatch
-      case result of
-        Right v -> pure (Right v)
-        Left  e
-          | n < maxAttempts -> do
-              let attemptNum = n + 1
-                  nodeIdTxt  = let (NodeId t) = nodeId node in t
-                  msg = T.concat
-                    [ "Retry ", T.pack (show attemptNum)
-                    , "/",      T.pack (show maxAttempts)
-                    , " for node ", nodeIdTxt
-                    , ": ", T.pack (displayException e)
-                    ]
-                  dat = object
-                    [ "attempt"     .= attemptNum
-                    , "maxAttempts" .= maxAttempts
-                    , "error"       .= T.pack (displayException e)
-                    , "nodeId"      .= nodeIdTxt
-                    ]
-              runAppM env $ insertLogEntry sid "warn" msg (Just dat)
-              runAppM env $ updateStepRetryCount sid attemptNum
-              retryNow <- getCurrentTime
-              runAppM env $
-                broadcastEvent (rcRunId ctx)
-                  (logEntryEvent (rcRunId ctx) sid "warn" msg retryNow)
-              -- Update in-memory step TVar.
-              steps <- readTVarIO (rcSteps ctx)
-              case Map.lookup (nodeId node) steps of
-                Just tv -> atomically $ modifyTVar tv (\s -> s { stepRetryCount = attemptNum })
-                Nothing -> pure ()
-              threadDelay (backoffDelay backoff n)
-              go (n + 1)
-          | otherwise -> pure (Left e)
+    go :: Int -> ExceptT SomeException IO Message
+    go n = catchError runDispatch $ \e ->
+      if n < maxAttempts
+        then do
+          let attemptNum = n + 1
+              nodeIdTxt  = let (NodeId t) = nodeId node in t
+              msg = T.concat
+                [ "Retry ", T.pack (show attemptNum)
+                , "/",      T.pack (show maxAttempts)
+                , " for node ", nodeIdTxt
+                , ": ", T.pack (displayException e)
+                ]
+              dat = object
+                [ "attempt"     .= attemptNum
+                , "maxAttempts" .= maxAttempts
+                , "error"       .= T.pack (displayException e)
+                , "nodeId"      .= nodeIdTxt
+                ]
+          liftIO $ runAppM env $ insertLogEntry sid "warn" msg (Just dat)
+          liftIO $ runAppM env $ updateStepRetryCount sid attemptNum
+          retryNow <- liftIO getCurrentTime
+          liftIO $ runAppM env $
+            broadcastEvent (rcRunId ctx)
+              (logEntryEvent (rcRunId ctx) sid "warn" msg retryNow)
+          liftIO $ do
+            steps <- readTVarIO (rcSteps ctx)
+            case Map.lookup (nodeId node) steps of
+              Just tv -> atomically $ modifyTVar tv (\s -> s { stepRetryCount = attemptNum })
+              Nothing -> pure ()
+            threadDelay (backoffDelay backoff n)
+          go (n + 1)
+        else throwError e
 
--- | Exposed for testing: apply a retry policy to an arbitrary IO action.
--- Returns 'Right' on the first success, 'Left' after all attempts exhausted.
-withRetry :: forall a. RetryPolicy -> IO a -> IO (Either SomeException a)
+-- | Exposed for testing: apply a retry policy to an arbitrary action.
+-- Succeeds on first success; raises the final exception via 'throwError'
+-- after all attempts are exhausted.
+withRetry :: forall a. RetryPolicy -> ExceptT SomeException IO a -> ExceptT SomeException IO a
 withRetry policy action = go 0
   where
     maxAttempts = retryMaxAttempts policy
     mTimeoutMs  = retryTimeoutMs policy
     boff        = retryBackoff policy
 
-    go :: Int -> IO (Either SomeException a)
-    go n = do
-      result <- try $ case mTimeoutMs of
-        Nothing -> action
-        Just ms -> do
-          mResult <- timeout (ms * 1000) action
-          case mResult of
-            Just r  -> pure r
-            Nothing -> ioError (userError ("timeout after " <> show ms <> "ms"))
-      case result of
-        Right v -> pure (Right v)
-        Left  e
-          | n < maxAttempts -> do
-              threadDelay (backoffDelay boff n)
-              go (n + 1)
-          | otherwise -> pure (Left e)
+    withTimeout :: ExceptT SomeException IO a
+    withTimeout = case mTimeoutMs of
+      Nothing -> action
+      Just ms -> ExceptT $ do
+        mResult <- timeout (ms * 1000) (runExceptT action)
+        return $ case mResult of
+          Nothing -> Left (toException (userError ("timeout after " <> show ms <> "ms")))
+          Just r  -> r
+
+    go :: Int -> ExceptT SomeException IO a
+    go n = catchError withTimeout $ \e ->
+      if n < maxAttempts
+        then lift (threadDelay (backoffDelay boff n)) >> go (n + 1)
+        else throwError e
 
 -- | Compute the backoff delay in microseconds for attempt @n@ (0-indexed).
 -- BackoffFixed ms: constant delay.

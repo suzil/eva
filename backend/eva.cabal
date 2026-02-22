@@ -137,3 +137,4 @@ test-suite eva-test
     , warp              ^>=3.4
     , network           ^>=3.2
     , cron              ^>=0.7
+    , mtl               ^>=2.3

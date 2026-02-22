@@ -7,7 +7,8 @@ module Eva.Engine.RetrySpec (spec) where
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM (newTVarIO, readTVarIO)
-import Control.Exception (Exception, throwIO)
+import Control.Exception (Exception, SomeException, throwIO, try)
+import Control.Monad.Except (ExceptT (..), runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Logger (runNoLoggingT)
 import Data.Aeson (Value (..))
@@ -217,16 +218,18 @@ spec = do
   describe "withRetry" $ do
 
     it "AC1: returns Right on first success (no retries needed)" $ do
-      result <- withRetry (RetryPolicy 3 (BackoffFixed 1) Nothing) (pure (42 :: Int))
+      result <- runExceptT $
+        withRetry (RetryPolicy 3 (BackoffFixed 1) Nothing) (pure (42 :: Int))
       case result of
         Right v -> v `shouldBe` 42
-        Left  e -> expectationFailure $ "expected Right 42, got Left: " <> show e
+        Left  e -> expectationFailure $ "expected Right 42, got Left: " <> show (e :: SomeException)
 
     it "AC1: retries exactly maxAttempts times, then returns Left" $ do
       counter <- newIORef (0 :: Int)
-      result  <- withRetry (RetryPolicy 2 (BackoffFixed 1) Nothing) $ do
-        modifyIORef counter (+1)
-        throwIO (IntentionalFailure "always fails")
+      result  <- runExceptT $
+        withRetry (RetryPolicy 2 (BackoffFixed 1) Nothing) $ ExceptT $ try $ do
+          modifyIORef counter (+1)
+          throwIO (IntentionalFailure "always fails")
       case result of
         Left  _ -> pure ()
         Right _ -> expectationFailure "expected Left after exhausting retries"
@@ -235,21 +238,23 @@ spec = do
 
     it "AC1: succeeds on the (maxAttempts)th retry" $ do
       counter <- newIORef (0 :: Int)
-      result  <- withRetry (RetryPolicy 3 (BackoffFixed 1) Nothing) $ do
-        n <- readIORef counter
-        modifyIORef counter (+1)
-        if n < 2
-          then throwIO (IntentionalFailure "not yet")
-          else pure ("success" :: String)
+      result  <- runExceptT $
+        withRetry (RetryPolicy 3 (BackoffFixed 1) Nothing) $ ExceptT $ try $ do
+          n <- readIORef counter
+          modifyIORef counter (+1)
+          if n < 2
+            then throwIO (IntentionalFailure "not yet")
+            else pure ("success" :: String)
       case result of
         Right v -> v `shouldBe` "success"
-        Left  e -> expectationFailure $ "expected Right, got Left: " <> show e
+        Left  e -> expectationFailure $ "expected Right, got Left: " <> show (e :: SomeException)
 
     it "AC5: timeout expiry triggers step failure with descriptive error" $ do
-      result <- withRetry (RetryPolicy 0 (BackoffFixed 0) (Just 1)) $ do
-        -- Sleep 200ms >> 1ms timeout → should time out
-        threadDelay 200000
-        pure ("done" :: String)
+      result <- runExceptT $
+        withRetry (RetryPolicy 0 (BackoffFixed 0) (Just 1)) $ ExceptT $ try $ do
+          -- Sleep 200ms >> 1ms timeout → should time out
+          threadDelay 200000
+          pure ("done" :: String)
       case result of
         Left  _ -> pure ()
         Right _ -> expectationFailure "expected Left (timeout)"
