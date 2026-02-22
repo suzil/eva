@@ -15,6 +15,7 @@ import {
   type IsValidConnection,
   type NodeMouseHandler,
   type EdgeMouseHandler,
+  type NodeDragHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { nodeTypes } from '../nodes'
@@ -104,7 +105,10 @@ function CanvasInner() {
   const setSelectedNode = useCanvasStore((s) => s.setSelectedNode)
   const setSelectedEdge = useCanvasStore((s) => s.setSelectedEdge)
   const clearSelection = useCanvasStore((s) => s.clearSelection)
-  const { screenToFlowPosition } = useReactFlow()
+  const snapshot = useCanvasStore((s) => s.snapshot)
+  const triggerFitView = useCanvasStore((s) => s.triggerFitView)
+  const setTriggerFitView = useCanvasStore((s) => s.setTriggerFitView)
+  const { screenToFlowPosition, fitView } = useReactFlow()
 
   const selectedProgramId = useUiStore((s) => s.selectedProgramId)
   const mode = useUiStore((s) => s.mode)
@@ -116,6 +120,18 @@ function CanvasInner() {
       loadGraph(program.graph, selectedProgramId)
     }
   }, [program, selectedProgramId, currentProgramId, loadGraph])
+
+  // Fire fitView after auto-layout repositions all nodes
+  useEffect(() => {
+    if (triggerFitView) {
+      fitView({ padding: 0.3 })
+      setTriggerFitView(false)
+    }
+  }, [triggerFitView, fitView, setTriggerFitView])
+
+  const onNodeDragStart: NodeDragHandler = useCallback(() => {
+    snapshot()
+  }, [snapshot])
 
   const onNodesChange: OnNodesChange<Node<EvaNodeData>> = useCallback(
     (changes) => applyNodes(changes),
@@ -214,6 +230,7 @@ function CanvasInner() {
         onDrop={onDrop}
         isValidConnection={isValidConnection}
         onNodeClick={onNodeClick}
+        onNodeDragStart={isOperate ? undefined : onNodeDragStart}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
         nodesDraggable={!isOperate}
