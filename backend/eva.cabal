@@ -83,8 +83,14 @@ test-suite eva-test
   type:             exitcode-stdio-1.0
   main-is:          Spec.hs
   hs-source-dirs:   test
+  other-modules:
+    Eva.Core.TypesSpec
   build-depends:
-      base       ^>=4.20
+      base        ^>=4.20
     , eva
-    , hspec      ^>=2.11
-    , QuickCheck ^>=2.14
+    , hspec       ^>=2.11
+    , QuickCheck  ^>=2.14
+    , aeson       ^>=2.2
+    , containers  ^>=0.7
+    , text        ^>=2.1
+    , time        ^>=1.12
