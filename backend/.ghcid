@@ -1,1 +1,2 @@
---command="cabal repl eva"
+--command="cabal repl exe:eva"
+--run=main
