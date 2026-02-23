@@ -38,7 +38,7 @@ function renderForm(config: ConnectorConfig = BASE_CONFIG, onChange = vi.fn()) {
 }
 
 beforeEach(() => {
-  vi.mocked(useCredentials).mockReturnValue({ data: [] } as ReturnType<typeof useCredentials>)
+  vi.mocked(useCredentials).mockReturnValue({ data: [] } as unknown as ReturnType<typeof useCredentials>)
 })
 
 // ---------------------------------------------------------------------------
@@ -56,26 +56,26 @@ describe('ConnectorForm', () => {
   })
 
   it('shows "no credentials" empty state when useCredentials returns empty', () => {
-    vi.mocked(useCredentials).mockReturnValue({ data: [] } as ReturnType<typeof useCredentials>)
+    vi.mocked(useCredentials).mockReturnValue({ data: [] } as unknown as ReturnType<typeof useCredentials>)
     renderForm()
     expect(screen.getByText(/No credentials for this system/i)).toBeInTheDocument()
   })
 
   it('shows credential select when credentials exist for the current system', () => {
-    vi.mocked(useCredentials).mockReturnValue({ data: [LINEAR_CREDENTIAL] } as ReturnType<typeof useCredentials>)
+    vi.mocked(useCredentials).mockReturnValue({ data: [LINEAR_CREDENTIAL] } as unknown as ReturnType<typeof useCredentials>)
     renderForm()
     expect(screen.getByDisplayValue('— select credential —')).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Linear API Key' })).toBeInTheDocument()
   })
 
   it('shows warning when credentials exist but none is selected', () => {
-    vi.mocked(useCredentials).mockReturnValue({ data: [LINEAR_CREDENTIAL] } as ReturnType<typeof useCredentials>)
+    vi.mocked(useCredentials).mockReturnValue({ data: [LINEAR_CREDENTIAL] } as unknown as ReturnType<typeof useCredentials>)
     renderForm({ ...BASE_CONFIG, credentialId: undefined })
     expect(screen.getByText(/No credential selected/i)).toBeInTheDocument()
   })
 
   it('changing system calls onChange with new system and credentialId cleared', () => {
-    vi.mocked(useCredentials).mockReturnValue({ data: [LINEAR_CREDENTIAL] } as ReturnType<typeof useCredentials>)
+    vi.mocked(useCredentials).mockReturnValue({ data: [LINEAR_CREDENTIAL] } as unknown as ReturnType<typeof useCredentials>)
     const { onChange } = renderForm({ ...BASE_CONFIG, credentialId: 'cred-1' })
     const systemSelect = screen.getByDisplayValue('Linear')
     fireEvent.change(systemSelect, { target: { value: 'github' } })

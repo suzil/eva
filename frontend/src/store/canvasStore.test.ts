@@ -141,7 +141,7 @@ describe('canvasStore — addNode / addEdge', () => {
       position: { x: 50, y: 50 },
       data: {
         label: 'Action',
-        nodeType: { type: 'action' as const, config: { type: 'op_template', template: '' } },
+        nodeType: { type: 'action' as const, config: { operation: 'template' as const, parameters: null, errorHandling: { mode: 'fail' as const } } },
       },
     }
     useCanvasStore.getState().addNode(newNode)
@@ -172,7 +172,7 @@ describe('canvasStore — undo / redo', () => {
     useCanvasStore.getState().loadGraph(GRAPH, 'prog-1')
     const nodesBefore = useCanvasStore.getState().nodes.slice()
 
-    const extra = { id: 'n3', type: 'action' as const, position: { x: 0, y: 0 }, data: { label: 'X', nodeType: { type: 'action' as const, config: { type: 'op_template' as const, template: '' } } } }
+    const extra = { id: 'n3', type: 'action' as const, position: { x: 0, y: 0 }, data: { label: 'X', nodeType: { type: 'action' as const, config: { operation: 'template' as const, parameters: null, errorHandling: { mode: 'fail' as const } } } } }
     useCanvasStore.getState().addNode(extra)
     expect(useCanvasStore.getState().nodes).toHaveLength(3)
 
@@ -191,7 +191,7 @@ describe('canvasStore — undo / redo', () => {
 
   it('redo reapplies the undone snapshot', () => {
     useCanvasStore.getState().loadGraph(GRAPH, 'prog-1')
-    const extra = { id: 'n3', type: 'action' as const, position: { x: 0, y: 0 }, data: { label: 'X', nodeType: { type: 'action' as const, config: { type: 'op_template' as const, template: '' } } } }
+    const extra = { id: 'n3', type: 'action' as const, position: { x: 0, y: 0 }, data: { label: 'X', nodeType: { type: 'action' as const, config: { operation: 'template' as const, parameters: null, errorHandling: { mode: 'fail' as const } } } } }
     useCanvasStore.getState().addNode(extra)
     useCanvasStore.getState().undo()
     expect(useCanvasStore.getState().nodes).toHaveLength(2)

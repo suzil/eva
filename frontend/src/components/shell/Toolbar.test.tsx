@@ -58,16 +58,16 @@ function renderToolbar() {
 beforeEach(() => {
   vi.clearAllMocks()
   // Restore defaults after per-test overrides
-  vi.mocked(apiHooks.useProgram).mockReturnValue(hoisted.programData as ReturnType<typeof apiHooks.useProgram>)
-  vi.mocked(apiHooks.useRuns).mockReturnValue(hoisted.runsData as ReturnType<typeof apiHooks.useRuns>)
-  vi.mocked(apiHooks.useSaveGraph).mockReturnValue({ mutate: hoisted.mockSave, isPending: false } as ReturnType<typeof apiHooks.useSaveGraph>)
-  vi.mocked(apiHooks.useValidateProgram).mockReturnValue({ mutate: hoisted.mockValidate } as ReturnType<typeof apiHooks.useValidateProgram>)
-  vi.mocked(apiHooks.useCreateRun).mockReturnValue({ mutate: hoisted.mockCreateRun } as ReturnType<typeof apiHooks.useCreateRun>)
-  vi.mocked(apiHooks.useDeployProgram).mockReturnValue({ mutate: hoisted.mockDeploy } as ReturnType<typeof apiHooks.useDeployProgram>)
-  vi.mocked(apiHooks.useCancelRun).mockReturnValue({ mutate: vi.fn(), isPending: false } as ReturnType<typeof apiHooks.useCancelRun>)
-  vi.mocked(apiHooks.usePauseProgram).mockReturnValue({ mutate: vi.fn(), isPending: false } as ReturnType<typeof apiHooks.usePauseProgram>)
-  vi.mocked(apiHooks.useResumeProgram).mockReturnValue({ mutate: vi.fn(), isPending: false } as ReturnType<typeof apiHooks.useResumeProgram>)
-  vi.mocked(apiHooks.useRunDetail).mockReturnValue({ data: undefined } as ReturnType<typeof apiHooks.useRunDetail>)
+  vi.mocked(apiHooks.useProgram).mockReturnValue(hoisted.programData as unknown as ReturnType<typeof apiHooks.useProgram>)
+  vi.mocked(apiHooks.useRuns).mockReturnValue(hoisted.runsData as unknown as ReturnType<typeof apiHooks.useRuns>)
+  vi.mocked(apiHooks.useSaveGraph).mockReturnValue({ mutate: hoisted.mockSave, isPending: false } as unknown as ReturnType<typeof apiHooks.useSaveGraph>)
+  vi.mocked(apiHooks.useValidateProgram).mockReturnValue({ mutate: hoisted.mockValidate } as unknown as ReturnType<typeof apiHooks.useValidateProgram>)
+  vi.mocked(apiHooks.useCreateRun).mockReturnValue({ mutate: hoisted.mockCreateRun } as unknown as ReturnType<typeof apiHooks.useCreateRun>)
+  vi.mocked(apiHooks.useDeployProgram).mockReturnValue({ mutate: hoisted.mockDeploy } as unknown as ReturnType<typeof apiHooks.useDeployProgram>)
+  vi.mocked(apiHooks.useCancelRun).mockReturnValue({ mutate: vi.fn(), isPending: false } as unknown as ReturnType<typeof apiHooks.useCancelRun>)
+  vi.mocked(apiHooks.usePauseProgram).mockReturnValue({ mutate: vi.fn(), isPending: false } as unknown as ReturnType<typeof apiHooks.usePauseProgram>)
+  vi.mocked(apiHooks.useResumeProgram).mockReturnValue({ mutate: vi.fn(), isPending: false } as unknown as ReturnType<typeof apiHooks.useResumeProgram>)
+  vi.mocked(apiHooks.useRunDetail).mockReturnValue({ data: undefined } as unknown as ReturnType<typeof apiHooks.useRunDetail>)
 
   useUiStore.setState({
     selectedProgramId: 'p1',
@@ -139,7 +139,7 @@ describe('Toolbar', () => {
 
   it('Deploy button is hidden and Pause button appears when program state is active', () => {
     const stableActiveData = { data: { id: 'p1', name: 'Test', state: 'active' as const } }
-    vi.mocked(apiHooks.useProgram).mockReturnValue(stableActiveData as ReturnType<typeof apiHooks.useProgram>)
+    vi.mocked(apiHooks.useProgram).mockReturnValue(stableActiveData as unknown as ReturnType<typeof apiHooks.useProgram>)
     renderToolbar()
     expect(screen.queryByRole('button', { name: 'Deploy' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument()
