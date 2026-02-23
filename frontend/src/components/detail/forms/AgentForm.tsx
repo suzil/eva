@@ -105,7 +105,7 @@ export function AgentForm({ config, onChange }: Props) {
           <Editor
             height="200px"
             language="markdown"
-            theme="vs-dark"
+            theme="eva-dark"
             value={config.systemPrompt}
             onChange={(val) => update({ systemPrompt: val ?? '' })}
             options={{

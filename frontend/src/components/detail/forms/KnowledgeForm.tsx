@@ -64,7 +64,7 @@ export function KnowledgeForm({ config, onChange }: Props) {
             <Editor
               height="180px"
               language="markdown"
-              theme="vs-dark"
+              theme="eva-dark"
               value={inlineValue}
               onChange={(val) =>
                 update({ source: { type: '_inline_text', value: val ?? '' } })
