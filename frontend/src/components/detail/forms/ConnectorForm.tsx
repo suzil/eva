@@ -43,11 +43,11 @@ export function ConnectorForm({ config, onChange }: Props) {
       <div>
         <FieldLabel>Credential</FieldLabel>
         {systemCredentials.length === 0 ? (
-          <div className="flex items-center gap-2 rounded border border-gray-700 bg-gray-800/50 px-2 py-2">
-            <Settings size={11} className="shrink-0 text-gray-600" />
-            <span className="text-[11px] text-gray-500">
+          <div className="flex items-center gap-2 rounded border border-terminal-500 bg-terminal-800/50 px-2 py-2">
+            <Settings size={11} className="shrink-0 text-terminal-400" />
+            <span className="text-[11px] text-terminal-400">
               No credentials for this system.{' '}
-              <span className="font-medium text-gray-400">Add one in Settings → Credentials.</span>
+              <span className="font-medium text-terminal-200">Add one in Settings → Credentials.</span>
             </span>
           </div>
         ) : (
@@ -63,10 +63,7 @@ export function ConnectorForm({ config, onChange }: Props) {
               ))}
             </select>
             {!config.credentialId && (
-              <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-amber-500/80">
-                <AlertTriangle size={10} className="shrink-0" />
-                <span>No credential selected — connector will fail at runtime.</span>
-              </div>
+              <AtFieldWarning message="No credential selected — connector will fail at runtime." />
             )}
           </>
         )}
@@ -101,20 +98,29 @@ export function ConnectorForm({ config, onChange }: Props) {
   )
 }
 
+function AtFieldWarning({ message }: { message: string }) {
+  return (
+    <div className="mt-1.5 flex items-center gap-1.5 rounded border border-warn-amber-700 bg-warn-amber-950/40 px-2 py-1 text-[10px] text-warn-amber-400">
+      <AlertTriangle size={10} className="shrink-0" />
+      <span>{message}</span>
+    </div>
+  )
+}
+
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+    <p className="font-display text-[10px] uppercase tracking-widest text-terminal-300">
       {children}
     </p>
   )
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="mb-1 block text-[11px] text-gray-400">{children}</label>
+  return <label className="mb-1 block text-sm font-medium text-terminal-200">{children}</label>
 }
 
 const inputClass =
-  'w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[11px] text-gray-200 outline-none focus:border-blue-600 focus:ring-0 placeholder:text-gray-600'
+  'w-full rounded border border-terminal-500 bg-terminal-700 px-2 py-1 text-sm text-terminal-100 outline-none placeholder:text-terminal-400 focus:border-at-field-500 focus:ring-1 focus:ring-at-field-500/30 transition-colors duration-[150ms]'
 
 const selectClass =
-  'w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[11px] text-gray-200 outline-none focus:border-blue-600'
+  'w-full rounded border border-terminal-500 bg-terminal-700 px-2 py-1 text-sm text-terminal-100 outline-none focus:border-at-field-500 focus:ring-1 focus:ring-at-field-500/30 transition-colors duration-[150ms]'

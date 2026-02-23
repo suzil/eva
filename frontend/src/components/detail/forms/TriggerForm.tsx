@@ -81,17 +81,17 @@ export function TriggerForm({ config, onChange }: Props) {
               checked={config.type === tt.value}
               disabled={!tt.available}
               onChange={() => update({ type: tt.value, schedule: undefined })}
-              className="accent-blue-500"
+              className="accent-at-field-500"
             />
-            <span className="text-[11px] text-gray-300">{tt.label}</span>
+            <span className="text-[11px] text-terminal-200">{tt.label}</span>
           </label>
         ))}
       </div>
 
       {/* Manual trigger — no additional config */}
       {config.type === 'manual' && (
-        <div className="rounded border border-gray-800 bg-gray-900/40 p-3 text-[11px] text-gray-500">
-          This trigger fires when you click <span className="font-medium text-gray-400">Run</span>{' '}
+        <div className="rounded border border-terminal-500 bg-terminal-800/40 p-3 text-[11px] text-terminal-400">
+          This trigger fires when you click <span className="font-medium text-terminal-200">Run</span>{' '}
           in the toolbar. No additional configuration required.
         </div>
       )}
@@ -109,10 +109,10 @@ export function TriggerForm({ config, onChange }: Props) {
                   type="button"
                   onClick={() => update({ schedule: p.value })}
                   className={[
-                    'rounded border px-2 py-0.5 text-[10px] transition-colors',
+                    'rounded border px-2 py-0.5 text-[10px] transition-colors duration-[150ms]',
                     config.schedule === p.value
-                      ? 'border-blue-600 bg-blue-600/20 text-blue-300'
-                      : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600 hover:text-gray-300',
+                      ? 'border-at-field-500 bg-at-field-900/20 text-at-field-300'
+                      : 'border-terminal-500 bg-terminal-700 text-terminal-400 hover:border-terminal-400 hover:text-terminal-100',
                   ].join(' ')}
                 >
                   {p.label}
@@ -132,29 +132,29 @@ export function TriggerForm({ config, onChange }: Props) {
               className={[
                 inputClass,
                 'font-mono',
-                validationError ? 'border-red-600 focus:border-red-500' : '',
+                validationError ? 'border-nerv-red-600 focus:border-nerv-red-500' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
             />
-            <p className="mt-1 text-[10px] text-gray-600">
+            <p className="mt-1 font-mono text-[10px] text-terminal-400">
               minute &nbsp; hour &nbsp; day-of-month &nbsp; month &nbsp; day-of-week
             </p>
             {validationError && (
-              <p className="mt-1 text-[10px] text-red-500">{validationError}</p>
+              <p className="mt-1 text-[10px] text-nerv-red-400">{validationError}</p>
             )}
           </div>
 
           {/* Preview card — only shown for valid, non-empty expressions */}
           {cronDescription && cronNextFire && (
-            <div className="space-y-1.5 rounded border border-gray-800 bg-gray-900/40 px-2.5 py-2">
+            <div className="space-y-1.5 rounded border border-terminal-500 bg-terminal-800/40 px-2.5 py-2">
               <div className="flex items-center gap-1.5">
-                <Clock size={11} className="shrink-0 text-blue-500" />
-                <span className="text-[11px] text-gray-200">{cronDescription}</span>
+                <Clock size={11} className="shrink-0 text-magi-blue-400" />
+                <span className="text-[11px] text-terminal-100">{cronDescription}</span>
               </div>
               <div className="flex items-center gap-1.5 pl-0.5">
-                <span className="text-[10px] text-gray-600">Next:</span>
-                <span className="text-[10px] text-gray-500">{formatNextFire(cronNextFire)}</span>
+                <span className="text-[10px] text-terminal-400">Next:</span>
+                <span className="text-[10px] text-terminal-300">{formatNextFire(cronNextFire)}</span>
               </div>
             </div>
           )}
@@ -166,13 +166,13 @@ export function TriggerForm({ config, onChange }: Props) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">{children}</p>
+    <p className="font-display text-[10px] uppercase tracking-widest text-terminal-300">{children}</p>
   )
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="mb-1 block text-[11px] text-gray-400">{children}</label>
+  return <label className="mb-1 block text-sm font-medium text-terminal-200">{children}</label>
 }
 
 const inputClass =
-  'w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[11px] text-gray-200 outline-none focus:border-blue-600 focus:ring-0 placeholder:text-gray-600'
+  'w-full rounded border border-terminal-500 bg-terminal-700 px-2 py-1 text-sm text-terminal-100 outline-none placeholder:text-terminal-400 focus:border-at-field-500 focus:ring-1 focus:ring-at-field-500/30 transition-colors duration-[150ms]'

@@ -36,19 +36,19 @@ export function DetailPanel() {
 
   return (
     <div
-      className="relative flex flex-shrink-0 flex-col border-l border-gray-800 bg-gray-900"
+      className="relative flex flex-shrink-0 flex-col border-l border-terminal-500 bg-terminal-800"
       style={{ width }}
     >
       {/* Drag handle */}
       <div
         onPointerDown={handleDragStart}
-        className="absolute left-0 top-0 h-full w-1 cursor-col-resize transition-colors hover:bg-blue-500/40"
+        className="absolute left-0 top-0 h-full w-1 cursor-col-resize transition-colors hover:bg-at-field-500/30"
         aria-hidden
       />
 
       {/* Header */}
-      <div className="flex h-9 shrink-0 items-center border-b border-gray-800 px-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+      <div className="flex h-9 shrink-0 items-center border-b border-terminal-500 px-3">
+        <span className="font-display text-xs uppercase tracking-widest text-terminal-300">
           {selectedNodeId ? 'Node' : selectedEdgeId ? 'Edge' : 'Detail'}
         </span>
       </div>
