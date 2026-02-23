@@ -191,13 +191,9 @@ describe('useRunStream', () => {
   it('run_state: failed with step errors sets runError', async () => {
     const { fetchRunDetail } = await import('../api/client')
     vi.mocked(fetchRunDetail).mockResolvedValueOnce({
-      id: 'run-1',
-      programId: 'prog-1',
-      state: 'failed',
-      steps: [{ id: 's1', runId: 'run-1', nodeId: 'n1', state: 'failed', output: null, error: 'API key missing', startedAt: null, completedAt: null }],
-      startedAt: null,
-      completedAt: null,
-    })
+      run: { id: 'run-1', programId: 'prog-1', state: 'failed' },
+      steps: [{ id: 's1', runId: 'run-1', nodeId: 'n1', state: 'failed', output: undefined, error: 'API key missing', retryCount: 0 }],
+    } as unknown as Awaited<ReturnType<typeof fetchRunDetail>>)
     renderHook(() => useRunStream('run-1', 'prog-1'), { wrapper })
     const ws = getLatestWs()
     ws.simulateMessage({ type: 'run_state', state: 'failed', runId: 'run-1' })
