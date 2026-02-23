@@ -72,13 +72,13 @@ export function CredentialsPanel() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header row */}
-      <div className="flex items-center justify-between border-b border-gray-800 px-3 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+      <div className="flex items-center justify-between border-b border-terminal-500 px-3 py-2">
+        <span className="font-display text-xs uppercase tracking-widest text-terminal-300">
           Credentials
         </span>
         <button
           onClick={() => { setShowForm((v) => !v); setFormError(null) }}
-          className="flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+          className="flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-terminal-400 hover:bg-terminal-600 hover:text-terminal-100 transition-colors"
           title="Add credential"
         >
           <Plus size={12} />
@@ -88,8 +88,8 @@ export function CredentialsPanel() {
 
       {/* Add form */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="border-b border-gray-800 bg-gray-900/60 px-3 py-3 space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-2">
+        <form onSubmit={handleSubmit} className="border-b border-terminal-500 bg-terminal-900/60 px-3 py-3 space-y-2">
+          <p className="font-display text-xs uppercase tracking-widest text-terminal-300 mb-2">
             New Credential
           </p>
 
@@ -143,14 +143,14 @@ export function CredentialsPanel() {
           </div>
 
           {formError && (
-            <p className="text-[10px] text-red-400">{formError}</p>
+            <p className="text-[10px] text-nerv-red-400">{formError}</p>
           )}
 
           <div className="flex gap-2 pt-1">
             <button
               type="submit"
               disabled={createMut.isPending}
-              className="flex items-center gap-1.5 rounded bg-blue-600 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 rounded bg-at-field-500 px-2.5 py-1.5 text-[11px] font-medium text-terminal-950 hover:bg-at-field-600 disabled:opacity-50 transition-colors"
             >
               {createMut.isPending ? <Loader2 size={11} className="animate-spin" /> : null}
               Save
@@ -158,7 +158,7 @@ export function CredentialsPanel() {
             <button
               type="button"
               onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setFormError(null) }}
-              className="rounded px-2.5 py-1.5 text-[11px] text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+              className="rounded px-2.5 py-1.5 text-[11px] text-terminal-400 hover:bg-terminal-600 hover:text-terminal-100 transition-colors"
             >
               Cancel
             </button>
@@ -170,30 +170,30 @@ export function CredentialsPanel() {
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 size={16} className="animate-spin text-gray-600" />
+            <Loader2 size={16} className="animate-spin text-terminal-400" />
           </div>
         ) : credentials.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-10 px-4">
-            <KeyRound size={24} className="text-gray-700" />
-            <p className="text-[11px] text-gray-500 text-center">
+            <KeyRound size={24} className="text-terminal-600" />
+            <p className="text-[11px] text-terminal-400 text-center">
               No credentials yet.<br />Add an API key to connect integrations.
             </p>
           </div>
         ) : (
-          <ul className="divide-y divide-gray-800/60">
+          <ul className="divide-y divide-terminal-600/60">
             {credentials.map((cred) => (
-              <li key={cred.id} className="flex items-center gap-2 px-3 py-2.5 group hover:bg-gray-800/30">
-                <KeyRound size={11} className="shrink-0 text-gray-600" />
+              <li key={cred.id} className="flex items-center gap-2 px-3 py-2.5 group hover:bg-terminal-700/30">
+                <KeyRound size={11} className="shrink-0 text-terminal-400" />
                 <div className="flex flex-1 flex-col min-w-0">
-                  <span className="truncate text-[11px] text-gray-200">{cred.name}</span>
-                  <span className="text-[10px] text-gray-500">
+                  <span className="truncate text-[11px] text-terminal-100">{cred.name}</span>
+                  <span className="text-[10px] text-terminal-400">
                     {SYSTEM_LABELS[cred.system]} · {TYPE_LABELS[cred.type]}
                   </span>
                 </div>
                 <button
                   onClick={() => handleDelete(cred.id)}
                   disabled={deletingId === cred.id}
-                  className="shrink-0 rounded p-1 text-gray-600 opacity-0 group-hover:opacity-100 hover:bg-red-900/40 hover:text-red-400 disabled:opacity-50 transition-all"
+                  className="shrink-0 rounded p-1 text-terminal-500 opacity-0 group-hover:opacity-100 hover:bg-nerv-red-900/40 hover:text-nerv-red-400 disabled:opacity-50 transition-all"
                   title="Delete credential"
                   aria-label={`Delete ${cred.name}`}
                 >
@@ -212,11 +212,11 @@ export function CredentialsPanel() {
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="mb-1 block text-[11px] text-gray-400">{children}</label>
+  return <label className="mb-1 block text-[11px] text-terminal-300">{children}</label>
 }
 
 const inputClass =
-  'w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[11px] text-gray-200 outline-none focus:border-blue-600 focus:ring-0 placeholder:text-gray-600'
+  'w-full rounded border border-terminal-500 bg-terminal-700 px-2 py-1 text-[11px] text-terminal-100 outline-none focus:border-at-field-500 focus:ring-1 focus:ring-at-field-500/30 placeholder:text-terminal-400 transition-colors'
 
 const selectClass =
-  'w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[11px] text-gray-200 outline-none focus:border-blue-600'
+  'w-full rounded border border-terminal-500 bg-terminal-700 px-2 py-1 text-[11px] text-terminal-100 outline-none focus:border-at-field-500 focus:ring-1 focus:ring-at-field-500/30 transition-colors'
