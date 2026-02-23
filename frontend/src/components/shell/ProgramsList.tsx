@@ -10,10 +10,10 @@ import type { ProgramState } from '../../types'
 // ---------------------------------------------------------------------------
 
 const BADGE_STYLES: Record<ProgramState, string> = {
-  draft: 'border-gray-600 text-gray-400',
-  active: 'border-green-700 text-green-400',
-  paused: 'border-amber-700 text-amber-400',
-  archived: 'border-gray-700 text-gray-600',
+  draft: 'border-terminal-500 text-terminal-400',
+  active: 'border-eva-green-700 text-eva-green-400',
+  paused: 'border-warn-amber-700 text-warn-amber-400',
+  archived: 'border-terminal-500 text-terminal-500',
 }
 
 function StateBadge({ state }: { state: ProgramState }) {
@@ -84,12 +84,12 @@ function ProgramItem({
       className={[
         'group relative flex min-h-[34px] cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors',
         isSelected
-          ? 'bg-gray-800 text-white'
-          : 'text-gray-300 hover:bg-gray-800/60 hover:text-white',
+          ? 'bg-terminal-600 text-terminal-50'
+          : 'text-terminal-200 hover:bg-terminal-600 hover:text-terminal-100',
       ].join(' ')}
     >
       {isSelected && (
-        <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r bg-blue-400" />
+        <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r bg-at-field-500" />
       )}
 
       {isRenaming ? (
@@ -101,7 +101,7 @@ function ProgramItem({
           onBlur={commitRename}
           onKeyDown={handleKeyDown}
           onClick={(e) => e.stopPropagation()}
-          className="min-w-0 flex-1 rounded bg-gray-700 px-1.5 py-0.5 text-xs text-white outline-none ring-1 ring-blue-500"
+          className="min-w-0 flex-1 rounded bg-terminal-700 px-1.5 py-0.5 text-xs text-terminal-100 outline-none ring-1 ring-at-field-500"
         />
       ) : (
         <span
@@ -159,8 +159,8 @@ export function ProgramsPanel() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Sub-header with create button */}
-      <div className="flex items-center justify-between border-b border-gray-800 px-3 py-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+      <div className="flex items-center justify-between border-b border-terminal-500 px-3 py-1.5">
+        <span className="font-display text-xs uppercase tracking-widest text-terminal-300">
           Programs
         </span>
         <button
@@ -168,7 +168,7 @@ export function ProgramsPanel() {
           disabled={createProgram.isPending}
           title="New program"
           aria-label="New program"
-          className="flex h-5 w-5 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-700 hover:text-white disabled:opacity-40"
+          className="flex h-5 w-5 items-center justify-center rounded text-terminal-400 transition-colors hover:bg-terminal-600 hover:text-terminal-100 disabled:opacity-40"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
@@ -177,26 +177,26 @@ export function ProgramsPanel() {
       {/* Body */}
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center p-4">
-          <Loader2 className="h-4 w-4 animate-spin text-gray-600" />
+          <Loader2 className="h-4 w-4 animate-spin text-terminal-400" />
         </div>
       ) : isError ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4">
-          <p className="text-center text-xs text-red-500">Failed to load programs</p>
+          <p className="text-center text-xs text-nerv-red-400">Failed to load programs</p>
           <button
             onClick={() => refetch()}
-            className="rounded border border-gray-700 px-2.5 py-1 text-xs text-gray-400 transition-colors hover:border-gray-600 hover:text-white"
+            className="rounded border border-terminal-500 px-2.5 py-1 text-xs text-terminal-400 transition-colors hover:border-terminal-400 hover:text-terminal-100"
           >
             Try again
           </button>
         </div>
       ) : list.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-4">
-          <LayoutList className="h-8 w-8 text-gray-700" />
-          <p className="text-center text-xs text-gray-500">No programs yet</p>
+          <LayoutList className="h-8 w-8 text-terminal-600" />
+          <p className="text-center text-xs text-terminal-400">No programs yet</p>
           <button
             onClick={handleCreate}
             disabled={createProgram.isPending}
-            className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="rounded bg-at-field-500 px-3 py-1.5 text-xs font-medium text-terminal-950 hover:bg-at-field-600 disabled:opacity-50"
           >
             Create your first program
           </button>

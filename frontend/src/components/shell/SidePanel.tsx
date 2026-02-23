@@ -25,9 +25,9 @@ function StubPanel({
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4">
-      <Icon className="h-7 w-7 text-gray-700" />
-      <p className="text-xs font-medium text-gray-500">{label}</p>
-      <p className="text-center text-[10px] text-gray-600">{note}</p>
+      <Icon className="h-7 w-7 text-terminal-600" />
+      <p className="text-xs font-medium text-terminal-400">{label}</p>
+      <p className="text-center text-[10px] text-terminal-500">{note}</p>
     </div>
   )
 }
@@ -61,12 +61,12 @@ export function SidePanel() {
 
   return (
     <div
-      className="relative flex flex-shrink-0 flex-col border-r border-gray-800 bg-gray-900"
+      className="relative flex flex-shrink-0 flex-col border-r border-terminal-500 bg-terminal-800"
       style={{ width }}
     >
       {/* Header */}
-      <div className="flex h-9 items-center border-b border-gray-800 px-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+      <div className="flex h-9 items-center border-b border-terminal-500 px-3">
+        <span className="font-display text-xs uppercase tracking-widest text-terminal-300">
           {ACTIVITY_LABELS[activeActivity]}
         </span>
       </div>
@@ -87,7 +87,7 @@ export function SidePanel() {
       {/* Drag handle */}
       <div
         onPointerDown={handleDragStart}
-        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500/40 transition-colors"
+        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-at-field-500/30 transition-colors"
         aria-hidden
       />
     </div>

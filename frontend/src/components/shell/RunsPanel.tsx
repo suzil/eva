@@ -23,38 +23,38 @@ const RUN_STATE_CONFIG: Record<
   completed: {
     label: 'Completed',
     icon: <CheckCircle2 size={11} />,
-    className: 'bg-green-900/60 text-green-400 border-green-800',
-    dotClass: 'bg-green-500',
+    className: 'bg-eva-green-900 text-eva-green-400 border-eva-green-800',
+    dotClass: 'bg-eva-green-500',
   },
   running: {
     label: 'Running',
     icon: <Loader2 size={11} className="animate-spin" />,
-    className: 'bg-blue-900/60 text-blue-400 border-blue-800',
-    dotClass: 'bg-blue-500',
+    className: 'bg-magi-blue-900 text-magi-blue-400 border-magi-blue-800',
+    dotClass: 'bg-magi-blue-500',
   },
   failed: {
     label: 'Failed',
     icon: <AlertCircle size={11} />,
-    className: 'bg-red-900/60 text-red-400 border-red-800',
-    dotClass: 'bg-red-500',
+    className: 'bg-nerv-red-900 text-nerv-red-400 border-nerv-red-800',
+    dotClass: 'bg-nerv-red-500',
   },
   waiting: {
     label: 'Waiting',
     icon: <Pause size={11} />,
-    className: 'bg-amber-900/60 text-amber-400 border-amber-800',
-    dotClass: 'bg-amber-500',
+    className: 'bg-warn-amber-900 text-warn-amber-400 border-warn-amber-800',
+    dotClass: 'bg-warn-amber-500',
   },
   pending: {
     label: 'Pending',
     icon: <Clock size={11} />,
-    className: 'bg-gray-800 text-gray-500 border-gray-700',
-    dotClass: 'bg-gray-500',
+    className: 'bg-terminal-800 text-terminal-400 border-terminal-600',
+    dotClass: 'bg-terminal-400',
   },
   canceled: {
     label: 'Canceled',
     icon: <XCircle size={11} />,
-    className: 'bg-gray-800 text-gray-600 border-gray-700',
-    dotClass: 'bg-gray-600',
+    className: 'bg-terminal-800 text-terminal-500 border-terminal-600',
+    dotClass: 'bg-terminal-500',
   },
 }
 
@@ -132,18 +132,18 @@ function RunRow({
       className={[
         'flex w-full flex-col gap-1.5 px-3 py-2.5 text-left transition-colors',
         isInspected
-          ? 'bg-gray-700/60 border-l-2 border-blue-500'
-          : 'border-l-2 border-transparent hover:bg-gray-800/60',
+          ? 'bg-terminal-600/60 border-l-2 border-at-field-500'
+          : 'border-l-2 border-transparent hover:bg-terminal-700/60',
       ].join(' ')}
     >
       {/* Top row: state badge + active indicator */}
       <div className="flex items-center gap-2">
         <RunStateBadge state={run.state} />
         {isActive && (
-          <span className="flex items-center gap-1 text-[10px] text-blue-400">
+          <span className="flex items-center gap-1 text-[10px] text-at-field-400">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-blue-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-at-field-400 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-at-field-500" />
             </span>
             live
           </span>
@@ -151,9 +151,9 @@ function RunRow({
       </div>
 
       {/* Bottom row: timestamp + duration */}
-      <div className="flex items-center justify-between text-[10px] text-gray-500">
+      <div className="flex items-center justify-between text-[10px] text-terminal-400">
         <span>{formatDate(run.startedAt)}</span>
-        {duration && <span className="text-gray-600">{duration}</span>}
+        {duration && <span className="text-terminal-500">{duration}</span>}
       </div>
     </button>
   )
@@ -191,8 +191,8 @@ export function RunsPanel() {
   if (!selectedProgramId) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4">
-        <History className="h-7 w-7 text-gray-700" />
-        <p className="text-center text-[10px] text-gray-600">Select a program to view runs</p>
+        <History className="h-7 w-7 text-terminal-600" />
+        <p className="text-center text-[10px] text-terminal-500">Select a program to view runs</p>
       </div>
     )
   }
@@ -200,7 +200,7 @@ export function RunsPanel() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Filter bar */}
-      <div className="flex gap-px border-b border-gray-800 bg-gray-900 px-2 py-1.5">
+      <div className="flex gap-px border-b border-terminal-500 bg-terminal-800 px-2 py-1.5">
         {FILTERS.map(({ key, label }) => (
           <button
             key={key}
@@ -208,8 +208,8 @@ export function RunsPanel() {
             className={[
               'rounded px-2 py-0.5 text-[10px] font-medium transition-colors',
               filter === key
-                ? 'bg-gray-700 text-gray-200'
-                : 'text-gray-500 hover:text-gray-300',
+                ? 'bg-terminal-600 text-terminal-100'
+                : 'text-terminal-400 hover:text-terminal-200',
             ].join(' ')}
           >
             {label}
@@ -221,14 +221,14 @@ export function RunsPanel() {
       <div className="flex-1 overflow-y-auto">
         {isLoading && (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-4 w-4 animate-spin text-gray-600" />
+            <Loader2 className="h-4 w-4 animate-spin text-terminal-400" />
           </div>
         )}
 
         {!isLoading && filteredRuns.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-2 py-8">
-            <History className="h-6 w-6 text-gray-700" />
-            <p className="text-center text-[10px] text-gray-600">
+            <History className="h-6 w-6 text-terminal-600" />
+            <p className="text-center text-[10px] text-terminal-500">
               {filter === 'all' ? 'No runs yet' : `No ${filter} runs`}
             </p>
           </div>

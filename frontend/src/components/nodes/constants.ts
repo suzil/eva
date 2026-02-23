@@ -26,8 +26,8 @@ export const NODE_TYPE_META: Record<string, NodeTypeMeta> = {
   agent: {
     label: 'Agent',
     icon: Brain,
-    accentClass: 'bg-indigo-500',
-    accentColor: '#6366f1',
+    accentClass: 'bg-node-agent',
+    accentColor: '#7B4AE2',
     inputs: [
       { name: 'instruction', label: 'instruction', category: 'data' },
       { name: 'context', label: 'context', category: 'resource' },
@@ -41,8 +41,8 @@ export const NODE_TYPE_META: Record<string, NodeTypeMeta> = {
   knowledge: {
     label: 'Knowledge',
     icon: BookOpen,
-    accentClass: 'bg-amber-500',
-    accentColor: '#f59e0b',
+    accentClass: 'bg-node-knowledge',
+    accentColor: '#00BBFF',
     inputs: [
       { name: 'update', label: 'update', category: 'data', optional: true },
     ],
@@ -54,8 +54,8 @@ export const NODE_TYPE_META: Record<string, NodeTypeMeta> = {
   connector: {
     label: 'Connector',
     icon: Plug,
-    accentClass: 'bg-purple-500',
-    accentColor: '#a855f7',
+    accentClass: 'bg-node-connector',
+    accentColor: '#FF8800',
     inputs: [],
     outputs: [
       { name: 'tools', label: 'tools', category: 'resource' },
@@ -65,8 +65,8 @@ export const NODE_TYPE_META: Record<string, NodeTypeMeta> = {
   action: {
     label: 'Action',
     icon: Zap,
-    accentClass: 'bg-emerald-500',
-    accentColor: '#10b981',
+    accentClass: 'bg-node-action',
+    accentColor: '#00DD44',
     inputs: [
       { name: 'input', label: 'input', category: 'data' },
       { name: 'tools', label: 'tools', category: 'resource', optional: true },
@@ -79,8 +79,8 @@ export const NODE_TYPE_META: Record<string, NodeTypeMeta> = {
   trigger: {
     label: 'Trigger',
     icon: Play,
-    accentClass: 'bg-red-500',
-    accentColor: '#ef4444',
+    accentClass: 'bg-node-trigger',
+    accentColor: '#FF3B3B',
     inputs: [],
     outputs: [
       { name: 'event', label: 'event', category: 'data' },
