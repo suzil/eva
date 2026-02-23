@@ -527,3 +527,52 @@ spec = before makeTestApp $ do
       liftIO $ do
         let Just arr = decode (simpleBody listRes) :: Maybe [Value]
         arr `shouldBe` []
+
+  describe "GET /api/programs/:id/spec" $ do
+    it "returns 200 with yaml field for a new program" $ \app -> sess app $ do
+      created <- doPostJson "/api/programs" (object ["name" .= ("Spec Test" :: Text)])
+      let Just pid = responseId created
+      res <- doGet ("/api/programs/" <> pid <> "/spec")
+      liftIO $ do
+        simpleStatus res `shouldBe` status200
+        isJust (responseField "yaml" res) `shouldBe` True
+
+  describe "PUT /api/programs/:id/spec" $ do
+    it "returns 200 and saves graph when YAML is valid" $ \app -> sess app $ do
+      created <- doPostJson "/api/programs" (object ["name" .= ("Spec Round-trip" :: Text)])
+      let Just pid = responseId created
+          -- A single manual trigger passes all validation checks (trigger presence,
+          -- no cycles, no required ports, reachability trivially satisfied).
+          triggerGraph = object
+            [ "nodes" .= object
+                [ "n1" .= object
+                    [ "id"    .= ("n1" :: Text)
+                    , "label" .= ("Start" :: Text)
+                    , "type"  .= object
+                        [ "type"   .= ("trigger" :: Text)
+                        , "config" .= object
+                            [ "type"            .= ("manual" :: Text)
+                            , "schedule"        .= Null
+                            , "eventFilter"     .= Null
+                            , "payloadTemplate" .= Null
+                            ]
+                        ]
+                    , "posX"  .= (0.0 :: Double)
+                    , "posY"  .= (0.0 :: Double)
+                    ]
+                ]
+            , "edges" .= ([] :: [Value])
+            ]
+      _ <- doPutJson ("/api/programs/" <> pid <> "/graph") triggerGraph
+      specRes <- doGet ("/api/programs/" <> pid <> "/spec")
+      let Just yaml = responseField "yaml" specRes
+      res <- doPutJson ("/api/programs/" <> pid <> "/spec")
+               (object ["yaml" .= yaml])
+      liftIO $ simpleStatus res `shouldBe` status200
+
+    it "returns 422 when YAML is malformed" $ \app -> sess app $ do
+      created <- doPostJson "/api/programs" (object ["name" .= ("Bad Spec" :: Text)])
+      let Just pid = responseId created
+      res <- doPutJson ("/api/programs/" <> pid <> "/spec")
+               (object ["yaml" .= ("not: valid: yaml: [unterminated" :: Text)])
+      liftIO $ simpleStatus res `shouldBe` status422
