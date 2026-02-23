@@ -43,23 +43,23 @@ export function BottomPanel() {
 
   return (
     <div
-      className="relative flex flex-shrink-0 flex-col bg-gray-900"
+      className="relative flex flex-shrink-0 flex-col bg-terminal-800"
       style={{ height: open ? height : undefined }}
     >
       {/* Drag handle — sits at the very top edge, only shown when open */}
       {open && (
         <div
           onPointerDown={handleDragStart}
-          className="absolute top-0 left-0 right-0 h-1 cursor-row-resize hover:bg-blue-500/40 transition-colors z-10"
+          className="absolute top-0 left-0 right-0 h-1 cursor-row-resize hover:bg-at-field-500/40 transition-colors z-10"
           aria-hidden
         />
       )}
 
       {/* Top border */}
-      <div className="h-px flex-shrink-0 bg-gray-800" />
+      <div className="h-px flex-shrink-0 bg-terminal-500" />
 
       {/* Tab bar */}
-      <div className="flex h-9 flex-shrink-0 items-center border-b border-gray-800 px-2">
+      <div className="flex h-9 flex-shrink-0 items-center border-b border-terminal-500 px-2">
         <div className="flex flex-1 items-center gap-0.5">
           {TABS.map(({ key, label, disabled }) => {
             const isActive = activeTab === key && open
@@ -75,16 +75,16 @@ export function BottomPanel() {
                 className={[
                   'rounded px-3 py-1 text-xs font-medium transition-colors',
                   disabled
-                    ? 'cursor-not-allowed text-gray-700'
+                    ? 'cursor-not-allowed text-terminal-500'
                     : isActive
-                    ? 'bg-gray-700 text-white'
-                    : 'text-gray-400 hover:bg-gray-800 hover:text-white',
+                    ? 'border-b-2 border-at-field-500 text-terminal-50'
+                    : 'text-terminal-300 hover:bg-terminal-700 hover:text-terminal-100',
                 ].join(' ')}
                 title={disabled ? 'Available in M7' : undefined}
               >
                 {label}
                 {disabled && (
-                  <span className="ml-1 text-gray-700 text-[10px]">—</span>
+                  <span className="ml-1 text-terminal-500 text-[10px]">—</span>
                 )}
               </button>
             )
@@ -93,7 +93,7 @@ export function BottomPanel() {
 
         <button
           onClick={toggle}
-          className="ml-auto rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-white transition-colors"
+          className="ml-auto rounded p-1 text-terminal-400 hover:bg-terminal-700 hover:text-terminal-100 transition-colors"
           aria-label={open ? 'Collapse bottom panel' : 'Expand bottom panel'}
           title={open ? 'Collapse' : 'Expand'}
         >
