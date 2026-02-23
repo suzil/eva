@@ -1,19 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | Unit tests for EVA-29: Knowledge node handler.
+-- | Unit tests for EVA-29 + EVA-46: Knowledge node handler.
 -- Tests are isolated from the DB and graph walker — handleKnowledge is called
 -- directly with fixture nodes and input maps.
 module Eva.Engine.Handlers.KnowledgeSpec (spec) where
 
 import Control.Concurrent.STM (newTVarIO)
-import Control.Exception (SomeException, try)
+import Control.Exception (SomeException, bracket, try)
 import Control.Monad.Logger (runNoLoggingT)
 import Data.Aeson (Value (..))
 import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy.Char8 as BSLC
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
+import qualified Data.Text as T
 import Database.Persist.Sqlite (createSqlitePool)
+import Network.HTTP.Types (hContentType, status200, status404)
+import qualified Network.Wai as Wai
+import qualified Network.Wai.Handler.Warp as Warp
+import System.Directory (removeFile)
+import System.IO (hClose, hPutStr, openTempFile)
 import Test.Hspec
 
 import Eva.App (AppEnv (..), runAppM)
@@ -110,6 +117,47 @@ withTestEnv action = do
   action env
 
 -- ---------------------------------------------------------------------------
+-- FileRef helpers
+-- ---------------------------------------------------------------------------
+
+-- | Create a temporary file with the given content, run the action with its
+-- path, then delete the file.
+withTempKnowledgeFile :: String -> (FilePath -> IO a) -> IO a
+withTempKnowledgeFile content action =
+  bracket
+    (do (path, h) <- openTempFile "/tmp" "eva-test-knowledge"
+        hPutStr h content
+        hClose h
+        pure path)
+    removeFile
+    action
+
+-- ---------------------------------------------------------------------------
+-- UrlRef mock server helpers
+-- ---------------------------------------------------------------------------
+
+-- | Spin up a temporary WAI server on a free port, run the action with the
+-- port number, then shut it down.
+withMockServer :: Wai.Application -> (Int -> IO a) -> IO a
+withMockServer app = Warp.testWithApplication (pure app)
+
+plainTextApp :: Text -> Wai.Application
+plainTextApp body _req respond =
+  respond $ Wai.responseLBS status200
+    [(hContentType, "text/plain; charset=utf-8")]
+    (BSLC.pack (T.unpack body))
+
+htmlApp :: Text -> Wai.Application
+htmlApp body _req respond =
+  respond $ Wai.responseLBS status200
+    [(hContentType, "text/html; charset=utf-8")]
+    (BSLC.pack (T.unpack body))
+
+notFoundApp :: Wai.Application
+notFoundApp _req respond =
+  respond $ Wai.responseLBS status404 [] "Not Found"
+
+-- ---------------------------------------------------------------------------
 -- Spec
 -- ---------------------------------------------------------------------------
 
@@ -188,24 +236,61 @@ spec = do
           Right _  -> expectationFailure "expected exception, got success"
           Left err -> show err `shouldContain` "update"
 
-    it "throws for FileRef source (not implemented in M5)" $
-      withTestEnv $ \env -> do
-        let cfg  = KnowledgeConfig (FileRef "/data/context.txt") FormatText RefreshStatic
-            node = mkNode (NodeId "k-8") cfg
-        result :: Either SomeException Message <-
-          try $ runAppM env $
+    it "reads file content for a valid FileRef path" $
+      withTempKnowledgeFile "Team goals: ship Eva by June." $ \path ->
+        withTestEnv $ \env -> do
+          let cfg  = KnowledgeConfig (FileRef (T.pack path)) FormatText RefreshStatic
+              node = mkNode (NodeId "k-8") cfg
+          result <- runAppM env $
             handleKnowledge testRunId node Map.empty emptyBindings
-        case result of
-          Right _  -> expectationFailure "expected exception, got success"
-          Left err -> show err `shouldContain` "not implemented"
+          msgType    result `shouldBe` "knowledge_content"
+          msgPayload result `shouldBe` Aeson.String "Team goals: ship Eva by June."
 
-    it "throws for UrlRef source (not implemented in M5)" $
+    it "returns an error message for a missing FileRef path" $
       withTestEnv $ \env -> do
-        let cfg  = KnowledgeConfig (UrlRef "https://example.com/context") FormatText RefreshStatic
+        let cfg  = KnowledgeConfig (FileRef "/tmp/eva-no-such-file-xyz.txt") FormatText RefreshStatic
             node = mkNode (NodeId "k-9") cfg
         result :: Either SomeException Message <-
           try $ runAppM env $
             handleKnowledge testRunId node Map.empty emptyBindings
         case result of
           Right _  -> expectationFailure "expected exception, got success"
-          Left err -> show err `shouldContain` "not implemented"
+          Left err -> show err `shouldContain` "not found"
+
+    it "returns plain-text HTTP body for a valid UrlRef (200)" $
+      withMockServer (plainTextApp "Sprint summary: 3 issues closed.") $ \port ->
+        withTestEnv $ \env -> do
+          let url  = "http://localhost:" <> T.pack (show port) <> "/"
+              cfg  = KnowledgeConfig (UrlRef url) FormatText RefreshStatic
+              node = mkNode (NodeId "k-10") cfg
+          result <- runAppM env $
+            handleKnowledge testRunId node Map.empty emptyBindings
+          msgType    result `shouldBe` "knowledge_content"
+          msgPayload result `shouldBe` Aeson.String "Sprint summary: 3 issues closed."
+
+    it "returns HTTP status code in the error for a non-200 UrlRef" $
+      withMockServer notFoundApp $ \port ->
+        withTestEnv $ \env -> do
+          let url  = "http://localhost:" <> T.pack (show port) <> "/"
+              cfg  = KnowledgeConfig (UrlRef url) FormatText RefreshStatic
+              node = mkNode (NodeId "k-11") cfg
+          result :: Either SomeException Message <-
+            try $ runAppM env $
+              handleKnowledge testRunId node Map.empty emptyBindings
+          case result of
+            Right _  -> expectationFailure "expected exception, got success"
+            Left err -> show err `shouldContain` "404"
+
+    it "strips HTML tags for a text/html UrlRef response" $
+      withMockServer (htmlApp "<html><body><h1>Hello</h1><p>World</p></body></html>") $ \port ->
+        withTestEnv $ \env -> do
+          let url  = "http://localhost:" <> T.pack (show port) <> "/"
+              cfg  = KnowledgeConfig (UrlRef url) FormatText RefreshStatic
+              node = mkNode (NodeId "k-12") cfg
+          result <- runAppM env $
+            handleKnowledge testRunId node Map.empty emptyBindings
+          case msgPayload result of
+            Aeson.String txt -> do
+              T.unpack txt `shouldContain` "Hello"
+              T.unpack txt `shouldContain` "World"
+            other -> expectationFailure $ "expected String payload, got: " <> show other
