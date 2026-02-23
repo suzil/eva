@@ -22,19 +22,19 @@ export function EdgePanel() {
           className={[
             'rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
             isResource
-              ? 'border-gray-600 text-gray-400'
-              : 'border-blue-800 text-blue-400',
+              ? 'border-terminal-500 text-terminal-300'
+              : 'border-magi-blue-800 text-magi-blue-400',
           ].join(' ')}
         >
           {isResource ? 'Resource' : 'Data'}
         </span>
-        <span className="text-[11px] text-gray-500">
+        <span className="text-[11px] text-terminal-400">
           {isResource ? 'Static capability binding' : 'Runtime message flow'}
         </span>
       </div>
 
       {/* Source → Target */}
-      <div className="rounded-lg border border-gray-800 bg-gray-900/50 p-3">
+      <div className="rounded-lg border border-terminal-500 bg-terminal-800/50 p-3">
         <NodePortRow
           label="Source"
           nodeName={sourceNode?.data.label ?? edge.source}
@@ -42,7 +42,7 @@ export function EdgePanel() {
           portName={edge.sourceHandle ?? '—'}
         />
         <div className="my-2 flex items-center justify-center">
-          <ArrowRight className="h-3.5 w-3.5 text-gray-600" />
+          <ArrowRight className="h-3.5 w-3.5 text-terminal-500" />
         </div>
         <NodePortRow
           label="Target"
@@ -72,13 +72,13 @@ function NodePortRow({
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-1.5">
-        <span className="w-10 text-[10px] text-gray-600">{label}</span>
+        <span className="w-10 text-[10px] text-terminal-400">{label}</span>
         {Icon && (
           <Icon size={11} style={{ color: meta.accentColor }} className="shrink-0" />
         )}
-        <span className="text-[11px] font-medium text-gray-300">{nodeName}</span>
+        <span className="text-[11px] font-medium text-terminal-100">{nodeName}</span>
       </div>
-      <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-mono text-gray-400">
+      <span className="rounded bg-terminal-700 px-1.5 py-0.5 font-mono text-[10px] text-terminal-300">
         {portName}
       </span>
     </div>

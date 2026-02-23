@@ -40,19 +40,19 @@ function AccessSummary({ nodeId }: { nodeId: string }) {
   if (knowledge.length === 0 && tools.length === 0) return null
 
   return (
-    <div className="mt-4 rounded-lg border border-gray-800 bg-gray-900/40 p-3">
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+    <div className="mt-4 rounded-lg border border-terminal-500 bg-terminal-800/40 p-3">
+      <p className="mb-1.5 font-display text-[10px] uppercase tracking-widest text-terminal-300">
         Access Summary
       </p>
       {knowledge.length > 0 && (
-        <p className="text-[11px] text-gray-400">
-          <span className="text-gray-600">Knowledge: </span>
+        <p className="text-[11px] text-terminal-200">
+          <span className="text-terminal-400">Knowledge: </span>
           {knowledge.join(', ')}
         </p>
       )}
       {tools.length > 0 && (
-        <p className="text-[11px] text-gray-400">
-          <span className="text-gray-600">Tools: </span>
+        <p className="text-[11px] text-terminal-200">
+          <span className="text-terminal-400">Tools: </span>
           {tools.join(', ')}
         </p>
       )}
@@ -129,7 +129,7 @@ export function NodePanel() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header: type icon + editable label + Save */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-gray-800 px-3 py-2">
+      <div className="flex shrink-0 items-center gap-2 border-b border-terminal-500 px-3 py-2">
         {Icon && meta && (
           <div
             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${meta.accentClass}`}
@@ -143,14 +143,14 @@ export function NodePanel() {
           onChange={(e) => setLabelDraft(e.target.value)}
           onBlur={handleLabelBlur}
           onKeyDown={handleLabelKeyDown}
-          className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none ring-0 placeholder:text-gray-600 hover:bg-gray-800/50 focus:bg-gray-800/50 rounded px-1 -mx-1 py-0.5"
+          className="-mx-1 min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-sm font-semibold text-terminal-50 outline-none ring-0 placeholder:text-terminal-500 hover:bg-terminal-700/50 focus:bg-terminal-700/50"
           aria-label="Node label"
         />
         <button
           onClick={handleSave}
           disabled={!selectedProgramId || saveGraph.isPending}
           title={selectedProgramId ? 'Save graph to backend' : 'Select a program first'}
-          className="flex items-center gap-1 rounded border border-gray-700 bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300 hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+          className="flex items-center gap-1 rounded border border-terminal-500 bg-terminal-700 px-2 py-0.5 text-[11px] text-terminal-200 transition-colors hover:bg-terminal-600 hover:text-terminal-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {saveGraph.isPending ? (
             <Loader2 size={11} className="animate-spin" />
@@ -163,24 +163,24 @@ export function NodePanel() {
 
       {/* Save feedback */}
       {saveGraph.isSuccess && (
-        <div className="shrink-0 border-b border-green-900/60 bg-green-950/40 px-3 py-1 text-[10px] text-green-400">
+        <div className="shrink-0 border-b border-eva-green-800 bg-eva-green-950/60 px-3 py-1 text-[10px] text-eva-green-400">
           Saved successfully
         </div>
       )}
       {saveGraph.isError && (
-        <div className="shrink-0 border-b border-red-900/60 bg-red-950/40 px-3 py-1 text-[10px] text-red-400">
+        <div className="shrink-0 border-b border-nerv-red-800 bg-nerv-red-950/60 px-3 py-1 text-[10px] text-nerv-red-400">
           Save failed — {(saveGraph.error as Error).message}
         </div>
       )}
 
       {/* Step execution error */}
       {node.data.stepState === 'failed' && nodeStepErrors[node.id] && (
-        <div className="shrink-0 border-b border-red-900/60 bg-red-950/40 px-3 py-2">
-          <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-red-500">
+        <div className="shrink-0 border-b border-nerv-red-800 bg-nerv-red-950/60 px-3 py-2">
+          <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-nerv-red-400">
             <AlertCircle size={11} />
             Step failed
           </div>
-          <p className="whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-red-300">
+          <p className="whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-nerv-red-300">
             {nodeStepErrors[node.id]}
           </p>
         </div>

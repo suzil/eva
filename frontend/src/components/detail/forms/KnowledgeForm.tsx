@@ -1,3 +1,4 @@
+import { AlertTriangle } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import type { KnowledgeConfig, KnowledgeFormat, RefreshPolicy } from '../../../types'
 
@@ -29,7 +30,7 @@ export function KnowledgeForm({ config, onChange }: Props) {
       <SectionLabel>Source</SectionLabel>
 
       {/* Source tabs — Inline only for MLP; File/URL deferred */}
-      <div className="flex gap-1 rounded border border-gray-700 bg-gray-900 p-0.5">
+      <div className="flex gap-1 rounded border border-terminal-500 bg-terminal-900 p-0.5">
         {[
           { id: '_inline_text', label: 'Inline' },
           { id: '_file_ref', label: 'File' },
@@ -44,10 +45,10 @@ export function KnowledgeForm({ config, onChange }: Props) {
               }
             }}
             className={[
-              'flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors',
+              'flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors duration-[150ms]',
               isInline && tab.id === '_inline_text'
-                ? 'bg-gray-700 text-white'
-                : 'text-gray-500 hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-40',
+                ? 'bg-terminal-600 text-terminal-50'
+                : 'text-terminal-400 hover:text-terminal-100 disabled:cursor-not-allowed disabled:opacity-40',
             ].join(' ')}
           >
             {tab.label}
@@ -59,7 +60,7 @@ export function KnowledgeForm({ config, onChange }: Props) {
       {isInline && (
         <div>
           <FieldLabel>Content</FieldLabel>
-          <div className="overflow-hidden rounded border border-gray-700 bg-[#1e1e1e]">
+          <div className="overflow-hidden rounded border border-terminal-500 bg-terminal-900">
             <Editor
               height="180px"
               language="markdown"
@@ -84,6 +85,9 @@ export function KnowledgeForm({ config, onChange }: Props) {
               }}
             />
           </div>
+          {!inlineValue?.trim() && (
+            <AtFieldWarning message="Content required" />
+          )}
         </div>
       )}
 
@@ -98,9 +102,9 @@ export function KnowledgeForm({ config, onChange }: Props) {
               value={f.value}
               checked={config.format === f.value}
               onChange={() => update({ format: f.value })}
-              className="accent-blue-500"
+              className="accent-at-field-500"
             />
-            <span className="text-[11px] text-gray-300">{f.label}</span>
+            <span className="text-[11px] text-terminal-200">{f.label}</span>
           </label>
         ))}
       </div>
@@ -123,9 +127,9 @@ export function KnowledgeForm({ config, onChange }: Props) {
                     : base
                 update({ refreshPolicy: policy })
               }}
-              className="accent-blue-500"
+              className="accent-at-field-500"
             />
-            <span className="text-[11px] text-gray-300">{rp.label}</span>
+            <span className="text-[11px] text-terminal-200">{rp.label}</span>
           </label>
         ))}
       </div>
@@ -150,17 +154,26 @@ export function KnowledgeForm({ config, onChange }: Props) {
   )
 }
 
+function AtFieldWarning({ message }: { message: string }) {
+  return (
+    <div className="mt-1.5 flex items-center gap-1.5 rounded border border-warn-amber-700 bg-warn-amber-950/40 px-2 py-1 text-[10px] text-warn-amber-400">
+      <AlertTriangle size={10} className="shrink-0" />
+      <span>{message}</span>
+    </div>
+  )
+}
+
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+    <p className="font-display text-[10px] uppercase tracking-widest text-terminal-300">
       {children}
     </p>
   )
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="mb-1 block text-[11px] text-gray-400">{children}</label>
+  return <label className="mb-1 block text-sm font-medium text-terminal-200">{children}</label>
 }
 
 const inputClass =
-  'w-full rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[11px] text-gray-200 outline-none focus:border-blue-600 focus:ring-0'
+  'w-full rounded border border-terminal-500 bg-terminal-700 px-2 py-1 text-sm text-terminal-100 outline-none placeholder:text-terminal-400 focus:border-at-field-500 focus:ring-1 focus:ring-at-field-500/30 transition-colors duration-[150ms]'
