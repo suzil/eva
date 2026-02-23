@@ -4,6 +4,7 @@ import { usePrograms, useCreateProgram, usePatchProgram } from '../../api/hooks'
 import { useUiStore } from '../../store/uiStore'
 import { useCanvasStore } from '../../store/canvasStore'
 import type { ProgramState } from '../../types'
+import { ConfirmDialog } from './ConfirmDialog'
 
 // ---------------------------------------------------------------------------
 // Badge
@@ -133,12 +134,27 @@ export function ProgramsPanel() {
 
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingProgramId, setPendingProgramId] = useState<string | null>(null)
 
   const handleSelectProgram = (id: string) => {
     if (isDirty && selectedProgramId !== id) {
-      if (!window.confirm('You have unsaved changes. Switch programs anyway?')) return
+      setPendingProgramId(id)
+      setConfirmOpen(true)
+      return
     }
     setSelectedProgramId(id)
+  }
+
+  const handleConfirmSwitch = () => {
+    if (pendingProgramId) setSelectedProgramId(pendingProgramId)
+    setConfirmOpen(false)
+    setPendingProgramId(null)
+  }
+
+  const handleCancelSwitch = () => {
+    setConfirmOpen(false)
+    setPendingProgramId(null)
   }
 
   const handleCreate = () => {
@@ -157,6 +173,16 @@ export function ProgramsPanel() {
   const list = programs ?? []
 
   return (
+    <>
+    <ConfirmDialog
+      open={confirmOpen}
+      title="Unsaved Changes"
+      message="You have unsaved changes. Switch programs anyway?"
+      confirmLabel="Switch"
+      cancelLabel="Stay"
+      onConfirm={handleConfirmSwitch}
+      onCancel={handleCancelSwitch}
+    />
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Sub-header with create button */}
       <div className="flex items-center justify-between border-b border-terminal-500 px-3 py-1.5">
@@ -224,5 +250,6 @@ export function ProgramsPanel() {
         </div>
       )}
     </div>
+    </>
   )
 }

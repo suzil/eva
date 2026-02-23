@@ -5,17 +5,17 @@ import type { LogLevel } from '../../types'
 const LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
 
 const LEVEL_STYLES: Record<LogLevel, string> = {
-  debug: 'text-gray-500',
-  info: 'text-gray-300',
-  warn: 'text-amber-400',
-  error: 'text-red-400',
+  debug: 'text-terminal-300',
+  info: 'text-terminal-200',
+  warn: 'text-warn-amber-400',
+  error: 'text-nerv-red-400',
 }
 
 const LEVEL_BADGE_STYLES: Record<LogLevel, string> = {
-  debug: 'bg-gray-800 text-gray-500',
-  info: 'bg-gray-800 text-gray-400',
-  warn: 'bg-amber-950 text-amber-400',
-  error: 'bg-red-950 text-red-400',
+  debug: 'bg-terminal-700 text-terminal-300',
+  info: 'bg-terminal-700 text-terminal-200',
+  warn: 'bg-warn-amber-950 text-warn-amber-400',
+  error: 'bg-nerv-red-950 text-nerv-red-400',
 }
 
 export function LogsPanel() {
@@ -36,15 +36,15 @@ export function LogsPanel() {
   return (
     <div className="flex h-full w-full flex-col">
       {/* Toolbar */}
-      <div className="flex flex-shrink-0 items-center gap-1 border-b border-gray-800 px-2 py-1">
+      <div className="flex flex-shrink-0 items-center gap-1 border-b border-terminal-500 px-2 py-1">
         {/* Level filter pills */}
         <button
           onClick={() => setFilter(null)}
           className={[
             'rounded px-2 py-0.5 text-xs font-medium transition-colors',
             filter === null
-              ? 'bg-gray-700 text-white'
-              : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300',
+              ? 'bg-terminal-600 text-terminal-50'
+              : 'text-terminal-400 hover:bg-terminal-700 hover:text-terminal-200',
           ].join(' ')}
         >
           All
@@ -57,7 +57,7 @@ export function LogsPanel() {
               'rounded px-2 py-0.5 text-xs font-medium capitalize transition-colors',
               filter === level
                 ? LEVEL_BADGE_STYLES[level] + ' ring-1 ring-inset ring-current'
-                : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300',
+                : 'text-terminal-400 hover:bg-terminal-700 hover:text-terminal-200',
             ].join(' ')}
           >
             {level}
@@ -69,7 +69,7 @@ export function LogsPanel() {
         <button
           onClick={clearRunOutput}
           disabled={logEntries.length === 0}
-          className="rounded px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-800 hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+          className="rounded px-2 py-0.5 text-xs text-terminal-400 hover:bg-terminal-700 hover:text-terminal-200 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
         >
           Clear
         </button>
@@ -78,15 +78,15 @@ export function LogsPanel() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-1">
         {visible.length === 0 ? (
-          <p className="p-2 text-xs text-gray-600">
+          <p className="p-2 text-xs text-terminal-400">
             {logEntries.length > 0 ? 'No entries match the selected filter' : 'No log entries yet'}
           </p>
         ) : (
           <table className="w-full border-collapse font-mono text-xs">
             <tbody>
               {visible.map((entry, i) => (
-                <tr key={i} className="group hover:bg-gray-800/50">
-                  <td className="w-[140px] select-none whitespace-nowrap py-0.5 pr-3 text-gray-600">
+                <tr key={i} className="group hover:bg-terminal-700/50">
+                  <td className="w-[140px] select-none whitespace-nowrap py-0.5 pr-3 text-terminal-400">
                     {formatTimestamp(entry.timestamp)}
                   </td>
                   <td className="w-12 py-0.5 pr-3">
