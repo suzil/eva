@@ -1,6 +1,6 @@
 import * as monaco from 'monaco-editor'
 import { loader } from '@monaco-editor/react'
-import { setDiagnosticsOptions } from 'monaco-yaml'
+import { configureMonacoYaml } from 'monaco-yaml'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import YamlWorker from './workers/yaml.worker?worker'
 
@@ -72,7 +72,7 @@ monaco.editor.defineTheme('eva-dark', EVA_DARK_THEME)
 // Full schema lives in frontend/public/eva-schema.json (EVA-62).
 // enableSchemaRequest lets monaco-yaml fetch it from the dev/prod static server.
 // fileMatch targets the model URI used by SpecEditorView (path="eva-program.yaml").
-setDiagnosticsOptions({
+configureMonacoYaml(monaco, {
   validate: true,
   enableSchemaRequest: true,
   schemas: [
