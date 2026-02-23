@@ -1,6 +1,7 @@
 import { Handle, useNodeConnections, Position } from '@xyflow/react'
 import type { HandleType } from '@xyflow/react'
 import type { PortDef } from './constants'
+import { PORT_TYPE_COLORS } from '../../constants/nodeConstants'
 
 interface PortHandleProps {
   port: PortDef
@@ -26,9 +27,8 @@ export function PortHandle({ port, handleType, topPercent, accentColor }: PortHa
       : // diamond: rotate a square
         'rounded-none rotate-45 w-2.5 h-2.5'
 
-  const colorStyle = isConnected
-    ? 'border-transparent'
-    : 'border-terminal-400 bg-terminal-500'
+  const { border, bg } = PORT_TYPE_COLORS[port.category]
+  const colorStyle = isConnected ? 'border-transparent' : `${border} ${bg}`
 
   return (
     <Handle
@@ -49,7 +49,6 @@ export function PortHandle({ port, handleType, topPercent, accentColor }: PortHa
       }}
       className={[
         'transition-all duration-150 hover:scale-110 hover:brightness-125',
-        isConnected ? '' : 'bg-terminal-500 border-terminal-400',
         optionalStyle,
         connectedStyle,
         baseStyle,

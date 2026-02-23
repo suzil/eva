@@ -1,13 +1,8 @@
-import {
-  Check,
-  Loader2,
-  Pause,
-  AlertCircle,
-  type LucideIcon,
-} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { StepState } from '../../types'
 import { PortHandle, PortLabel } from './PortHandle'
 import type { PortDef } from './constants'
+import { STEP_STATE_RING, STEP_STATE_BADGE } from '../../constants/nodeConstants'
 
 interface BaseNodeProps {
   id: string
@@ -20,22 +15,6 @@ interface BaseNodeProps {
   outputs: PortDef[]
   stepState?: StepState
   selected?: boolean
-}
-
-const STEP_STATE_RING: Record<StepState, string> = {
-  completed: 'ring-2 ring-eva-green-500',
-  running: 'ring-2 ring-magi-blue-500 animate-glow-pulse',
-  waiting: 'ring-2 ring-warn-amber-500',
-  failed: 'ring-2 ring-nerv-red-500',
-  pending: 'opacity-50',
-  skipped: 'opacity-25',
-}
-
-const STEP_STATE_BADGE: Partial<Record<StepState, { icon: LucideIcon; className: string }>> = {
-  completed: { icon: Check, className: 'bg-eva-green-500 text-terminal-950' },
-  running: { icon: Loader2, className: 'bg-magi-blue-500 text-terminal-950 animate-spin' },
-  waiting: { icon: Pause, className: 'bg-warn-amber-500 text-terminal-950' },
-  failed: { icon: AlertCircle, className: 'bg-nerv-red-500 text-terminal-50' },
 }
 
 /** Compute evenly-spaced top% positions for n ports on one side */
