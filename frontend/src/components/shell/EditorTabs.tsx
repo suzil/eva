@@ -1,5 +1,6 @@
 import { type EditorTab, useUiStore } from '../../store/uiStore'
 import { ContentArea } from './ContentArea'
+import { SpecEditorView } from '../editor/SpecEditorView'
 
 const EDITOR_TABS: { key: EditorTab; label: string }[] = [
   { key: 'graph', label: 'Graph' },
@@ -44,13 +45,7 @@ export function EditorTabs() {
             </p>
           </div>
         )}
-        {activeTab === 'spec' && (
-          <div className="flex h-full w-full items-center justify-center">
-            <p className="font-display text-xs uppercase tracking-widest text-terminal-500">
-              Coming in P2-M3
-            </p>
-          </div>
-        )}
+        {activeTab === 'spec' && <SpecEditorView />}
       </div>
     </div>
   )

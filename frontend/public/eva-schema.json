@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Eva Program",
+  "description": "Placeholder schema — full schema in EVA-62 (P2-M3)",
+  "type": "object",
+  "properties": {
+    "eva": {
+      "type": "object",
+      "description": "Eva metadata header",
+      "properties": {
+        "version": { "type": "string", "enum": ["1"] }
+      },
+      "required": ["version"]
+    },
+    "program": {
+      "type": "object",
+      "description": "Program metadata",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "nodes": {
+      "type": "object",
+      "description": "Graph nodes keyed by node ID",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["agent", "knowledge", "connector", "action", "trigger"]
+          },
+          "label": { "type": "string" },
+          "config": { "type": "object" }
+        },
+        "required": ["type", "label"]
+      }
+    },
+    "edges": {
+      "type": "array",
+      "description": "Graph edges",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "from": { "type": "string" },
+          "fromPort": { "type": "string" },
+          "to": { "type": "string" },
+          "toPort": { "type": "string" },
+          "category": { "type": "string", "enum": ["data", "resource"] }
+        }
+      }
+    }
+  }
+}
