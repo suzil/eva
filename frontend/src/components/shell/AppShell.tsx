@@ -5,7 +5,7 @@ import { BottomPanel } from './BottomPanel'
 
 export function AppShell() {
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-950 text-white">
+    <div className="eva-scanlines flex h-screen overflow-hidden bg-terminal-900 text-terminal-100">
       <ActivityBar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Toolbar />

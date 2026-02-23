@@ -32,22 +32,22 @@ export function ActivityBar() {
         className={[
           'group relative flex h-12 w-12 items-center justify-center rounded-md transition-colors',
           isActive
-            ? 'bg-gray-700 text-white'
-            : 'text-gray-400 hover:bg-gray-800 hover:text-white',
+            ? 'text-terminal-50'
+            : 'text-terminal-400 hover:bg-terminal-600 hover:text-terminal-100',
         ].join(' ')}
         aria-label={label}
         aria-pressed={isActive}
       >
         <Icon className="h-5 w-5" />
         {isActive && (
-          <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-blue-400" />
+          <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-at-field-500" />
         )}
       </button>
     )
   }
 
   return (
-    <aside className="flex w-12 flex-shrink-0 flex-col items-center gap-1 bg-gray-900 py-2 border-r border-gray-800">
+    <aside className="flex w-12 flex-shrink-0 flex-col items-center gap-1 bg-terminal-900 py-2 border-r border-terminal-500">
       <div className="flex flex-1 flex-col items-center gap-1">
         {ACTIVITIES.map(renderItem)}
       </div>
