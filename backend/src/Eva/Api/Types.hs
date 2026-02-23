@@ -9,20 +9,24 @@ module Eva.Api.Types
   , PatchProgramReq (..)
   , CreateRunReq (..)
   , CreateCredentialReq (..)
+  , SpecRequest (..)
 
     -- * Response bodies
   , HealthResponse (..)
   , ValidateResult (..)
   , RunDetail (..)
+  , SpecResponse (..)
 
     -- * Error response
   , ApiError (..)
+  , SpecError (..)
   ) where
 
 import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
 import Data.Text (Text)
 
 import Eva.Core.Types (Run, Step, ValidationError (..), CredentialType (..), SystemType (..))
+import Eva.Declarative (ParseError)
 
 -- ---------------------------------------------------------------------------
 -- Request bodies
@@ -114,3 +118,32 @@ newtype ApiError = ApiError
 
 instance ToJSON ApiError where
   toJSON e = object ["error" .= aeError e]
+
+-- ---------------------------------------------------------------------------
+-- Spec request / response / error
+-- ---------------------------------------------------------------------------
+
+-- | Request body for PUT /api/programs/:id/spec.
+newtype SpecRequest = SpecRequest
+  { srYaml :: Text
+  }
+
+instance FromJSON SpecRequest where
+  parseJSON = withObject "SpecRequest" $ \o ->
+    SpecRequest <$> o .: "yaml"
+
+-- | Response body for GET /api/programs/:id/spec.
+newtype SpecResponse = SpecResponse
+  { spYaml :: Text
+  }
+
+instance ToJSON SpecResponse where
+  toJSON r = object ["yaml" .= spYaml r]
+
+-- | Error body for 422 responses from PUT /api/programs/:id/spec.
+newtype SpecError = SpecError
+  { seErrors :: [ParseError]
+  }
+
+instance ToJSON SpecError where
+  toJSON e = object ["errors" .= seErrors e]

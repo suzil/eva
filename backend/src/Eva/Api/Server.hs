@@ -44,6 +44,7 @@ import qualified Data.Text.Encoding as TE
 
 import Eva.Api.Types
 import Eva.Api.WebSocket (wsServerApp)
+import Eva.Declarative (ParseError (..), graphToYaml, yamlToGraph)
 import Eva.App (AppEnv (..), AppM, runAppM)
 import Eva.Config (configStaticDir)
 import Eva.Core.Types
@@ -79,11 +80,17 @@ type ProgramByIdAPI =
   :<|> "pause"    :> Post '[JSON] Program
   :<|> "resume"   :> Post '[JSON] Program
   :<|> "runs"     :> ProgramRunsAPI
+  :<|> "spec"     :> SpecByIdAPI
 
 -- | Endpoints under /api/programs/:id/runs
 type ProgramRunsAPI =
        QueryParam "limit" Int :> QueryParam "offset" Int :> Get '[JSON] [Run]
   :<|> ReqBody '[JSON] CreateRunReq :> PostCreated '[JSON] Run
+
+-- | Endpoints under /api/programs/:id/spec
+type SpecByIdAPI =
+       Get '[JSON] SpecResponse
+  :<|> ReqBody '[JSON] SpecRequest :> Put '[JSON] Program
 
 -- | Top-level /api/runs/:id endpoints (not scoped to a program)
 type RunsAPI =
@@ -206,8 +213,8 @@ programsHandlers env =
       :<|> deployH
       :<|> pauseH
       :<|> resumeH
-      :<|> listRunsH
-      :<|> createRunH
+      :<|> (listRunsH :<|> createRunH)
+      :<|> (getSpecH  :<|> putSpecH)
       where
         pid :: ProgramId
         pid = ProgramId rawId
@@ -315,6 +322,30 @@ programsHandlers env =
             throwError err400 { errBody = encode (ValidateResult False errs) }
           ctx <- run (startRun p (crrTriggerPayload req))
           liftIO $ readTVarIO (rcRun ctx)
+
+        -- GET /api/programs/:id/spec
+        getSpecH :: Handler SpecResponse
+        getSpecH = do
+          p <- requireProgram
+          pure SpecResponse { spYaml = graphToYaml (programGraph p) }
+
+        -- PUT /api/programs/:id/spec
+        putSpecH :: SpecRequest -> Handler Program
+        putSpecH req = do
+          p <- requireProgram
+          g <- case yamlToGraph (srYaml req) of
+            Left errs -> throwError err422
+              { errBody = encode (SpecError errs) }
+            Right g   -> pure g
+          let valErrs = validateGraph g
+          unless (null valErrs) $
+            throwError err422
+              { errBody = encode (SpecError (map (\ve -> ParseError (veMessage ve)) valErrs)) }
+          now <- liftIO getCurrentTime
+          run (putGraph pid g)
+          let p' = p { programGraph = g, programUpdatedAt = now }
+          run (updateProgram p')
+          pure p'
 
 -- ---------------------------------------------------------------------------
 -- Top-level run handlers (/api/runs/:id)

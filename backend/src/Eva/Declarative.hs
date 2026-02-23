@@ -55,6 +55,9 @@ import Eva.Core.Types
 data ParseError = ParseError { peMessage :: Text }
   deriving (Eq, Show)
 
+instance Ae.ToJSON ParseError where
+  toJSON e = Ae.object ["message" Ae..= peMessage e]
+
 -- | Serialise a 'Graph' to a YAML document (promoted-fields format).
 graphToYaml :: Graph -> Text
 graphToYaml g =
