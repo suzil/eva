@@ -37,10 +37,10 @@ import type { ProgramState, Run, ValidationError } from '../../types'
 // ---------------------------------------------------------------------------
 
 const BREADCRUMB_BADGE_STYLES: Record<ProgramState, string> = {
-  draft: 'border-gray-700 text-gray-500',
-  active: 'border-green-800 text-green-500',
-  paused: 'border-amber-800 text-amber-500',
-  archived: 'border-gray-700 text-gray-600',
+  draft: 'border-terminal-500 text-terminal-400',
+  active: 'border-eva-green-700 text-eva-green-400',
+  paused: 'border-warn-amber-700 text-warn-amber-400',
+  archived: 'border-terminal-500 text-terminal-500',
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +83,7 @@ export function Toolbar() {
   const { data: runsData } = useRuns(mode === 'operate' ? selectedProgramId : null)
   const { data: inspectedRunDetail } = useRunDetail(inspectedRunId)
 
+  const setSelectedProgramId = useUiStore((s) => s.setSelectedProgramId)
   const setBottomPanelOpen = useUiStore((s) => s.setBottomPanelOpen)
   const setActiveBottomTab = useUiStore((s) => s.setActiveBottomTab)
   const clearRunOutput = useUiStore((s) => s.clearRunOutput)
@@ -307,19 +308,19 @@ export function Toolbar() {
 
   return (
     <div className="flex flex-col flex-shrink-0">
-      <header className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-gray-800 bg-gray-900 px-3">
+      <header className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-terminal-500 bg-terminal-800 px-3">
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-1 text-sm text-gray-400" aria-label="Breadcrumb">
+        <nav className="flex items-center gap-1 text-sm text-terminal-400" aria-label="Breadcrumb">
           <button
             onClick={() => setSelectedProgramId(null)}
-            className="transition-colors hover:text-white"
+            className="transition-colors hover:text-terminal-50"
           >
             Programs
           </button>
           {program ? (
             <>
               <ChevronRight className="h-3.5 w-3.5" />
-              <span className="font-medium text-white">{program.name}</span>
+              <span className="font-display font-semibold uppercase tracking-wide text-terminal-50">{program.name}</span>
               <span
                 className={`ml-1 rounded border px-1.5 py-0.5 text-xs ${BREADCRUMB_BADGE_STYLES[program.state]}`}
               >
@@ -329,7 +330,7 @@ export function Toolbar() {
           ) : (
             <>
               <ChevronRight className="h-3.5 w-3.5" />
-              <span className="text-gray-600 italic">Select a program</span>
+              <span className="text-terminal-500 italic">Select a program</span>
             </>
           )}
         </nav>
@@ -356,7 +357,7 @@ export function Toolbar() {
               <span className="relative flex items-center">
                 <Save className="h-3.5 w-3.5" />
                 {isDirty && (
-                  <span className="absolute -right-1.5 -top-1.5 h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  <span className="absolute -right-1.5 -top-1.5 h-1.5 w-1.5 rounded-full bg-at-field-500" />
                 )}
               </span>
             }
@@ -394,6 +395,7 @@ export function Toolbar() {
                   }
                   onClick={handleRun}
                   disabled={!selectedProgramId || isRunBusy || runPhase === 'error'}
+                  variant="primary"
                 />
               )}
             </>
@@ -418,7 +420,7 @@ export function Toolbar() {
               }
               onClick={handleDeploy}
               disabled={!selectedProgramId || isDeployBusy}
-              variant="primary"
+              variant="deploy"
             />
           )}
 
@@ -463,6 +465,7 @@ export function Toolbar() {
                 label="Undo (⌘Z)"
                 onClick={undo}
                 disabled={past.length === 0}
+                variant="ghost"
                 hideLabel
               />
               <ToolbarButton
@@ -470,6 +473,7 @@ export function Toolbar() {
                 label="Redo (⌘Y)"
                 onClick={redo}
                 disabled={future.length === 0}
+                variant="ghost"
                 hideLabel
               />
             </>
@@ -482,6 +486,7 @@ export function Toolbar() {
               label="Auto-layout"
               onClick={() => setLayoutedNodes(applyDagreLayout(nodes, edges))}
               disabled={nodes.length === 0}
+              variant="ghost"
               hideLabel
             />
           )}
@@ -492,6 +497,7 @@ export function Toolbar() {
             label="⌘K"
             onClick={() => {}}
             disabled
+            variant="ghost"
             hideLabel
           />
         </div>
@@ -499,7 +505,7 @@ export function Toolbar() {
 
       {/* Run validation / error banner */}
       {runPhase === 'error' && runErrorMsg && (
-        <div className="flex items-center gap-2 border-b border-red-900/60 bg-red-950/50 px-3 py-1.5 text-xs text-red-400">
+        <div className="flex items-center gap-2 border-b border-nerv-red-800 bg-nerv-red-950/60 px-3 py-1.5 text-xs text-nerv-red-300">
           <span className="shrink-0 font-semibold">Run error:</span>
           <span className="truncate">{runErrorMsg}</span>
           <button
@@ -507,7 +513,7 @@ export function Toolbar() {
               setRunPhase('idle')
               setRunErrorMsg('')
             }}
-            className="ml-auto shrink-0 text-red-600 hover:text-red-400"
+            className="ml-auto shrink-0 text-nerv-red-500 hover:text-nerv-red-300"
             aria-label="Dismiss"
           >
             ✕
@@ -517,12 +523,12 @@ export function Toolbar() {
 
       {/* Deploy success banner */}
       {deployPhase === 'success' && (
-        <div className="flex items-center gap-2 border-b border-green-900/60 bg-green-950/50 px-3 py-1.5 text-xs text-green-400">
+        <div className="flex items-center gap-2 border-b border-eva-green-800 bg-eva-green-950/60 px-3 py-1.5 text-xs text-eva-green-300">
           <span className="shrink-0 font-semibold">Deployed.</span>
           <span>Program is now active — switched to Operate mode.</span>
           <button
             onClick={() => setDeployPhase('idle')}
-            className="ml-auto shrink-0 text-green-700 hover:text-green-400"
+            className="ml-auto shrink-0 text-eva-green-600 hover:text-eva-green-300"
             aria-label="Dismiss"
           >
             ✕
@@ -532,7 +538,7 @@ export function Toolbar() {
 
       {/* Deploy error panel — list of clickable validation errors */}
       {deployPhase === 'error' && deployErrors.length > 0 && (
-        <div className="border-b border-red-900/60 bg-red-950/50 px-3 py-2 text-xs text-red-400">
+        <div className="border-b border-nerv-red-800 bg-nerv-red-950/60 px-3 py-2 text-xs text-nerv-red-300">
           <div className="mb-1.5 flex items-center gap-2">
             <span className="font-semibold">Deploy failed — fix the following issues:</span>
             <button
@@ -540,7 +546,7 @@ export function Toolbar() {
                 setDeployPhase('idle')
                 setDeployErrors([])
               }}
-              className="ml-auto shrink-0 text-red-600 hover:text-red-400"
+              className="ml-auto shrink-0 text-nerv-red-500 hover:text-nerv-red-300"
               aria-label="Dismiss"
             >
               <XCircle className="h-3.5 w-3.5" />
@@ -551,13 +557,13 @@ export function Toolbar() {
               <li key={i}>
                 {err.nodeId ? (
                   <button
-                    className="text-left text-red-300 underline decoration-red-700 underline-offset-2 hover:text-red-100"
+                    className="text-left text-nerv-red-300 underline decoration-nerv-red-700 underline-offset-2 hover:text-nerv-red-100"
                     onClick={() => setSelectedNode(err.nodeId!)}
                   >
                     {err.message}
                   </button>
                 ) : (
-                  <span className="text-red-300">{err.message}</span>
+                  <span className="text-nerv-red-300">{err.message}</span>
                 )}
               </li>
             ))}
@@ -604,14 +610,14 @@ function RunSelector({
 }) {
   if (runs.length === 0) {
     return (
-      <span className="text-[11px] text-gray-600 italic">No runs yet</span>
+      <span className="text-[11px] text-terminal-500 italic">No runs yet</span>
     )
   }
   return (
     <select
       value={selectedRunId ?? ''}
       onChange={(e) => onSelect(e.target.value || null)}
-      className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[11px] text-gray-300 focus:border-gray-500 focus:outline-none"
+      className="rounded border border-terminal-500 bg-terminal-700 px-2 py-1 text-[11px] text-terminal-200 focus:border-terminal-400 focus:outline-none"
       aria-label="Select run to inspect"
     >
       {runs.map((run) => (
@@ -626,7 +632,7 @@ function RunSelector({
 function ModeToggle({ mode, onChange }: { mode: AppMode; onChange: (m: AppMode) => void }) {
   return (
     <div
-      className="flex rounded-md border border-gray-700 bg-gray-800 p-0.5 text-xs font-medium"
+      className="flex rounded-md border border-terminal-500 bg-terminal-700 p-0.5 text-xs font-medium"
       role="group"
       aria-label="App mode"
     >
@@ -637,8 +643,8 @@ function ModeToggle({ mode, onChange }: { mode: AppMode; onChange: (m: AppMode) 
           className={[
             'rounded px-2.5 py-1 capitalize transition-colors',
             mode === m
-              ? 'bg-gray-600 text-white'
-              : 'text-gray-400 hover:text-white',
+              ? 'bg-terminal-600 text-terminal-50'
+              : 'text-terminal-400 hover:text-terminal-100',
           ].join(' ')}
           aria-pressed={mode === m}
         >
@@ -654,16 +660,18 @@ interface ToolbarButtonProps {
   label: string
   onClick: () => void
   disabled?: boolean
-  variant?: 'default' | 'primary' | 'danger'
+  variant?: 'default' | 'primary' | 'deploy' | 'danger' | 'ghost'
   hideLabel?: boolean
 }
 
 function ToolbarButton({ icon, label, onClick, disabled, variant = 'default', hideLabel }: ToolbarButtonProps) {
-  const base = 'flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40'
+  const base = 'flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-at-field-500 focus-visible:ring-offset-1 focus-visible:ring-offset-terminal-800'
   const styles = {
-    default: 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700',
-    primary: 'bg-blue-600 text-white hover:bg-blue-500 border border-blue-500',
-    danger: 'bg-red-900/60 text-red-300 hover:bg-red-800/60 border border-red-800',
+    default: 'bg-terminal-700 hover:bg-terminal-600 text-terminal-100 border border-terminal-500',
+    primary: 'bg-at-field-500 hover:bg-at-field-600 text-terminal-950 font-semibold border border-at-field-400',
+    deploy:  'bg-eva-green-600 hover:bg-eva-green-500 text-terminal-950 font-semibold border border-eva-green-500',
+    danger:  'bg-nerv-red-800 hover:bg-nerv-red-700 text-nerv-red-100 border border-nerv-red-600',
+    ghost:   'bg-transparent hover:bg-terminal-600 text-terminal-200',
   }
 
   return (
