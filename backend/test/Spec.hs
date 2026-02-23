@@ -4,6 +4,7 @@ import Test.Hspec
 
 import qualified Eva.Api.ServerSpec
 import qualified Eva.Api.WebSocketSpec
+import qualified Eva.Codebase.TypesSpec
 import qualified Eva.Core.GraphSpec
 import qualified Eva.Core.TypesSpec
 import qualified Eva.Core.ValidationSpec
@@ -24,6 +25,7 @@ main :: IO ()
 main = hspec $ do
   Eva.Api.ServerSpec.spec
   Eva.Api.WebSocketSpec.spec
+  Eva.Codebase.TypesSpec.spec
   Eva.Core.GraphSpec.spec
   Eva.Core.TypesSpec.spec
   Eva.Core.ValidationSpec.spec

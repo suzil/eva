@@ -20,6 +20,7 @@ library
     Eva.Core.Types
     Eva.Core.Graph
     Eva.Core.Validation
+    Eva.Codebase.Types
     Eva.Declarative
     Eva.Engine.Runner
     Eva.Engine.StateMachine
@@ -119,6 +120,7 @@ test-suite eva-test
     Eva.Persistence.PersistenceSpec
     Eva.Api.ServerSpec
     Eva.Api.WebSocketSpec
+    Eva.Codebase.TypesSpec
     Eva.Integration.LinearSpec
     Eva.Engine.SchedulerSpec
   build-depends:
