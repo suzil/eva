@@ -4,6 +4,7 @@ import type { LogEntry, RunId } from '../types'
 export type ActivityKey = 'programs' | 'nodes' | 'knowledge' | 'runs' | 'settings'
 export type AppMode = 'author' | 'operate'
 export type BottomTab = 'logs' | 'output' | 'timeline'
+export type EditorTab = 'graph' | 'code' | 'spec'
 
 interface UiState {
   activeActivity: ActivityKey
@@ -24,6 +25,7 @@ interface UiState {
   logEntries: LogEntry[]
   /** Error message from a failed run, shown in the output panel when no LLM tokens were produced. */
   runError: string | null
+  activeEditorTab: EditorTab
 
   setActiveActivity: (activity: ActivityKey) => void
   setMode: (mode: AppMode) => void
@@ -43,6 +45,7 @@ interface UiState {
   appendLogEntry: (entry: LogEntry) => void
   /** Reset output, logs, and error — called when a new run starts. */
   clearRunOutput: () => void
+  setActiveEditorTab: (tab: EditorTab) => void
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -59,6 +62,7 @@ export const useUiStore = create<UiState>((set) => ({
   llmOutput: '',
   logEntries: [],
   runError: null,
+  activeEditorTab: 'graph',
 
   setActiveActivity: (activity) => set({ activeActivity: activity }),
   setMode: (mode) => set({ mode }),
@@ -76,4 +80,5 @@ export const useUiStore = create<UiState>((set) => ({
   setLlmOutput: (output) => set({ llmOutput: output }),
   appendLogEntry: (entry) => set((s) => ({ logEntries: [...s.logEntries, entry] })),
   clearRunOutput: () => set({ llmOutput: '', logEntries: [], runError: null }),
+  setActiveEditorTab: (tab) => set({ activeEditorTab: tab }),
 }))

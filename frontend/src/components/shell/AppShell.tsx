@@ -1,6 +1,6 @@
 import { ActivityBar } from './ActivityBar'
 import { Toolbar } from './Toolbar'
-import { ContentArea } from './ContentArea'
+import { EditorTabs } from './EditorTabs'
 import { BottomPanel } from './BottomPanel'
 
 export function AppShell() {
@@ -9,7 +9,7 @@ export function AppShell() {
       <ActivityBar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Toolbar />
-        <ContentArea />
+        <EditorTabs />
         <BottomPanel />
       </div>
     </div>
