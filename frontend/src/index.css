@@ -1,3 +1,165 @@
+/* 1. Font imports — must precede @tailwind directives */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Rajdhani:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─── Base layer overrides ─────────────────────────────────────────────── */
+@layer base {
+  :root {
+    /* CSS custom properties mirror key Tailwind tokens for use in
+       third-party components (ReactFlow, etc.) that can't use Tailwind */
+    --terminal-950: #06060C;
+    --terminal-900: #0A0B12;
+    --terminal-850: #0E0F18;
+    --terminal-800: #13141F;
+    --terminal-750: #191A28;
+    --terminal-700: #212233;
+    --terminal-600: #2C2D42;
+    --terminal-500: #3A3B54;
+    --terminal-400: #4F5070;
+    --terminal-300: #6E6F8D;
+    --terminal-200: #9596AF;
+    --terminal-100: #C4C5D6;
+    --terminal-50:  #EAEAF2;
+
+    --at-field-500: #FF6A00;
+    --at-field-600: #E05E00;
+
+    --eva-green-500: #00DD44;
+    --nerv-red-500:  #FF2222;
+    --magi-blue-500: #00AAFF;
+    --warn-amber-500: #FFBB00;
+
+    --node-agent:     #7B4AE2;
+    --node-trigger:   #FF3B3B;
+    --node-knowledge: #00BBFF;
+    --node-action:    #00DD44;
+    --node-connector: #FF8800;
+
+    /* ReactFlow control theming */
+    --xy-controls-button-background-color: var(--terminal-700);
+    --xy-controls-button-background-color-hover: var(--terminal-600);
+    --xy-controls-button-color: var(--terminal-100);
+    --xy-controls-button-border-color: var(--terminal-500);
+    --xy-minimap-background-color: var(--terminal-800);
+  }
+
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background-color: var(--terminal-900);
+    color: var(--terminal-100);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--terminal-800);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--terminal-500);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--terminal-400);
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(255, 106, 0, 0.25);
+    color: var(--terminal-50);
+  }
+}
+
+/* ─── Utility classes ──────────────────────────────────────────────────── */
+@layer utilities {
+  /* CRT scanline overlay — applied to the AppShell root element.
+     At 3% opacity users won't consciously notice it, but it adds
+     CRT texture that grounds the EVA aesthetic. */
+  .eva-scanlines {
+    position: relative;
+  }
+  .eva-scanlines::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 1px,
+      rgba(0, 0, 0, 0.03) 1px,
+      rgba(0, 0, 0, 0.03) 2px
+    );
+    z-index: 9999;
+  }
+
+  /* NERV caution hazard stripe — for danger modal headers and
+     critical error banner top borders. */
+  .nerv-caution {
+    background: repeating-linear-gradient(
+      -45deg,
+      #FFBB00,
+      #FFBB00 10px,
+      #2B1F00 10px,
+      #2B1F00 20px
+    );
+  }
+
+  /* Hexagonal grid overlay for canvas background.
+     Using SVG data URI for a repeating hex dot pattern.
+     Applied as a pseudo-element overlay at low opacity. */
+  .eva-hex-grid {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='48'%3E%3Cpath d='M14 0 L28 8 L28 24 L14 32 L0 24 L0 8 Z' fill='none' stroke='%233A3B54' stroke-width='0.5'/%3E%3C/svg%3E");
+    background-size: 28px 48px;
+  }
+
+  /* Shimmer skeleton loader */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--terminal-700) 25%,
+      var(--terminal-600) 50%,
+      var(--terminal-700) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  /* Font utility — display/accent font */
+  .font-display {
+    font-family: 'Rajdhani', 'Inter', sans-serif;
+  }
+
+  /* Execution state ring helpers (supplement Tailwind ring-* utilities) */
+  .ring-glow-blue  { box-shadow: 0 0 0 2px #00AAFF, 0 0 8px rgba(0, 170, 255, 0.4); }
+  .ring-glow-green { box-shadow: 0 0 0 2px #00DD44, 0 0 8px rgba(0, 221, 68, 0.4); }
+  .ring-glow-red   { box-shadow: 0 0 0 2px #FF2222, 0 0 8px rgba(255, 34, 34, 0.4); }
+  .ring-glow-amber { box-shadow: 0 0 0 2px #FFBB00, 0 0 8px rgba(255, 187, 0, 0.4); }
+}
+
+/* ─── Reduced motion overrides ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .eva-scanlines::after { display: none; }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
