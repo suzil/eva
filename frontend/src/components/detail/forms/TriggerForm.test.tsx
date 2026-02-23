@@ -42,7 +42,7 @@ describe('TriggerForm — cron section', () => {
     expect(screen.queryByText(/Next:/i)).not.toBeInTheDocument()
     // Some error text should be visible (content varies by parser version)
     const input = screen.getByPlaceholderText('0 9 * * 1')
-    expect(input).toHaveClass('border-red-600')
+    expect(input).toHaveClass('border-nerv-red-600')
   })
 
   it('does not show preview when expression is empty', () => {
