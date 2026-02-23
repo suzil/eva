@@ -20,6 +20,7 @@ library
     Eva.Core.Types
     Eva.Core.Graph
     Eva.Core.Validation
+    Eva.Declarative
     Eva.Engine.Runner
     Eva.Engine.StateMachine
     Eva.Engine.Dispatch
@@ -77,6 +78,9 @@ library
     , time                ^>=1.12
     , http-types          ^>=0.12
     , cron                ^>=0.7
+    , HsYAML              ^>=0.2
+    , scientific          ^>=0.3
+    , vector              ^>=0.13
 
 executable eva
   import:           shared
@@ -102,6 +106,7 @@ test-suite eva-test
     Eva.Core.GraphSpec
     Eva.Core.TypesSpec
     Eva.Core.ValidationSpec
+    Eva.DeclarativeSpec
     Eva.Engine.Handlers.ActionSpec
     Eva.Engine.Handlers.AgentSpec
     Eva.Engine.Handlers.ConnectorSpec
@@ -140,3 +145,4 @@ test-suite eva-test
     , cron              ^>=0.7
     , mtl               ^>=2.3
     , directory         ^>=1.3
+    , HsYAML            ^>=0.2
