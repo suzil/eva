@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Knowledge node handler: resolves inline text (or upstream-port input) into
--- a 'knowledge_content' message.
+-- | Knowledge node handler: resolves content into a 'knowledge_content' message.
 --
 -- Execution model:
 --   * InlineText nodes are never dispatched by the graph walker
@@ -11,24 +10,35 @@
 --     port (requiredDataInputs = ["update"]).  The handler extracts the
 --     payload, and the Runner caches it in 'rcKnowledgeCache' so that
 --     downstream Agents see the fresh content via 'rbKnowledgeDynamic'.
---   * FileRef / UrlRef are not implemented in M5 and throw immediately.
+--   * FileRef reads a local file by absolute path and returns its text content.
+--   * UrlRef performs an HTTP GET and returns the response body; text/html
+--     responses have tags stripped before being returned.
 module Eva.Engine.Handlers.Knowledge
   ( handleKnowledge
   ) where
 
-import Control.Exception (throwIO)
+import Control.Exception (SomeException, catch, displayException, throwIO)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (Value (..))
 import qualified Data.Aeson as Aeson
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.IO as TIO
 import Data.Time (getCurrentTime)
 import qualified Data.UUID as UUID
 import Data.UUID.V4 (nextRandom)
+import Network.HTTP.Client
+  ( httpLbs, parseRequest, responseBody
+  , responseHeaders, responseStatus )
+import Network.HTTP.Client.TLS (newTlsManager)
+import Network.HTTP.Types (hContentType, statusCode)
+import System.Directory (doesFileExist)
 
 import Eva.App (AppM)
 import Eva.Core.Types
@@ -84,13 +94,38 @@ resolveContent cfg inputs =
         Just msg ->
           pure (msgPayload msg)
 
-    FileRef path ->
-      liftIO $ throwIO $ userError $
-        "Knowledge FileRef source not implemented in M5: " <> T.unpack path
+    FileRef path -> do
+      let p = T.unpack path
+      exists <- liftIO $ doesFileExist p
+      if not exists
+        then liftIO $ throwIO $ userError $
+               "Knowledge FileRef: file not found: " <> p
+        else do
+          content <- liftIO $ TIO.readFile p
+          pure $ encodeContent (knowledgeFormat cfg) content
 
-    UrlRef url ->
-      liftIO $ throwIO $ userError $
-        "Knowledge UrlRef source not implemented in M5: " <> T.unpack url
+    UrlRef url -> do
+      let urlStr = T.unpack url
+      mgr <- liftIO newTlsManager
+      req <- liftIO $
+        parseRequest urlStr
+          `catch` \(e :: SomeException) ->
+            throwIO $ userError $
+              "Knowledge UrlRef: invalid URL '" <> urlStr <> "': " <> displayException e
+      response <- liftIO $ httpLbs req mgr
+      let status = statusCode (responseStatus response)
+          body   = responseBody response
+      if status /= 200
+        then liftIO $ throwIO $ userError $
+               "Knowledge UrlRef: HTTP " <> show status <> " for " <> urlStr
+               <> " — " <> T.unpack (TE.decodeUtf8Lenient (BL.toStrict (BL.take 200 body)))
+        else do
+          let rawText     = TE.decodeUtf8Lenient (BL.toStrict body)
+              contentType = fromMaybe "" $ lookup hContentType (responseHeaders response)
+              content     = if "html" `BS.isInfixOf` contentType
+                              then stripHtmlTags rawText
+                              else rawText
+          pure $ encodeContent (knowledgeFormat cfg) content
 
 -- ---------------------------------------------------------------------------
 -- Format encoding
@@ -107,3 +142,14 @@ encodeContent FormatJson     t =
   case Aeson.eitherDecode (BL.fromStrict (TE.encodeUtf8 t)) of
     Right v  -> v
     Left _   -> Aeson.String t
+
+-- | Strip HTML tags from text by tracking '<'/'>' character depth.
+-- Closing '>' is replaced with a space to preserve word boundaries between
+-- adjacent tag and content spans.
+stripHtmlTags :: Text -> Text
+stripHtmlTags t = T.strip . T.pack . reverse . snd $ T.foldl' go (False, []) t
+  where
+    go (_,     acc) '<' = (True,  acc)
+    go (_,     acc) '>' = (False, ' ' : acc)
+    go (True,  acc) _   = (True,  acc)
+    go (False, acc) c   = (False, c : acc)

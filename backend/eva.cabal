@@ -97,6 +97,7 @@ test-suite eva-test
   type:             exitcode-stdio-1.0
   main-is:          Spec.hs
   hs-source-dirs:   test
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   other-modules:
     Eva.Core.GraphSpec
     Eva.Core.TypesSpec
@@ -138,3 +139,4 @@ test-suite eva-test
     , network           ^>=3.2
     , cron              ^>=0.7
     , mtl               ^>=2.3
+    , directory         ^>=1.3
