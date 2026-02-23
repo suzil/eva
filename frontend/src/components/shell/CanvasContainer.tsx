@@ -2,10 +2,8 @@ import { useCallback, useEffect, useMemo } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
-  Background,
   Controls,
   MiniMap,
-  BackgroundVariant,
   useReactFlow,
   type Node,
   type Edge,
@@ -241,31 +239,22 @@ function CanvasInner() {
         deleteKeyCode={isOperate ? null : ['Backspace', 'Delete']}
         fitView
         fitViewOptions={{ padding: 0.3 }}
-        className="bg-gray-950"
+        className="bg-terminal-850 eva-hex-grid"
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={24}
-          size={1}
-          color="#374151"
-        />
-        <Controls
-          className="[&>button]:border-gray-700 [&>button]:bg-gray-800 [&>button]:text-gray-300 [&>button:hover]:bg-gray-700"
-        />
+        <Controls />
         <MiniMap
-          className="!bg-gray-900"
           nodeColor={(node) => {
             const typeKey = node.type ?? 'agent'
             const colors: Record<string, string> = {
-              agent: '#6366f1',
-              knowledge: '#f59e0b',
-              connector: '#a855f7',
-              action: '#10b981',
-              trigger: '#ef4444',
+              agent:     '#7B4AE2',
+              knowledge: '#00BBFF',
+              connector: '#FF8800',
+              action:    '#00DD44',
+              trigger:   '#FF3B3B',
             }
-            return colors[typeKey] ?? '#6b7280'
+            return colors[typeKey] ?? '#4F5070'
           }}
-          maskColor="rgba(17,24,39,0.7)"
+          maskColor="rgba(10,11,18,0.7)"
         />
       </ReactFlow>
 

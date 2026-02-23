@@ -14,8 +14,12 @@ export function DataEdge({
   return (
     <BaseEdge
       path={path}
-      style={{ stroke: '#6366f1', strokeWidth: 1.5 }}
-      className={animated ? 'animated' : ''}
+      style={{
+        stroke: animated ? 'var(--at-field-500)' : 'var(--terminal-400)',
+        strokeWidth: 1.5,
+        ...(animated ? { strokeDasharray: '8 4' } : {}),
+      }}
+      className={animated ? 'animate-dash-flow' : ''}
     />
   )
 }
