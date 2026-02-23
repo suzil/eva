@@ -92,4 +92,29 @@ CredentialRow sql=credentials
   encryptedData ByteString sql=encrypted_data
   createdAt UTCTime sql=created_at
   deriving Show Eq
+
+CodebaseRow sql=codebases
+  Id Text sqltype=text
+  programId ProgramRowId sql=program_id
+  path Text
+  createdAt UTCTime sql=created_at
+  deriving Show Eq
+
+CodeChangesetRow sql=code_changesets
+  Id Text sqltype=text
+  runId RunRowId sql=run_id
+  stepId StepRowId sql=step_id
+  status Text
+  createdAt UTCTime sql=created_at
+  deriving Show Eq
+
+CodeFileChangeRow sql=code_file_changes
+  Id Text sqltype=text
+  changesetId CodeChangesetRowId sql=changeset_id
+  path Text
+  action Text
+  originalContent Text Maybe sql=original_content
+  proposedContent Text sql=proposed_content
+  status Text
+  deriving Show Eq
 |]
