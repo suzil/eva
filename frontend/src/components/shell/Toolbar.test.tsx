@@ -144,4 +144,20 @@ describe('Toolbar', () => {
     expect(screen.queryByRole('button', { name: 'Deploy' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument()
   })
+
+  // T5: graph save resets specSyncState to graph_source
+  it('Save button calls onSuccess which resets specSyncState to graph_source', () => {
+    useUiStore.setState({ specSyncState: 'yaml_source' })
+    vi.mocked(apiHooks.useSaveGraph).mockReturnValue({
+      mutate: (_: unknown, opts: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.()
+      },
+      isPending: false,
+    } as unknown as ReturnType<typeof apiHooks.useSaveGraph>)
+
+    renderToolbar()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(useUiStore.getState().specSyncState).toBe('graph_source')
+  })
 })

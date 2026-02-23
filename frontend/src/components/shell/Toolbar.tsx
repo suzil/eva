@@ -88,6 +88,9 @@ export function Toolbar() {
   const setActiveBottomTab = useUiStore((s) => s.setActiveBottomTab)
   const clearRunOutput = useUiStore((s) => s.clearRunOutput)
 
+  const setSpecSyncState = useUiStore((s) => s.setSpecSyncState)
+  const setSpecDirty = useUiStore((s) => s.setSpecDirty)
+
   const isDirty = useCanvasStore((s) => s.isDirty)
   const buildGraph = useCanvasStore((s) => s.buildGraph)
   const markClean = useCanvasStore((s) => s.markClean)
@@ -140,6 +143,8 @@ export function Toolbar() {
     setActiveRunId(null)
     clearRunOutput()
     setMode('author')
+    setSpecSyncState('graph_source')
+    setSpecDirty(false)
   }, [selectedProgramId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // When switching to Operate (or when runsData arrives after the switch):
@@ -191,7 +196,12 @@ export function Toolbar() {
       if (e.key === 's') {
         e.preventDefault()
         if (selectedProgramId && isDirty && !saveMutation.isPending) {
-          saveMutation.mutate(buildGraph(), { onSuccess: markClean })
+          saveMutation.mutate(buildGraph(), {
+            onSuccess: () => {
+              markClean()
+              setSpecSyncState('graph_source')
+            },
+          })
         }
       } else if (e.key === 'z' && !e.shiftKey) {
         e.preventDefault()
@@ -217,7 +227,12 @@ export function Toolbar() {
 
   const handleSave = () => {
     if (!selectedProgramId) return
-    saveMutation.mutate(buildGraph(), { onSuccess: markClean })
+    saveMutation.mutate(buildGraph(), {
+      onSuccess: () => {
+        markClean()
+        setSpecSyncState('graph_source')
+      },
+    })
   }
 
   const handleRun = () => {
