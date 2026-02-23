@@ -1,5 +1,6 @@
 import * as monaco from 'monaco-editor'
 import { loader } from '@monaco-editor/react'
+import { setDiagnosticsOptions } from 'monaco-yaml'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import YamlWorker from './workers/yaml.worker?worker'
 
@@ -66,6 +67,68 @@ const EVA_DARK_THEME: monaco.editor.IStandaloneThemeData = {
 }
 
 monaco.editor.defineTheme('eva-dark', EVA_DARK_THEME)
+
+// ─── YAML schema registration ───────────────────────────────────────────────
+// Placeholder schema for the Spec editor. Full schema defined in EVA-62 (P2-M3).
+// fileMatch targets the model URI used by SpecEditorView (path="eva-program.yaml").
+setDiagnosticsOptions({
+  validate: true,
+  enableSchemaRequest: false,
+  schemas: [
+    {
+      uri: 'https://eva-ide/schema/eva-program.json',
+      fileMatch: ['eva-program.yaml'],
+      schema: {
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        title: 'Eva Program',
+        type: 'object',
+        properties: {
+          eva: {
+            type: 'object',
+            properties: { version: { type: 'string', enum: ['1'] } },
+            required: ['version'],
+          },
+          program: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              description: { type: 'string' },
+            },
+          },
+          nodes: {
+            type: 'object',
+            additionalProperties: {
+              type: 'object',
+              properties: {
+                type: {
+                  type: 'string',
+                  enum: ['agent', 'knowledge', 'connector', 'action', 'trigger'],
+                },
+                label: { type: 'string' },
+                config: { type: 'object' },
+              },
+              required: ['type', 'label'],
+            },
+          },
+          edges: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                from: { type: 'string' },
+                fromPort: { type: 'string' },
+                to: { type: 'string' },
+                toPort: { type: 'string' },
+                category: { type: 'string', enum: ['data', 'resource'] },
+              },
+            },
+          },
+        },
+      },
+    },
+  ],
+})
 
 // ─── Web worker registration ────────────────────────────────────────────────
 // This must run before any <Editor> component mounts. The yaml label is served
