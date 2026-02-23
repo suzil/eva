@@ -9,6 +9,7 @@ import type {
   RunDetail,
   Credential,
   CreateCredentialReq,
+  SpecResponse,
 } from '../types/index.ts'
 
 const BASE = '/api'
@@ -126,4 +127,19 @@ export function createCredential(body: CreateCredentialReq): Promise<Credential>
 
 export function deleteCredential(id: string): Promise<void> {
   return request<void>(`/credentials/${id}`, { method: 'DELETE' })
+}
+
+// ---------------------------------------------------------------------------
+// Spec (YAML declarative view) — EVA-62
+// ---------------------------------------------------------------------------
+
+export function fetchSpec(programId: string): Promise<SpecResponse> {
+  return request<SpecResponse>(`/programs/${programId}/spec`)
+}
+
+export function putSpec(programId: string, yaml: string): Promise<Program> {
+  return request<Program>(`/programs/${programId}/spec`, {
+    method: 'PUT',
+    body: JSON.stringify({ yaml }),
+  })
 }

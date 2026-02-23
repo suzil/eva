@@ -13,9 +13,11 @@ import {
   fetchPrograms,
   fetchRunDetail,
   fetchRuns,
+  fetchSpec,
   patchProgram,
   pauseProgram,
   putGraph,
+  putSpec,
   resumeProgram,
   validateProgram,
 } from './client.ts'
@@ -207,6 +209,33 @@ export function useDeleteCredential() {
     mutationFn: (id: string) => deleteCredential(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: credentialKeys.all })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Spec (YAML declarative view) — EVA-62
+// ---------------------------------------------------------------------------
+
+export const specKeys = {
+  detail: (programId: string) => ['spec', programId] as const,
+}
+
+export function useSpec(programId: string | null) {
+  return useQuery({
+    queryKey: specKeys.detail(programId ?? ''),
+    queryFn: () => fetchSpec(programId!),
+    enabled: Boolean(programId),
+  })
+}
+
+export function useSaveSpec(programId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (yaml: string) => putSpec(programId, yaml),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: programKeys.detail(programId) })
+      void queryClient.invalidateQueries({ queryKey: specKeys.detail(programId) })
     },
   })
 }

@@ -297,6 +297,22 @@ export interface ApiError {
 }
 
 // ---------------------------------------------------------------------------
+// Spec (YAML declarative view) — EVA-62
+// ---------------------------------------------------------------------------
+
+export interface SpecResponse {
+  yaml: string
+}
+
+export interface SpecParseError {
+  message: string
+}
+
+export interface SpecError {
+  errors: SpecParseError[]
+}
+
+// ---------------------------------------------------------------------------
 // Canvas node data (react-flow v12 — must extend Record<string, unknown>)
 // ---------------------------------------------------------------------------
 

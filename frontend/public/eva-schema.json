@@ -1,53 +1,318 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Eva Program",
-  "description": "Placeholder schema — full schema in EVA-62 (P2-M3)",
+  "description": "Eva prompt program YAML specification (promoted-fields format produced by Eva.Declarative)",
   "type": "object",
+  "required": ["eva.version", "nodes", "edges"],
   "properties": {
-    "eva": {
-      "type": "object",
-      "description": "Eva metadata header",
-      "properties": {
-        "version": { "type": "string", "enum": ["1"] }
-      },
-      "required": ["version"]
-    },
-    "program": {
-      "type": "object",
-      "description": "Program metadata",
-      "properties": {
-        "name": { "type": "string" },
-        "description": { "type": "string" }
-      }
+    "eva.version": {
+      "type": "string",
+      "enum": ["1"],
+      "description": "Eva YAML schema version"
     },
     "nodes": {
       "type": "object",
       "description": "Graph nodes keyed by node ID",
       "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": ["agent", "knowledge", "connector", "action", "trigger"]
-          },
-          "label": { "type": "string" },
-          "config": { "type": "object" }
-        },
-        "required": ["type", "label"]
+        "$ref": "#/definitions/node"
       }
     },
     "edges": {
       "type": "array",
       "description": "Graph edges",
       "items": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string" },
-          "from": { "type": "string" },
-          "fromPort": { "type": "string" },
-          "to": { "type": "string" },
-          "toPort": { "type": "string" },
-          "category": { "type": "string", "enum": ["data", "resource"] }
+        "$ref": "#/definitions/edge"
+      }
+    }
+  },
+  "definitions": {
+    "node": {
+      "type": "object",
+      "required": ["type", "label", "posX", "posY"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["agent", "knowledge", "connector", "action", "trigger"],
+          "description": "Node type"
+        },
+        "label": { "type": "string", "description": "Display label" },
+        "posX": { "type": "number", "description": "Canvas X position" },
+        "posY": { "type": "number", "description": "Canvas Y position" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "agent" } }, "required": ["type"] },
+          "then": { "$ref": "#/definitions/agentFields" }
+        },
+        {
+          "if": { "properties": { "type": { "const": "knowledge" } }, "required": ["type"] },
+          "then": { "$ref": "#/definitions/knowledgeFields" }
+        },
+        {
+          "if": { "properties": { "type": { "const": "connector" } }, "required": ["type"] },
+          "then": { "$ref": "#/definitions/connectorFields" }
+        },
+        {
+          "if": { "properties": { "type": { "const": "action" } }, "required": ["type"] },
+          "then": { "$ref": "#/definitions/actionFields" }
+        },
+        {
+          "if": { "properties": { "type": { "const": "trigger" } }, "required": ["type"] },
+          "then": { "$ref": "#/definitions/triggerFields" }
+        }
+      ]
+    },
+    "agentFields": {
+      "required": ["model", "systemPrompt", "responseFormat", "temperature", "maxIterations"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["openai", "anthropic"],
+          "description": "LLM provider (default: openai)"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier, e.g. gpt-4o or claude-3-5-sonnet-20241022"
+        },
+        "systemPrompt": {
+          "type": "string",
+          "description": "System prompt sent to the LLM"
+        },
+        "responseFormat": {
+          "type": "string",
+          "enum": ["text", "json"],
+          "description": "Expected response format"
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature"
+        },
+        "maxTokens": {
+          "type": "integer",
+          "description": "Max tokens in the response (optional)"
+        },
+        "maxIterations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Max tool-use iterations per invocation"
+        },
+        "costBudgetUsd": {
+          "type": "number",
+          "description": "Optional per-run cost cap in USD"
+        },
+        "retryPolicy": {
+          "$ref": "#/definitions/retryPolicy"
+        }
+      }
+    },
+    "knowledgeFields": {
+      "required": ["source", "format", "refreshPolicy"],
+      "properties": {
+        "source": {
+          "$ref": "#/definitions/contentSource"
+        },
+        "format": {
+          "type": "string",
+          "enum": ["text", "json", "embedded"],
+          "description": "Content format"
+        },
+        "refreshPolicy": {
+          "$ref": "#/definitions/refreshPolicy"
+        }
+      }
+    },
+    "connectorFields": {
+      "required": ["system", "actionFilter"],
+      "properties": {
+        "system": {
+          "type": "string",
+          "enum": ["linear", "github", "http", "codebase"],
+          "description": "External system"
+        },
+        "credentialId": {
+          "type": "string",
+          "description": "Credential ID for authentication (optional)"
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "Custom endpoint URL (optional)"
+        },
+        "scope": {
+          "type": "string",
+          "description": "Scope restriction (optional)"
+        },
+        "actionFilter": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Allowed action names exposed to the agent"
+        }
+      }
+    },
+    "actionFields": {
+      "required": ["operation", "parameters", "errorHandling"],
+      "properties": {
+        "operation": {
+          "type": "string",
+          "enum": ["template", "code", "api_call", "format"],
+          "description": "Action operation type"
+        },
+        "parameters": {
+          "description": "Operation-specific parameters (free-form object)"
+        },
+        "errorHandling": {
+          "$ref": "#/definitions/errorHandling"
+        },
+        "retryPolicy": {
+          "$ref": "#/definitions/retryPolicy"
+        }
+      }
+    },
+    "triggerFields": {
+      "required": ["triggerType"],
+      "properties": {
+        "triggerType": {
+          "type": "string",
+          "enum": ["manual", "cron", "webhook", "connectorevent"],
+          "description": "Trigger mechanism (uses triggerType to avoid collision with node-level type)"
+        },
+        "schedule": {
+          "type": "string",
+          "description": "Cron expression, e.g. '0 9 * * 1' (required when triggerType=cron)"
+        },
+        "eventFilter": {
+          "type": "string",
+          "description": "Event filter expression (optional)"
+        },
+        "payloadTemplate": {
+          "description": "Payload template for the trigger event (optional)"
+        }
+      }
+    },
+    "contentSource": {
+      "type": "object",
+      "required": ["type"],
+      "oneOf": [
+        {
+          "properties": {
+            "type": { "const": "_inline_text" },
+            "value": { "type": "string", "description": "Inline text content" }
+          },
+          "required": ["type", "value"]
+        },
+        {
+          "properties": {
+            "type": { "const": "_file_ref" },
+            "value": { "type": "string", "description": "File path" }
+          },
+          "required": ["type", "value"]
+        },
+        {
+          "properties": {
+            "type": { "const": "_url_ref" },
+            "value": { "type": "string", "description": "URL" }
+          },
+          "required": ["type", "value"]
+        },
+        {
+          "properties": {
+            "type": { "const": "_upstream_port" }
+          },
+          "required": ["type"]
+        }
+      ]
+    },
+    "refreshPolicy": {
+      "type": "object",
+      "required": ["type"],
+      "oneOf": [
+        {
+          "properties": { "type": { "const": "static" } },
+          "required": ["type"]
+        },
+        {
+          "properties": { "type": { "const": "on_run" } },
+          "required": ["type"]
+        },
+        {
+          "properties": {
+            "type": { "const": "periodic" },
+            "periodSeconds": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["type", "periodSeconds"]
+        }
+      ]
+    },
+    "errorHandling": {
+      "type": "object",
+      "required": ["mode"],
+      "oneOf": [
+        {
+          "properties": { "mode": { "const": "fail" } },
+          "required": ["mode"]
+        },
+        {
+          "properties": { "mode": { "const": "continue" } },
+          "required": ["mode"]
+        },
+        {
+          "properties": {
+            "mode": { "const": "use_default" },
+            "value": { "type": "string" }
+          },
+          "required": ["mode", "value"]
+        }
+      ]
+    },
+    "retryPolicy": {
+      "type": "object",
+      "required": ["maxAttempts", "backoff"],
+      "properties": {
+        "maxAttempts": { "type": "integer", "minimum": 1 },
+        "backoff": { "$ref": "#/definitions/backoffStrategy" },
+        "timeoutMs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "backoffStrategy": {
+      "type": "object",
+      "required": ["strategy", "params"],
+      "oneOf": [
+        {
+          "properties": {
+            "strategy": { "const": "fixed" },
+            "params": { "type": "integer", "description": "Fixed delay in ms" }
+          },
+          "required": ["strategy", "params"]
+        },
+        {
+          "properties": {
+            "strategy": { "const": "exponential" },
+            "params": {
+              "type": "array",
+              "items": { "type": "integer" },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "[base_ms, cap_ms]"
+            }
+          },
+          "required": ["strategy", "params"]
+        }
+      ]
+    },
+    "edge": {
+      "type": "object",
+      "required": ["from", "fromPort", "to", "toPort", "category"],
+      "properties": {
+        "id": { "type": "string", "description": "Edge ID (synthesised from endpoints if absent)" },
+        "from": { "type": "string", "description": "Source node ID" },
+        "fromPort": { "type": "string", "description": "Source port name" },
+        "to": { "type": "string", "description": "Target node ID" },
+        "toPort": { "type": "string", "description": "Target port name" },
+        "category": {
+          "type": "string",
+          "enum": ["data", "resource"],
+          "description": "Port category"
         }
       }
     }
