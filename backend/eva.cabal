@@ -80,6 +80,7 @@ library
     , http-types          ^>=0.12
     , cron                ^>=0.7
     , HsYAML              ^>=0.2
+    , typed-process       ^>=0.2
     , scientific          ^>=0.3
     , vector              ^>=0.13
 
