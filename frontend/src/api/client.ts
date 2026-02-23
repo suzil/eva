@@ -137,9 +137,26 @@ export function fetchSpec(programId: string): Promise<SpecResponse> {
   return request<SpecResponse>(`/programs/${programId}/spec`)
 }
 
-export function putSpec(programId: string, yaml: string): Promise<Program> {
-  return request<Program>(`/programs/${programId}/spec`, {
+/** Structured error thrown when PUT /spec returns 422. Carries the backend ParseError list. */
+export class SpecSaveError extends Error {
+  constructor(public readonly errors: Array<{ message: string }>) {
+    super(errors.map((e) => e.message).join('; '))
+    this.name = 'SpecSaveError'
+  }
+}
+
+export async function putSpec(programId: string, yaml: string): Promise<Program> {
+  const res = await fetch(`${BASE}/programs/${programId}/spec`, {
     method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ yaml }),
   })
+  if (!res.ok) {
+    if (res.status === 422) {
+      const body = (await res.json()) as { errors: Array<{ message: string }> }
+      throw new SpecSaveError(body.errors ?? [])
+    }
+    throw new Error(`HTTP ${res.status}`)
+  }
+  return res.json() as Promise<Program>
 }

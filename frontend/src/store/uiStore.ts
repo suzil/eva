@@ -5,6 +5,7 @@ export type ActivityKey = 'programs' | 'nodes' | 'knowledge' | 'runs' | 'setting
 export type AppMode = 'author' | 'operate'
 export type BottomTab = 'logs' | 'output' | 'timeline'
 export type EditorTab = 'graph' | 'code' | 'spec'
+export type SpecSyncState = 'graph_source' | 'yaml_source' | 'conflict'
 
 interface UiState {
   activeActivity: ActivityKey
@@ -26,6 +27,8 @@ interface UiState {
   /** Error message from a failed run, shown in the output panel when no LLM tokens were produced. */
   runError: string | null
   activeEditorTab: EditorTab
+  specSyncState: SpecSyncState
+  specDirty: boolean
 
   setActiveActivity: (activity: ActivityKey) => void
   setMode: (mode: AppMode) => void
@@ -46,6 +49,8 @@ interface UiState {
   /** Reset output, logs, and error — called when a new run starts. */
   clearRunOutput: () => void
   setActiveEditorTab: (tab: EditorTab) => void
+  setSpecSyncState: (state: SpecSyncState) => void
+  setSpecDirty: (dirty: boolean) => void
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -63,6 +68,8 @@ export const useUiStore = create<UiState>((set) => ({
   logEntries: [],
   runError: null,
   activeEditorTab: 'graph',
+  specSyncState: 'graph_source',
+  specDirty: false,
 
   setActiveActivity: (activity) => set({ activeActivity: activity }),
   setMode: (mode) => set({ mode }),
@@ -81,4 +88,6 @@ export const useUiStore = create<UiState>((set) => ({
   appendLogEntry: (entry) => set((s) => ({ logEntries: [...s.logEntries, entry] })),
   clearRunOutput: () => set({ llmOutput: '', logEntries: [], runError: null }),
   setActiveEditorTab: (tab) => set({ activeEditorTab: tab }),
+  setSpecSyncState: (state) => set({ specSyncState: state }),
+  setSpecDirty: (dirty) => set({ specDirty: dirty }),
 }))
