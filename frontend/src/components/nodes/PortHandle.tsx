@@ -28,7 +28,7 @@ export function PortHandle({ port, handleType, topPercent, accentColor }: PortHa
 
   const colorStyle = isConnected
     ? 'border-transparent'
-    : 'border-gray-600 bg-gray-500'
+    : 'border-terminal-400 bg-terminal-500'
 
   return (
     <Handle
@@ -48,8 +48,8 @@ export function PortHandle({ port, handleType, topPercent, accentColor }: PortHa
         right: handleType === 'source' ? -6 : undefined,
       }}
       className={[
-        'transition-colors duration-150',
-        isConnected ? '' : 'bg-gray-500 border-gray-600',
+        'transition-all duration-150 hover:scale-110 hover:brightness-125',
+        isConnected ? '' : 'bg-terminal-500 border-terminal-400',
         optionalStyle,
         connectedStyle,
         baseStyle,
@@ -74,7 +74,7 @@ export function PortLabel({ port, topPercent, side }: PortLabelProps) {
   return (
     <div
       className={[
-        'pointer-events-none absolute text-[10px] leading-none text-gray-500 select-none',
+        'pointer-events-none absolute text-[10px] leading-none text-terminal-300 select-none',
         side === 'left' ? 'left-4' : 'right-4',
         side === 'right' ? 'text-right' : 'text-left',
       ].join(' ')}

@@ -23,19 +23,19 @@ interface BaseNodeProps {
 }
 
 const STEP_STATE_RING: Record<StepState, string> = {
-  completed: 'ring-2 ring-green-500',
-  running: 'ring-2 ring-blue-500',
-  waiting: 'ring-2 ring-amber-500',
-  failed: 'ring-2 ring-red-500',
+  completed: 'ring-2 ring-eva-green-500',
+  running: 'ring-2 ring-magi-blue-500 animate-glow-pulse',
+  waiting: 'ring-2 ring-warn-amber-500',
+  failed: 'ring-2 ring-nerv-red-500',
   pending: 'opacity-50',
   skipped: 'opacity-25',
 }
 
 const STEP_STATE_BADGE: Partial<Record<StepState, { icon: LucideIcon; className: string }>> = {
-  completed: { icon: Check, className: 'bg-green-500 text-white' },
-  running: { icon: Loader2, className: 'bg-blue-500 text-white animate-spin' },
-  waiting: { icon: Pause, className: 'bg-amber-500 text-white' },
-  failed: { icon: AlertCircle, className: 'bg-red-500 text-white' },
+  completed: { icon: Check, className: 'bg-eva-green-500 text-terminal-950' },
+  running: { icon: Loader2, className: 'bg-magi-blue-500 text-terminal-950 animate-spin' },
+  waiting: { icon: Pause, className: 'bg-warn-amber-500 text-terminal-950' },
+  failed: { icon: AlertCircle, className: 'bg-nerv-red-500 text-terminal-50' },
 }
 
 /** Compute evenly-spaced top% positions for n ports on one side */
@@ -69,12 +69,12 @@ export function BaseNode({
   const badge = stepState ? STEP_STATE_BADGE[stepState] : undefined
   const skippedBorder = stepState === 'skipped' ? 'border-dashed' : 'border-solid'
 
-  const selectionRing = selected && !stepState ? 'ring-2 ring-white/40' : ''
+  const selectionRing = selected && !stepState ? 'ring-2 ring-at-field-500/40' : ''
 
   return (
     <div
       className={[
-        'relative flex overflow-visible rounded-lg border border-gray-700 bg-gray-900 shadow-lg',
+        'relative flex overflow-visible rounded-lg border border-terminal-500 bg-terminal-700 shadow-node',
         skippedBorder,
         ringClass,
         selectionRing,
@@ -95,12 +95,12 @@ export function BaseNode({
             style={{ color: accentColor }}
             className="shrink-0"
           />
-          <span className="truncate text-[11px] font-semibold leading-tight text-gray-200">
+          <span className="truncate text-[11px] font-semibold leading-tight text-terminal-50">
             {label}
           </span>
         </div>
         {subtitle && (
-          <p className="mb-1 truncate text-[10px] leading-tight text-gray-500">{subtitle}</p>
+          <p className="mb-1 truncate text-[10px] leading-tight text-terminal-300">{subtitle}</p>
         )}
 
         {/* Port labels */}

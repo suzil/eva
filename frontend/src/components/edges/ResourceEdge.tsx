@@ -13,7 +13,7 @@ export function ResourceEdge({
   return (
     <BaseEdge
       path={path}
-      style={{ stroke: '#6b7280', strokeWidth: 1.5, strokeDasharray: '5 4' }}
+      style={{ stroke: 'var(--terminal-400)', strokeWidth: 1.5, strokeDasharray: '5 4' }}
     />
   )
 }
