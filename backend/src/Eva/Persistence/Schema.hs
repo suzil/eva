@@ -134,4 +134,17 @@ KnowledgeEntryRow sql=knowledge_entries
   updatedAt UTCTime sql=updated_at
   scannedAt UTCTime sql=scanned_at
   deriving Show Eq
+
+PromptTemplateRow sql=prompt_templates
+  Id Text sqltype=text
+  name Text
+  description Text
+  category Text
+  tags Text sqltype=text
+  body Text
+  variables Text sqltype=text
+  builtIn Bool sql=built_in
+  createdAt UTCTime sql=created_at
+  updatedAt UTCTime sql=updated_at
+  deriving Show Eq
 |]

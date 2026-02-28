@@ -29,6 +29,7 @@ import qualified Eva.Integration.LinearSpec
 import qualified Eva.Persistence.PersistenceSpec
 import qualified Eva.Engine.SchedulerSpec
 import qualified Eva.Prompt.TypesSpec
+import qualified Eva.Prompt.StoreSpec
 
 main :: IO ()
 main = hspec $ do
@@ -59,3 +60,4 @@ main = hspec $ do
   Eva.Persistence.PersistenceSpec.spec
   Eva.Engine.SchedulerSpec.spec
   Eva.Prompt.TypesSpec.spec
+  Eva.Prompt.StoreSpec.spec

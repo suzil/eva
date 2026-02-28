@@ -33,6 +33,7 @@ library
     Eva.Knowledge.Api
     Eva.Declarative
     Eva.Prompt.Types
+    Eva.Prompt.Store
     Eva.Engine.Runner
     Eva.Engine.StateMachine
     Eva.Engine.Dispatch
@@ -145,6 +146,7 @@ test-suite eva-test
     Eva.Integration.LinearSpec
     Eva.Engine.SchedulerSpec
     Eva.Prompt.TypesSpec
+    Eva.Prompt.StoreSpec
   build-depends:
       base              ^>=4.20
     , eva

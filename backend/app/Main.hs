@@ -6,16 +6,18 @@ import System.Exit (exitSuccess)
 import System.Posix.Signals (Handler (..), installHandler, sigTERM)
 
 import Eva.Api.Server (makeApp)
-import Eva.App (logMsg, makeAppEnv, runAppM)
+import Eva.App (AppEnv (..), logMsg, makeAppEnv, runAppM)
 import Eva.Config (LogLevel (..), configPort, loadConfig)
 import Eva.Engine.Dispatch (execute)
 import Eva.Engine.Scheduler (shutdownScheduler, startScheduler)
+import Eva.Prompt.Store (seedBuiltinTemplates)
 import Network.Wai.Handler.Warp (run)
 
 main :: IO ()
 main = do
   cfg <- loadConfig
   env <- makeAppEnv cfg execute
+  seedBuiltinTemplates (envDbPool env)
   runAppM env $ logMsg LogInfo "Eva backend starting"
 
   -- Start the in-process cron scheduler.
