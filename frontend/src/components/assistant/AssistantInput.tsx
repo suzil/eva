@@ -5,6 +5,9 @@ import { SlashCommandMenu } from './SlashCommandMenu'
 interface AssistantInputProps {
   onSend: (text: string) => void
   disabled?: boolean
+  /** Pre-fill the textarea with this text without auto-sending. Cleared by the parent after being consumed. */
+  initialValue?: string | null
+  onInitialValueConsumed?: () => void
 }
 
 /**
@@ -13,10 +16,19 @@ interface AssistantInputProps {
  * Selecting a command inserts it as the input text.
  * Enter sends; Shift+Enter inserts a newline.
  */
-export function AssistantInput({ onSend, disabled = false }: AssistantInputProps) {
+export function AssistantInput({ onSend, disabled = false, initialValue, onInitialValueConsumed }: AssistantInputProps) {
   const [value, setValue] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // When a pre-fill value arrives (e.g. from GraphProposalCard Revise), populate and focus
+  useEffect(() => {
+    if (initialValue) {
+      setValue(initialValue)
+      textareaRef.current?.focus()
+      onInitialValueConsumed?.()
+    }
+  }, [initialValue]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // The query passed to SlashCommandMenu is the text after the leading `/`
   const slashQuery = showSlashMenu ? value.replace(/^\//, '') : ''

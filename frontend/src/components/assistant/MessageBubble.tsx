@@ -1,7 +1,8 @@
-import { CheckCircle, XCircle, GitBranch, GitMerge, Activity, AlertCircle } from 'lucide-react'
+import { CheckCircle, XCircle, GitMerge, Activity, AlertCircle } from 'lucide-react'
 import type { AssistantMessage } from '../../types'
 import { useCanvasStore } from '../../store/canvasStore'
 import { NodeReferenceChip } from './NodeReferenceChip'
+import { GraphProposalCard } from './GraphProposalCard'
 
 interface MessageBubbleProps {
   message: AssistantMessage
@@ -18,7 +19,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     case 'action_result':
       return <ActionResultBubble success={message.success} message={message.message} />
     case 'graph_proposal':
-      return <StubCard icon={<GitBranch className="h-4 w-4" />} label="Graph Proposal" detail={message.summary} />
+      return <GraphProposalCard graph={message.graph} summary={message.summary} />
     case 'graph_diff':
       return <StubCard icon={<GitMerge className="h-4 w-4" />} label="Graph Diff" detail={message.summary} />
     case 'run_data':

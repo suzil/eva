@@ -65,6 +65,8 @@ interface UiState {
   commandBarOpen: boolean
   /** Message to auto-send to the assistant when the MAGI panel opens (set by CommandBar). */
   pendingAssistantMessage: string | null
+  /** Text to pre-fill in the AssistantInput without auto-sending (set by GraphProposalCard Revise). */
+  prefillAssistantMessage: string | null
   /** Per-program assistant conversation threads, persisted to localStorage. */
   assistantConversations: Record<ProgramId, ConversationThread>
 
@@ -100,6 +102,7 @@ interface UiState {
   setCommandBarOpen: (open: boolean) => void
   toggleCommandBar: () => void
   setPendingAssistantMessage: (msg: string | null) => void
+  setPrefillAssistantMessage: (msg: string | null) => void
   appendAssistantMessage: (programId: ProgramId, message: AssistantMessage) => void
   setAssistantStreaming: (programId: ProgramId, streaming: boolean) => void
   clearAssistantConversation: (programId: ProgramId) => void
@@ -129,6 +132,7 @@ export const useUiStore = create<UiState>((set) => ({
   detailPanelTab: 'inspector',
   commandBarOpen: false,
   pendingAssistantMessage: null,
+  prefillAssistantMessage: null,
   assistantConversations: loadConversations(),
 
   setActiveActivity: (activity) => set({ activeActivity: activity }),
@@ -183,6 +187,7 @@ export const useUiStore = create<UiState>((set) => ({
   setCommandBarOpen: (open) => set({ commandBarOpen: open }),
   toggleCommandBar: () => set((s) => ({ commandBarOpen: !s.commandBarOpen })),
   setPendingAssistantMessage: (msg) => set({ pendingAssistantMessage: msg }),
+  setPrefillAssistantMessage: (msg) => set({ prefillAssistantMessage: msg }),
   appendAssistantMessage: (programId, message) =>
     set((s) => {
       const existing = s.assistantConversations[programId] ?? {

@@ -14,6 +14,8 @@ export function AssistantPanel() {
   const clearAssistantConversation = useUiStore((s) => s.clearAssistantConversation)
   const pendingAssistantMessage = useUiStore((s) => s.pendingAssistantMessage)
   const setPendingAssistantMessage = useUiStore((s) => s.setPendingAssistantMessage)
+  const prefillAssistantMessage = useUiStore((s) => s.prefillAssistantMessage)
+  const setPrefillAssistantMessage = useUiStore((s) => s.setPrefillAssistantMessage)
 
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId)
   const nodes = useCanvasStore((s) => s.nodes)
@@ -84,7 +86,12 @@ export function AssistantPanel() {
 
       {/* Input */}
       <div className="shrink-0 border-t border-terminal-600 p-2">
-        <AssistantInput onSend={sendMessage} disabled={isStreaming || !selectedProgramId} />
+        <AssistantInput
+          onSend={sendMessage}
+          disabled={isStreaming || !selectedProgramId}
+          initialValue={prefillAssistantMessage}
+          onInitialValueConsumed={() => setPrefillAssistantMessage(null)}
+        />
       </div>
     </div>
   )
