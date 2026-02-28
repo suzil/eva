@@ -7,9 +7,10 @@ interface MessageListProps {
   isStreaming: boolean
   /** Accumulated streaming tokens from the in-flight MAGI response. */
   streamingText?: string
+  programId?: string
 }
 
-export function MessageList({ messages, isStreaming, streamingText }: MessageListProps) {
+export function MessageList({ messages, isStreaming, streamingText, programId }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -19,7 +20,7 @@ export function MessageList({ messages, isStreaming, streamingText }: MessageLis
   return (
     <div className="flex flex-1 flex-col gap-2 overflow-y-auto py-3">
       {messages.map((msg, idx) => (
-        <MessageBubble key={idx} message={msg} />
+        <MessageBubble key={idx} message={msg} programId={programId} />
       ))}
 
       {isStreaming && streamingText && (

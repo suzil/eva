@@ -81,7 +81,7 @@ export function AssistantPanel() {
           </p>
         </div>
       ) : (
-        <MessageList messages={messages} isStreaming={isStreaming} streamingText={streamingText} />
+        <MessageList messages={messages} isStreaming={isStreaming} streamingText={streamingText} programId={selectedProgramId ?? undefined} />
       )}
 
       {/* Input */}
