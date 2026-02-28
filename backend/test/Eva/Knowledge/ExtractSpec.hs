@@ -275,13 +275,12 @@ spec = do
           entries <- runTest env (listBySource SourceCodebase (Just (T.pack root)) testProgramId)
           length entries `shouldBe` 6
 
-    it "is a no-op for SourceLinear (EVA-78 handles that)" $
+    it "dispatches SourceLinear to extractLinear (fails on missing credential)" $
       withSystemTempDirectory "eva-extract-test" $ \root -> do
         setupFixtureDir root
         withTestEnv dummyLLMClient $ \env -> do
           runTest env (insertProgram testProgram)
-          -- Should not throw even though no Linear extraction is implemented
-          runTest env (extractForSource SourceLinear (Just "proj-123") testProgramId)
-          entries <- runTest env (listBySource SourceLinear (Just "proj-123") testProgramId)
-          length entries `shouldBe` 0
+          -- extractLinear is now wired; a missing credential produces an error
+          runTest env (extractForSource SourceLinear (Just "nonexistent-cred") testProgramId)
+            `shouldThrow` anyException
 

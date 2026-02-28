@@ -28,6 +28,7 @@ library
     Eva.Knowledge.Query
     Eva.Knowledge.Extract
     Eva.Knowledge.Extract.Codebase
+    Eva.Knowledge.Extract.Linear
     Eva.Knowledge.Api
     Eva.Declarative
     Eva.Engine.Runner
@@ -136,6 +137,7 @@ test-suite eva-test
     Eva.Knowledge.StoreSpec
     Eva.Knowledge.QuerySpec
     Eva.Knowledge.ExtractSpec
+    Eva.Knowledge.Extract.LinearSpec
     Eva.Knowledge.ApiSpec
     Eva.Integration.LinearSpec
     Eva.Engine.SchedulerSpec
