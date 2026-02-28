@@ -10,6 +10,14 @@ import type {
   Credential,
   CreateCredentialReq,
   SpecResponse,
+  CodebaseMetadata,
+  ConnectCodebaseReq,
+  FileNode,
+  FileEntry,
+  WriteFileReq,
+  GitDiffResponse,
+  CodeChangeset,
+  FileChange,
 } from '../types/index.ts'
 
 const BASE = '/api'
@@ -159,4 +167,78 @@ export async function putSpec(programId: string, yaml: string): Promise<Program>
     throw new Error(`HTTP ${res.status}`)
   }
   return res.json() as Promise<Program>
+}
+
+// ---------------------------------------------------------------------------
+// Codebase (P2-M4) — EVA-74
+// ---------------------------------------------------------------------------
+
+export function fetchCodebases(programId: string): Promise<CodebaseMetadata[]> {
+  return request<CodebaseMetadata[]>(`/programs/${programId}/codebase`)
+}
+
+export function connectCodebase(programId: string, body: ConnectCodebaseReq): Promise<CodebaseMetadata> {
+  return request<CodebaseMetadata>(`/programs/${programId}/codebase`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function disconnectCodebase(programId: string, codebaseId: string): Promise<void> {
+  return request<void>(`/programs/${programId}/codebase/${codebaseId}`, { method: 'DELETE' })
+}
+
+export function fetchFileTree(codebaseId: string): Promise<FileNode> {
+  return request<FileNode>(`/codebase/${codebaseId}/tree`)
+}
+
+export function fetchFile(codebaseId: string, path: string): Promise<FileEntry> {
+  return request<FileEntry>(`/codebase/${codebaseId}/file?path=${encodeURIComponent(path)}`)
+}
+
+export function writeFile(codebaseId: string, body: WriteFileReq): Promise<void> {
+  return request<void>(`/codebase/${codebaseId}/file`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export function fetchGitDiff(codebaseId: string): Promise<GitDiffResponse> {
+  return request<GitDiffResponse>(`/codebase/${codebaseId}/diff`)
+}
+
+export function refreshCodebase(codebaseId: string): Promise<CodebaseMetadata> {
+  return request<CodebaseMetadata>(`/codebase/${codebaseId}/refresh`, { method: 'POST' })
+}
+
+// ---------------------------------------------------------------------------
+// Changesets (P2-M4) — EVA-74
+// ---------------------------------------------------------------------------
+
+export function fetchProgramChangesets(programId: string): Promise<CodeChangeset[]> {
+  return request<CodeChangeset[]>(`/programs/${programId}/changesets`)
+}
+
+export function fetchRunChangesets(runId: string): Promise<CodeChangeset[]> {
+  return request<CodeChangeset[]>(`/runs/${runId}/changesets`)
+}
+
+export function fetchChangeset(id: string): Promise<CodeChangeset> {
+  return request<CodeChangeset>(`/changesets/${id}`)
+}
+
+export function acceptFile(changesetId: string, fileId: string): Promise<FileChange> {
+  return request<FileChange>(`/changesets/${changesetId}/files/${fileId}/accept`, { method: 'POST' })
+}
+
+export function rejectFile(changesetId: string, fileId: string): Promise<FileChange> {
+  return request<FileChange>(`/changesets/${changesetId}/files/${fileId}/reject`, { method: 'POST' })
+}
+
+export function acceptAllChanges(changesetId: string): Promise<CodeChangeset> {
+  return request<CodeChangeset>(`/changesets/${changesetId}/accept-all`, { method: 'POST' })
+}
+
+export function rejectAllChanges(changesetId: string): Promise<CodeChangeset> {
+  return request<CodeChangeset>(`/changesets/${changesetId}/reject-all`, { method: 'POST' })
 }

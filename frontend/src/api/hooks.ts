@@ -1,5 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Graph, CreateProgramReq, PatchProgramReq, CreateCredentialReq } from '../types/index.ts'
+import type {
+  Graph,
+  CreateProgramReq,
+  PatchProgramReq,
+  CreateCredentialReq,
+  ConnectCodebaseReq,
+  WriteFileReq,
+} from '../types/index.ts'
 import {
   cancelRun,
   createCredential,
@@ -20,6 +27,19 @@ import {
   putSpec,
   resumeProgram,
   validateProgram,
+  fetchCodebases,
+  connectCodebase,
+  disconnectCodebase,
+  fetchFileTree,
+  refreshCodebase,
+  writeFile,
+  fetchProgramChangesets,
+  fetchRunChangesets,
+  fetchChangeset,
+  acceptFile,
+  rejectFile,
+  acceptAllChanges,
+  rejectAllChanges,
 } from './client.ts'
 
 // ---------------------------------------------------------------------------
@@ -252,4 +272,142 @@ export function useGraphInvalidation(programId: string) {
     void queryClient.invalidateQueries({ queryKey: programKeys.detail(programId) })
   }
   return { invalidateGraph }
+}
+
+// ---------------------------------------------------------------------------
+// Codebase (P2-M4) — EVA-74
+// ---------------------------------------------------------------------------
+
+export const codebaseKeys = {
+  list: (programId: string) => ['codebases', 'list', programId] as const,
+  tree: (codebaseId: string) => ['codebases', 'tree', codebaseId] as const,
+  diff: (codebaseId: string) => ['codebases', 'diff', codebaseId] as const,
+}
+
+export const changesetKeys = {
+  byProgram: (programId: string) => ['changesets', 'program', programId] as const,
+  byRun: (runId: string) => ['changesets', 'run', runId] as const,
+  detail: (id: string) => ['changesets', id] as const,
+}
+
+export function useCodebases(programId: string | null) {
+  return useQuery({
+    queryKey: codebaseKeys.list(programId ?? ''),
+    queryFn: () => fetchCodebases(programId!),
+    enabled: Boolean(programId),
+  })
+}
+
+export function useFileTree(codebaseId: string | null) {
+  return useQuery({
+    queryKey: codebaseKeys.tree(codebaseId ?? ''),
+    queryFn: () => fetchFileTree(codebaseId!),
+    enabled: Boolean(codebaseId),
+  })
+}
+
+export function useProgramChangesets(programId: string | null) {
+  return useQuery({
+    queryKey: changesetKeys.byProgram(programId ?? ''),
+    queryFn: () => fetchProgramChangesets(programId!),
+    enabled: Boolean(programId),
+  })
+}
+
+export function useRunChangesets(runId: string | null) {
+  return useQuery({
+    queryKey: changesetKeys.byRun(runId ?? ''),
+    queryFn: () => fetchRunChangesets(runId!),
+    enabled: Boolean(runId),
+  })
+}
+
+export function useChangeset(id: string | null) {
+  return useQuery({
+    queryKey: changesetKeys.detail(id ?? ''),
+    queryFn: () => fetchChangeset(id!),
+    enabled: Boolean(id),
+  })
+}
+
+export function useConnectCodebase(programId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: ConnectCodebaseReq) => connectCodebase(programId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: codebaseKeys.list(programId) })
+    },
+  })
+}
+
+export function useDisconnectCodebase(programId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (codebaseId: string) => disconnectCodebase(programId, codebaseId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: codebaseKeys.list(programId) })
+    },
+  })
+}
+
+export function useWriteFile(codebaseId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: WriteFileReq) => writeFile(codebaseId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: codebaseKeys.diff(codebaseId) })
+    },
+  })
+}
+
+export function useRefreshCodebase() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (codebaseId: string) => refreshCodebase(codebaseId),
+    onSuccess: (_data, codebaseId) => {
+      void queryClient.invalidateQueries({ queryKey: codebaseKeys.tree(codebaseId) })
+    },
+  })
+}
+
+export function useAcceptFile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ changesetId, fileId }: { changesetId: string; fileId: string }) =>
+      acceptFile(changesetId, fileId),
+    onSuccess: (_data, { changesetId }) => {
+      void queryClient.invalidateQueries({ queryKey: changesetKeys.detail(changesetId) })
+    },
+  })
+}
+
+export function useRejectFile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ changesetId, fileId }: { changesetId: string; fileId: string }) =>
+      rejectFile(changesetId, fileId),
+    onSuccess: (_data, { changesetId }) => {
+      void queryClient.invalidateQueries({ queryKey: changesetKeys.detail(changesetId) })
+    },
+  })
+}
+
+export function useAcceptAll() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (changesetId: string) => acceptAllChanges(changesetId),
+    onSuccess: (_data, changesetId) => {
+      void queryClient.invalidateQueries({ queryKey: changesetKeys.detail(changesetId) })
+    },
+  })
+}
+
+export function useRejectAll() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (changesetId: string) => rejectAllChanges(changesetId),
+    onSuccess: (_data, changesetId) => {
+      void queryClient.invalidateQueries({ queryKey: changesetKeys.detail(changesetId) })
+    },
+  })
 }
