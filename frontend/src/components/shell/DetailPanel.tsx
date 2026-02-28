@@ -5,10 +5,13 @@ import { EmptyPanel } from '../detail/EmptyPanel'
 import { EdgePanel } from '../detail/EdgePanel'
 import { NodePanel } from '../detail/NodePanel'
 import { KnowledgeEntryView } from '../detail/KnowledgeEntryView'
+import { AssistantPanel } from '../assistant/AssistantPanel'
 
 export function DetailPanel() {
   const width = useUiStore((s) => s.detailPanelWidth)
   const setDetailPanelWidth = useUiStore((s) => s.setDetailPanelWidth)
+  const detailPanelTab = useUiStore((s) => s.detailPanelTab)
+  const setDetailPanelTab = useUiStore((s) => s.setDetailPanelTab)
   const isDragging = useRef(false)
 
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId)
@@ -48,21 +51,28 @@ export function DetailPanel() {
         aria-hidden
       />
 
-      {/* Header */}
-      <div className="flex h-9 shrink-0 items-center border-b border-terminal-500 px-3">
-        <span className="font-display text-xs uppercase tracking-widest text-terminal-300">
-          {selectedKnowledgeEntryId
-            ? 'Knowledge Entry'
-            : selectedNodeId
-              ? 'Node'
-              : selectedEdgeId
-                ? 'Edge'
-                : 'Detail'}
-        </span>
+      {/* Tab bar — Inspector | MAGI */}
+      <div className="flex h-9 shrink-0 items-center border-b border-terminal-500 px-1">
+        {(['inspector', 'magi'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setDetailPanelTab(tab)}
+            className={[
+              'px-3 py-1 font-display text-xs uppercase tracking-widest transition-colors',
+              detailPanelTab === tab
+                ? 'border-b-2 border-at-field-500 text-terminal-50'
+                : 'text-terminal-300 hover:bg-terminal-700 hover:text-terminal-100',
+            ].join(' ')}
+          >
+            {tab === 'inspector' ? 'Inspector' : 'MAGI'}
+          </button>
+        ))}
       </div>
 
-      {/* Content — adapts to selection */}
-      {selectedKnowledgeEntryId ? (
+      {/* Content — tab-driven */}
+      {detailPanelTab === 'magi' ? (
+        <AssistantPanel />
+      ) : selectedKnowledgeEntryId ? (
         <KnowledgeEntryView entryId={selectedKnowledgeEntryId} />
       ) : selectedNodeId ? (
         <NodePanel />
