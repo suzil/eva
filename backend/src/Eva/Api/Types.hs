@@ -12,6 +12,8 @@ module Eva.Api.Types
   , SpecRequest (..)
   , ConnectCodebaseReq (..)
   , WriteFileReq (..)
+  , CreateKnowledgeEntryReq (..)
+  , PatchKnowledgeEntryReq (..)
 
     -- * Response bodies
   , HealthResponse (..)
@@ -31,6 +33,7 @@ import Data.Text (Text)
 
 import Eva.Core.Types (Run, Step, ValidationError (..), CredentialType (..), SystemType (..))
 import Eva.Declarative (ParseError)
+import Eva.Knowledge.Types (KnowledgeCategory (..))
 
 -- ---------------------------------------------------------------------------
 -- Request bodies
@@ -198,3 +201,33 @@ newtype GitDiffResponse = GitDiffResponse
 
 instance ToJSON GitDiffResponse where
   toJSON r = object ["files" .= gdrFiles r]
+
+-- ---------------------------------------------------------------------------
+-- Knowledge request bodies
+-- ---------------------------------------------------------------------------
+
+-- | Request body for POST /api/programs/:id/knowledge (create manual entry).
+data CreateKnowledgeEntryReq = CreateKnowledgeEntryReq
+  { ckerTitle    :: Text
+  , ckerContent  :: Text
+  , ckerCategory :: Maybe KnowledgeCategory
+  }
+
+instance FromJSON CreateKnowledgeEntryReq where
+  parseJSON = withObject "CreateKnowledgeEntryReq" $ \o ->
+    CreateKnowledgeEntryReq
+      <$> o .:  "title"
+      <*> o .:  "content"
+      <*> o .:? "category"
+
+-- | Request body for PATCH /api/knowledge/:entryId.
+data PatchKnowledgeEntryReq = PatchKnowledgeEntryReq
+  { pkerTitle   :: Maybe Text
+  , pkerContent :: Maybe Text
+  }
+
+instance FromJSON PatchKnowledgeEntryReq where
+  parseJSON = withObject "PatchKnowledgeEntryReq" $ \o ->
+    PatchKnowledgeEntryReq
+      <$> o .:? "title"
+      <*> o .:? "content"
