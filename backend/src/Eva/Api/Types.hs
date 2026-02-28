@@ -10,12 +10,16 @@ module Eva.Api.Types
   , CreateRunReq (..)
   , CreateCredentialReq (..)
   , SpecRequest (..)
+  , ConnectCodebaseReq (..)
+  , WriteFileReq (..)
 
     -- * Response bodies
   , HealthResponse (..)
   , ValidateResult (..)
   , RunDetail (..)
   , SpecResponse (..)
+  , GitDiffFile (..)
+  , GitDiffResponse (..)
 
     -- * Error response
   , ApiError (..)
@@ -147,3 +151,50 @@ newtype SpecError = SpecError
 
 instance ToJSON SpecError where
   toJSON e = object ["errors" .= seErrors e]
+
+-- ---------------------------------------------------------------------------
+-- Codebase request bodies
+-- ---------------------------------------------------------------------------
+
+-- | Request body for POST /api/programs/:id/codebase (connect a directory).
+newtype ConnectCodebaseReq = ConnectCodebaseReq
+  { ccrPath :: Text
+  }
+
+instance FromJSON ConnectCodebaseReq where
+  parseJSON = withObject "ConnectCodebaseReq" $ \o ->
+    ConnectCodebaseReq <$> o .: "path"
+
+-- | Request body for PUT /api/codebase/:cbId/file (write file content).
+data WriteFileReq = WriteFileReq
+  { wfrPath    :: Text
+  , wfrContent :: Text
+  }
+
+instance FromJSON WriteFileReq where
+  parseJSON = withObject "WriteFileReq" $ \o ->
+    WriteFileReq
+      <$> o .: "path"
+      <*> o .: "content"
+
+-- ---------------------------------------------------------------------------
+-- Codebase response bodies
+-- ---------------------------------------------------------------------------
+
+-- | A single changed file from git status --porcelain.
+-- 'gdfStatus' is the raw two-char git porcelain code (e.g. "M ", "??", " D").
+data GitDiffFile = GitDiffFile
+  { gdfStatus :: Text
+  , gdfPath   :: Text
+  }
+
+instance ToJSON GitDiffFile where
+  toJSON f = object ["status" .= gdfStatus f, "path" .= gdfPath f]
+
+-- | Response body for GET /api/codebase/:cbId/diff.
+newtype GitDiffResponse = GitDiffResponse
+  { gdrFiles :: [GitDiffFile]
+  }
+
+instance ToJSON GitDiffResponse where
+  toJSON r = object ["files" .= gdrFiles r]
