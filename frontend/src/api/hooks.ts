@@ -31,6 +31,7 @@ import {
   connectCodebase,
   disconnectCodebase,
   fetchFileTree,
+  fetchFile,
   refreshCodebase,
   writeFile,
   fetchProgramChangesets,
@@ -281,6 +282,7 @@ export function useGraphInvalidation(programId: string) {
 export const codebaseKeys = {
   list: (programId: string) => ['codebases', 'list', programId] as const,
   tree: (codebaseId: string) => ['codebases', 'tree', codebaseId] as const,
+  file: (codebaseId: string, path: string) => ['codebases', 'file', codebaseId, path] as const,
   diff: (codebaseId: string) => ['codebases', 'diff', codebaseId] as const,
 }
 
@@ -303,6 +305,14 @@ export function useFileTree(codebaseId: string | null) {
     queryKey: codebaseKeys.tree(codebaseId ?? ''),
     queryFn: () => fetchFileTree(codebaseId!),
     enabled: Boolean(codebaseId),
+  })
+}
+
+export function useFile(codebaseId: string | null, path: string | null) {
+  return useQuery({
+    queryKey: codebaseKeys.file(codebaseId ?? '', path ?? ''),
+    queryFn: () => fetchFile(codebaseId!, path!),
+    enabled: Boolean(codebaseId) && Boolean(path),
   })
 }
 

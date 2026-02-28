@@ -1,5 +1,6 @@
 import { type EditorTab, useUiStore } from '../../store/uiStore'
 import { ContentArea } from './ContentArea'
+import { CodeEditorView } from '../editor/CodeEditorView'
 import { SpecEditorView } from '../editor/SpecEditorView'
 
 const EDITOR_TABS: { key: EditorTab; label: string }[] = [
@@ -57,13 +58,7 @@ export function EditorTabs() {
       {/* Content */}
       <div className="flex flex-1 overflow-hidden">
         {activeTab === 'graph' && <ContentArea />}
-        {activeTab === 'code' && (
-          <div className="flex h-full w-full items-center justify-center">
-            <p className="font-display text-xs uppercase tracking-widest text-terminal-500">
-              Coming in P2-M4
-            </p>
-          </div>
-        )}
+        {activeTab === 'code' && <CodeEditorView />}
         {activeTab === 'spec' && <SpecEditorView />}
       </div>
     </div>
