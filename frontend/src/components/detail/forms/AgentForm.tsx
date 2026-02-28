@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { AlertTriangle, LayoutTemplate } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import type { AgentConfig, LLMProvider, ResponseFormat } from '../../../types'
+import { useCanvasStore } from '../../../store/canvasStore'
 import { TemplatePicker } from '../../assistant/TemplatePicker'
+import { VariableBindingPanel } from './VariableBindingPanel'
+import { PromptHints } from './PromptHints'
 
 const OPENAI_MODELS = [
   'gpt-4o',
@@ -24,16 +27,31 @@ const PROVIDER_LABELS: Record<LLMProvider, string> = {
 }
 
 interface Props {
+  nodeId: string
   config: AgentConfig
   onChange: (config: AgentConfig) => void
 }
 
-export function AgentForm({ config, onChange }: Props) {
+export function AgentForm({ nodeId, config, onChange }: Props) {
   const [tempTokens, setTempTokens] = useState(String(config.maxTokens ?? ''))
   const [tempCost, setTempCost] = useState(String(config.costBudgetUsd ?? ''))
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const update = (patch: Partial<AgentConfig>) => onChange({ ...config, ...patch })
+
+  // Derive connected knowledge/connector labels for PromptHints
+  const edges = useCanvasStore((s) => s.edges)
+  const nodes = useCanvasStore((s) => s.nodes)
+  const resourceEdges = edges.filter((e) => e.target === nodeId && e.type === 'resource')
+  const knowledgeLabels: string[] = []
+  const connectorLabels: string[] = []
+  for (const e of resourceEdges) {
+    const src = nodes.find((n) => n.id === e.source)
+    if (!src) continue
+    const t = src.data.nodeType.type
+    if (t === 'knowledge') knowledgeLabels.push(src.data.label)
+    if (t === 'connector') connectorLabels.push(src.data.label)
+  }
 
   const activeProvider: LLMProvider = config.provider ?? 'openai'
   const modelList = activeProvider === 'anthropic' ? ANTHROPIC_MODELS : OPENAI_MODELS
@@ -106,6 +124,14 @@ export function AgentForm({ config, onChange }: Props) {
         </div>
       </div>
 
+      <PromptHints
+        nodeId={nodeId}
+        systemPrompt={config.systemPrompt}
+        responseFormat={config.responseFormat}
+        knowledgeLabels={knowledgeLabels}
+        connectorLabels={connectorLabels}
+      />
+
       <div className="flex items-center justify-between">
         <SectionLabel>System Prompt</SectionLabel>
         <button
@@ -149,10 +175,14 @@ export function AgentForm({ config, onChange }: Props) {
         {!config.systemPrompt?.trim() && (
           <AtFieldWarning message="System prompt required for agent to run" />
         )}
-        <p className="mt-1 font-mono text-[10px] text-terminal-400">
-          Use {'{{portName}}'} to reference upstream port values.
-        </p>
       </div>
+
+      <VariableBindingPanel
+        nodeId={nodeId}
+        systemPrompt={config.systemPrompt}
+        bindings={config.promptVariableBindings ?? {}}
+        onChange={(promptVariableBindings) => update({ promptVariableBindings })}
+      />
 
       <SectionLabel>Parameters</SectionLabel>
 
