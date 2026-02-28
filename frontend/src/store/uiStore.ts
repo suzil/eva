@@ -5,7 +5,7 @@ export type { FileTab }
 
 export type ActivityKey = 'programs' | 'nodes' | 'knowledge' | 'runs' | 'codebase' | 'settings'
 export type AppMode = 'author' | 'operate'
-export type BottomTab = 'logs' | 'output' | 'timeline'
+export type BottomTab = 'logs' | 'output' | 'timeline' | 'changes'
 export type EditorTab = 'graph' | 'code' | 'spec'
 export type SpecSyncState = 'graph_source' | 'yaml_source' | 'conflict'
 

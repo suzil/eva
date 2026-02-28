@@ -5,6 +5,7 @@
 # Sources .env automatically if present (sets EVA_* vars for the backend).
 dev:
 	@set -a; [ -f .env ] && . ./.env || true; set +a; \
+	unset SOURCE_DATE_EPOCH; \
 	lsof -ti :$${EVA_PORT:-8080} | xargs kill -9 2>/dev/null || true; \
 	trap 'kill 0' INT; \
 	(cd backend && ghcid) & \
@@ -19,12 +20,12 @@ install:
 
 # Build backend and frontend.
 build:
-	cd backend && cabal build all
+	unset SOURCE_DATE_EPOCH && cd backend && cabal build all
 	cd frontend && npm run build
 
 # Run backend (cabal) and frontend (Vitest) test suites.
 test:
-	cd backend && cabal test all --test-show-details=direct
+	unset SOURCE_DATE_EPOCH && cd backend && cabal test all --test-show-details=direct
 	cd frontend && npm test
 
 # Seed the Weekly Project Summarizer demo program (backend must be running).
