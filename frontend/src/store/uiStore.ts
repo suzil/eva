@@ -109,11 +109,20 @@ export const useUiStore = create<UiState>((set) => ({
   setSpecDirty: (dirty) => set({ specDirty: dirty }),
   openFile: (tab) =>
     set((s) => {
-      const alreadyOpen = s.openFiles.some((f) => f.path === tab.path)
-      return {
-        openFiles: alreadyOpen ? s.openFiles : [...s.openFiles, tab],
-        activeFilePath: tab.path,
+      const existingIdx = s.openFiles.findIndex((f) => f.path === tab.path)
+      if (existingIdx !== -1) {
+        // Move to end (most-recently-used) without duplicating
+        const reordered = [
+          ...s.openFiles.slice(0, existingIdx),
+          ...s.openFiles.slice(existingIdx + 1),
+          s.openFiles[existingIdx],
+        ]
+        return { openFiles: reordered, activeFilePath: tab.path }
       }
+      const withNew = [...s.openFiles, tab]
+      // Evict LRU (first entry) when exceeding 8 open files
+      const trimmed = withNew.length > 8 ? withNew.slice(1) : withNew
+      return { openFiles: trimmed, activeFilePath: tab.path }
     }),
   closeFile: (path) =>
     set((s) => {
