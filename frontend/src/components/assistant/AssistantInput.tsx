@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUp } from 'lucide-react'
+import { ArrowUp, Paperclip } from 'lucide-react'
 import { SlashCommandMenu } from './SlashCommandMenu'
+import { TemplatePicker } from './TemplatePicker'
 
 interface AssistantInputProps {
   onSend: (text: string) => void
@@ -19,6 +20,7 @@ interface AssistantInputProps {
 export function AssistantInput({ onSend, disabled = false, initialValue, onInitialValueConsumed }: AssistantInputProps) {
   const [value, setValue] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // When a pre-fill value arrives (e.g. from GraphProposalCard Revise), populate and focus
@@ -90,6 +92,16 @@ export function AssistantInput({ onSend, disabled = false, initialValue, onIniti
 
   return (
     <div className="relative">
+      <TemplatePicker
+        open={templatePickerOpen}
+        onClose={() => setTemplatePickerOpen(false)}
+        onInsert={(body) => {
+          setValue(body)
+          setTemplatePickerOpen(false)
+          textareaRef.current?.focus()
+        }}
+      />
+
       {showSlashMenu && (
         <SlashCommandMenu
           query={slashQuery}
@@ -116,6 +128,17 @@ export function AssistantInput({ onSend, disabled = false, initialValue, onIniti
           placeholder={disabled ? 'MAGI is thinking…' : 'Ask MAGI or type /'}
           className="flex-1 resize-none bg-transparent text-sm text-terminal-100 placeholder-terminal-500 outline-none"
         />
+
+        <button
+          type="button"
+          onClick={() => setTemplatePickerOpen(true)}
+          disabled={disabled}
+          aria-label="Insert template"
+          title="Insert template"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-terminal-500 transition-colors hover:text-terminal-300 disabled:opacity-40"
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+        </button>
 
         <button
           type="button"
