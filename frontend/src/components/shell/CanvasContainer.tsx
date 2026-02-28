@@ -24,6 +24,7 @@ import type { EvaNodeData, NodeType } from '../../types'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useUiStore } from '../../store/uiStore'
 import { useProgram, useKnowledgeEntries, useRefreshKnowledge } from '../../api/hooks'
+import { GraphPreviewOverlay } from '../canvas/GraphPreviewOverlay'
 
 // ---------------------------------------------------------------------------
 // KnowledgeStalenessBar — shown when any entry scanned_at is >24h old
@@ -132,6 +133,7 @@ function CanvasInner() {
   const edges = useCanvasStore((s) => s.edges)
   const nodeStepStates = useCanvasStore((s) => s.nodeStepStates)
   const currentProgramId = useCanvasStore((s) => s.currentProgramId)
+  const previewOverlayGraph = useCanvasStore((s) => s.previewOverlayGraph)
   const loadGraph = useCanvasStore((s) => s.loadGraph)
   const applyNodes = useCanvasStore((s) => s.applyNodeChanges)
   const applyEdges = useCanvasStore((s) => s.applyEdgeChanges)
@@ -254,55 +256,60 @@ function CanvasInner() {
   return (
     <div className="relative flex flex-1 flex-col">
       {selectedProgramId && <KnowledgeStalenessBar programId={selectedProgramId} />}
-      <ReactFlow
-        proOptions={{ hideAttribution: true }}
-        nodes={nodes}
-        edges={animatedEdges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onNodesChange={isOperate ? undefined : onNodesChange}
-        onEdgesChange={isOperate ? undefined : onEdgesChange}
-        onConnect={isOperate ? undefined : onConnect}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
-        isValidConnection={isValidConnection}
-        onNodeClick={onNodeClick}
-        onNodeDragStart={isOperate ? undefined : onNodeDragStart}
-        onEdgeClick={onEdgeClick}
-        onPaneClick={onPaneClick}
-        nodesDraggable={!isOperate}
-        nodesConnectable={!isOperate}
-        edgesReconnectable={!isOperate}
-        deleteKeyCode={isOperate ? null : ['Backspace', 'Delete']}
-        fitView
-        fitViewOptions={{ padding: 0.3 }}
-        className="bg-terminal-850 eva-hex-grid"
-      >
-        <Controls />
-        <MiniMap
-          nodeColor={(node) => {
-            const typeKey = node.type ?? 'agent'
-            const colors: Record<string, string> = {
-              agent:     '#7B4AE2',
-              knowledge: '#00BBFF',
-              connector: '#FF8800',
-              action:    '#00DD44',
-              trigger:   '#FF3B3B',
-            }
-            return colors[typeKey] ?? '#4F5070'
-          }}
-          maskColor="rgba(10,11,18,0.7)"
-        />
-      </ReactFlow>
+      <div className={previewOverlayGraph ? 'opacity-30 pointer-events-none flex flex-1 flex-col' : 'flex flex-1 flex-col'}>
+        <ReactFlow
+          proOptions={{ hideAttribution: true }}
+          nodes={nodes}
+          edges={animatedEdges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onNodesChange={isOperate ? undefined : onNodesChange}
+          onEdgesChange={isOperate ? undefined : onEdgesChange}
+          onConnect={isOperate ? undefined : onConnect}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          isValidConnection={isValidConnection}
+          onNodeClick={onNodeClick}
+          onNodeDragStart={isOperate ? undefined : onNodeDragStart}
+          onEdgeClick={onEdgeClick}
+          onPaneClick={onPaneClick}
+          nodesDraggable={!isOperate}
+          nodesConnectable={!isOperate}
+          edgesReconnectable={!isOperate}
+          deleteKeyCode={isOperate ? null : ['Backspace', 'Delete']}
+          fitView
+          fitViewOptions={{ padding: 0.3 }}
+          className="bg-terminal-850 eva-hex-grid"
+        >
+          <Controls />
+          <MiniMap
+            nodeColor={(node) => {
+              const typeKey = node.type ?? 'agent'
+              const colors: Record<string, string> = {
+                agent:     '#7B4AE2',
+                knowledge: '#00BBFF',
+                connector: '#FF8800',
+                action:    '#00DD44',
+                trigger:   '#FF3B3B',
+              }
+              return colors[typeKey] ?? '#4F5070'
+            }}
+            maskColor="rgba(10,11,18,0.7)"
+          />
+        </ReactFlow>
 
-      {/* Empty canvas hint */}
-      {nodes.length === 0 && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="rounded-md border border-dashed border-gray-700 px-4 py-2 text-xs text-gray-500">
-            Drag a Trigger from the palette to start
-          </p>
-        </div>
-      )}
+        {/* Empty canvas hint */}
+        {nodes.length === 0 && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <p className="rounded-md border border-dashed border-gray-700 px-4 py-2 text-xs text-gray-500">
+              Drag a Trigger from the palette to start
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Graph preview overlay — shown when the assistant proposes a graph */}
+      <GraphPreviewOverlay />
     </div>
   )
 }

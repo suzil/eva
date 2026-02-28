@@ -82,6 +82,8 @@ interface CanvasState {
   buildGraph: () => Graph
 
   setPreviewOverlayGraph: (graph: Graph | null) => void
+  /** Mark the canvas as having unsaved changes (called after accepting a proposal via loadGraph). */
+  markDirty: () => void
   /** Apply a GraphDiff as a single undoable batch (snapshot → remove → add → modify). */
   applyGraphDiff: (diff: GraphDiff) => void
 }
@@ -308,6 +310,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   setPreviewOverlayGraph: (graph) => set({ previewOverlayGraph: graph }),
+  markDirty: () => set({ isDirty: true }),
 
   applyGraphDiff: (diff) => {
     get().snapshot()
