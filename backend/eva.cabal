@@ -24,6 +24,7 @@ library
     Eva.Codebase.Scanner
     Eva.Codebase.Api
     Eva.Knowledge.Types
+    Eva.Knowledge.Store
     Eva.Declarative
     Eva.Engine.Runner
     Eva.Engine.StateMachine
@@ -128,6 +129,7 @@ test-suite eva-test
     Eva.Codebase.ScannerSpec
     Eva.Codebase.ApiSpec
     Eva.Knowledge.TypesSpec
+    Eva.Knowledge.StoreSpec
     Eva.Integration.LinearSpec
     Eva.Engine.SchedulerSpec
   build-depends:
