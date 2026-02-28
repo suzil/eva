@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, LayoutTemplate } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import type { AgentConfig, LLMProvider, ResponseFormat } from '../../../types'
+import { TemplatePicker } from '../../assistant/TemplatePicker'
 
 const OPENAI_MODELS = [
   'gpt-4o',
@@ -30,6 +31,7 @@ interface Props {
 export function AgentForm({ config, onChange }: Props) {
   const [tempTokens, setTempTokens] = useState(String(config.maxTokens ?? ''))
   const [tempCost, setTempCost] = useState(String(config.costBudgetUsd ?? ''))
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const update = (patch: Partial<AgentConfig>) => onChange({ ...config, ...patch })
 
@@ -43,6 +45,14 @@ export function AgentForm({ config, onChange }: Props) {
 
   return (
     <div className="space-y-4">
+      <TemplatePicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onInsert={(body) => {
+          update({ systemPrompt: body })
+          setPickerOpen(false)
+        }}
+      />
       <SectionLabel>Model</SectionLabel>
 
       {/* Provider picker */}
@@ -96,7 +106,18 @@ export function AgentForm({ config, onChange }: Props) {
         </div>
       </div>
 
-      <SectionLabel>System Prompt</SectionLabel>
+      <div className="flex items-center justify-between">
+        <SectionLabel>System Prompt</SectionLabel>
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          title="Use a template"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-terminal-400 transition-colors duration-[150ms] hover:bg-terminal-700 hover:text-terminal-100"
+        >
+          <LayoutTemplate size={11} />
+          Templates
+        </button>
+      </div>
 
       {/* Monaco system prompt editor */}
       <div>

@@ -4,6 +4,7 @@ import { useUiStore } from '../../store/uiStore'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useKnowledgeEntries, useKnowledgeSearch } from '../../api/hooks'
 import type { KnowledgeEntry } from '../../types'
+import { TemplateLibrary } from './TemplateLibrary'
 
 // ---------------------------------------------------------------------------
 // Source badge config
@@ -312,12 +313,7 @@ export function KnowledgeLibrary() {
         ))}
       </div>
 
-      {activeSegment === 'templates' && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-1 p-4">
-          <p className="text-xs font-medium text-terminal-400">Templates</p>
-          <p className="text-center text-[10px] text-terminal-500">Coming in P2-M7</p>
-        </div>
-      )}
+      {activeSegment === 'templates' && <TemplateLibrary />}
 
       {activeSegment === 'knowledge' && !selectedProgramId && (
         <div className="flex flex-1 flex-col items-center justify-center gap-1 p-4">
