@@ -1,15 +1,18 @@
-import { CheckCircle, XCircle, GitMerge, Activity, AlertCircle } from 'lucide-react'
+import { CheckCircle, XCircle } from 'lucide-react'
 import type { AssistantMessage } from '../../types'
 import { useCanvasStore } from '../../store/canvasStore'
 import { NodeReferenceChip } from './NodeReferenceChip'
 import { GraphProposalCard } from './GraphProposalCard'
 import { GraphDiffCard } from './GraphDiffCard'
+import { ActionConfirmCard } from './ActionConfirmCard'
+import { RunDataCard } from './RunDataCard'
 
 interface MessageBubbleProps {
   message: AssistantMessage
+  programId?: string
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, programId }: MessageBubbleProps) {
   switch (message.type) {
     case 'user':
       return <UserBubble text={message.text} />
@@ -24,9 +27,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     case 'graph_diff':
       return <GraphDiffCard diff={message.diff} summary={message.summary} />
     case 'run_data':
-      return <StubCard icon={<Activity className="h-4 w-4" />} label="Run Data" detail={message.summary} />
+      return <RunDataCard runId={message.runId} summary={message.summary} detail={message.detail} />
     case 'action_confirm':
-      return <StubCard icon={<AlertCircle className="h-4 w-4" />} label={message.operation} detail={message.description} />
+      return (
+        <ActionConfirmCard
+          operation={message.operation}
+          description={message.description}
+          programId={programId ?? ''}
+        />
+      )
     default:
       return null
   }
@@ -89,26 +98,3 @@ function ActionResultBubble({ success, message }: { success: boolean; message: s
   )
 }
 
-// ---------------------------------------------------------------------------
-// Stub card — placeholder for rich variants (EVA-92, EVA-93, EVA-94)
-// ---------------------------------------------------------------------------
-
-function StubCard({
-  icon,
-  label,
-  detail,
-}: {
-  icon: React.ReactNode
-  label: string
-  detail: string
-}) {
-  return (
-    <div className="mx-3 rounded border border-terminal-600 bg-terminal-900 px-3 py-2">
-      <div className="mb-1 flex items-center gap-1.5 text-xs font-display uppercase tracking-widest text-terminal-400">
-        {icon}
-        {label}
-      </div>
-      <p className="text-xs text-terminal-300 whitespace-pre-wrap">{detail}</p>
-    </div>
-  )
-}
