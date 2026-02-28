@@ -11,6 +11,7 @@ export type SpecSyncState = 'graph_source' | 'yaml_source' | 'conflict'
 export type DetailPanelTab = 'inspector' | 'magi'
 
 const CONV_LS_KEY = 'eva:assistant:conversations'
+const MAX_CONVERSATION_MESSAGES = 50
 
 function loadConversations(): Record<ProgramId, ConversationThread> {
   try {
@@ -196,10 +197,8 @@ export const useUiStore = create<UiState>((set) => ({
         messages: [],
         isStreaming: false,
       }
-      const updated: ConversationThread = {
-        ...existing,
-        messages: [...existing.messages, message],
-      }
+      const trimmed = [...existing.messages, message].slice(-MAX_CONVERSATION_MESSAGES)
+      const updated: ConversationThread = { ...existing, messages: trimmed }
       const next = { ...s.assistantConversations, [programId]: updated }
       persistConversations(next)
       return { assistantConversations: next }

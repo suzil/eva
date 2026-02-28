@@ -3,6 +3,7 @@ import type { StepState } from '../../types'
 import { PortHandle, PortLabel } from './PortHandle'
 import type { PortDef } from './constants'
 import { STEP_STATE_RING, STEP_STATE_BADGE } from '../../constants/nodeConstants'
+import { useCanvasStore } from '../../store/canvasStore'
 
 interface BaseNodeProps {
   id: string
@@ -30,6 +31,7 @@ function nodeHeight(inputs: PortDef[], outputs: PortDef[]): number {
 }
 
 export function BaseNode({
+  id,
   label,
   subtitle,
   icon: Icon,
@@ -44,11 +46,14 @@ export function BaseNode({
   const inputTops = portTopPercents(inputs.length)
   const outputTops = portTopPercents(outputs.length)
 
+  const hoveredNodeId = useCanvasStore((s) => s.hoveredNodeId)
+
   const ringClass = stepState ? STEP_STATE_RING[stepState] : ''
   const badge = stepState ? STEP_STATE_BADGE[stepState] : undefined
   const skippedBorder = stepState === 'skipped' ? 'border-dashed' : 'border-solid'
 
   const selectionRing = selected && !stepState ? 'ring-2 ring-at-field-500/40' : ''
+  const hoverRing = id === hoveredNodeId && !selected && !stepState ? 'ring-2 ring-at-field-500/20' : ''
 
   return (
     <div
@@ -57,6 +62,7 @@ export function BaseNode({
         skippedBorder,
         ringClass,
         selectionRing,
+        hoverRing,
       ]
         .filter(Boolean)
         .join(' ')}
