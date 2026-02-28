@@ -36,6 +36,19 @@ module Eva.Persistence.Queries
   , listCredentials
   , deleteCredential
   , getDecryptedCredential
+
+    -- * Codebases
+  , insertCodebase
+  , getCodebase
+  , listCodebasesForProgram
+  , deleteCodebase
+
+    -- * Changesets
+  , listChangesetsForProgram
+  , listChangesetsForRun
+  , getChangeset
+  , updateFileChangeStatus
+  , updateChangesetStatus
   ) where
 
 import Control.Monad (forM_)
@@ -64,11 +77,13 @@ import Database.Persist.Sql
   , update
   , (=.)
   , (==.)
+  , (<-.)
   )
 
 import Data.ByteString (ByteString)
 
 import Eva.App (AppEnv (..), AppM)
+import Eva.Codebase.Types
 import Eva.Core.Types
 import qualified Eva.Crypto as Crypto
 import Eva.Persistence.Schema
@@ -525,3 +540,137 @@ getDecryptedCredential cid = do
   case mRow of
     Nothing  -> pure $ Left $ "credential not found: " <> T.unpack (let CredentialId t = cid in t)
     Just row -> pure $ Crypto.decrypt credKey (credentialRowEncryptedData row)
+
+-- ---------------------------------------------------------------------------
+-- Codebase ID helpers
+-- ---------------------------------------------------------------------------
+
+toCodebaseRowId :: CodebaseId -> CodebaseRowId
+toCodebaseRowId (CodebaseId t) = CodebaseRowKey t
+
+fromCodebaseRowId :: CodebaseRowId -> CodebaseId
+fromCodebaseRowId (CodebaseRowKey t) = CodebaseId t
+
+toCodeChangesetRowId :: CodeChangesetId -> CodeChangesetRowId
+toCodeChangesetRowId (CodeChangesetId t) = CodeChangesetRowKey t
+
+fromCodeChangesetRowId :: CodeChangesetRowId -> CodeChangesetId
+fromCodeChangesetRowId (CodeChangesetRowKey t) = CodeChangesetId t
+
+toCodeFileChangeRowId :: FileChangeId -> CodeFileChangeRowId
+toCodeFileChangeRowId (FileChangeId t) = CodeFileChangeRowKey t
+
+fromCodeFileChangeRowId :: CodeFileChangeRowId -> FileChangeId
+fromCodeFileChangeRowId (CodeFileChangeRowKey t) = FileChangeId t
+
+-- ---------------------------------------------------------------------------
+-- Codebase row converters
+-- ---------------------------------------------------------------------------
+
+fileChangeFromRow :: Entity CodeFileChangeRow -> Either String FileChange
+fileChangeFromRow (Entity k row) = do
+  action <- decodeState (codeFileChangeRowAction row)
+  status <- decodeState (codeFileChangeRowStatus row)
+  pure FileChange
+    { fileChangeId              = fromCodeFileChangeRowId k
+    , fileChangeChangesetId     = fromCodeChangesetRowId (codeFileChangeRowChangesetId row)
+    , fileChangePath            = codeFileChangeRowPath row
+    , fileChangeAction          = action
+    , fileChangeOriginalContent = codeFileChangeRowOriginalContent row
+    , fileChangeProposedContent = codeFileChangeRowProposedContent row
+    , fileChangeStatus          = status
+    }
+
+changesetFromRows :: Entity CodeChangesetRow -> [Entity CodeFileChangeRow] -> Either String CodeChangeset
+changesetFromRows (Entity k row) fileRows = do
+  status <- decodeState (codeChangesetRowStatus row)
+  files  <- traverse fileChangeFromRow fileRows
+  pure CodeChangeset
+    { codeChangesetId        = fromCodeChangesetRowId k
+    , codeChangesetRunId     = fromRunRowId (codeChangesetRowRunId row)
+    , codeChangesetStepId    = fromStepRowId (codeChangesetRowStepId row)
+    , codeChangesetStatus    = status
+    , codeChangesetFiles     = files
+    , codeChangesetCreatedAt = codeChangesetRowCreatedAt row
+    }
+
+-- ---------------------------------------------------------------------------
+-- Codebases
+-- ---------------------------------------------------------------------------
+
+insertCodebase :: CodebaseId -> ProgramId -> Text -> UTCTime -> AppM ()
+insertCodebase cbId pid path now = runDb $
+  insertKey (toCodebaseRowId cbId) CodebaseRow
+    { codebaseRowProgramId = toProgramRowId pid
+    , codebaseRowPath      = path
+    , codebaseRowCreatedAt = now
+    }
+
+getCodebase :: CodebaseId -> AppM (Maybe (CodebaseId, ProgramId, Text, UTCTime))
+getCodebase cbId = runDb $ do
+  mRow <- get (toCodebaseRowId cbId)
+  pure $ fmap (\row -> ( cbId
+                        , fromProgramRowId (codebaseRowProgramId row)
+                        , codebaseRowPath row
+                        , codebaseRowCreatedAt row
+                        )) mRow
+
+listCodebasesForProgram :: ProgramId -> AppM [(CodebaseId, Text, UTCTime)]
+listCodebasesForProgram pid = runDb $ do
+  entities <- selectList [CodebaseRowProgramId ==. toProgramRowId pid] [Asc CodebaseRowCreatedAt]
+  pure $ map (\(Entity k row) -> (fromCodebaseRowId k, codebaseRowPath row, codebaseRowCreatedAt row)) entities
+
+deleteCodebase :: CodebaseId -> AppM ()
+deleteCodebase cbId = runDb $ delete (toCodebaseRowId cbId)
+
+-- ---------------------------------------------------------------------------
+-- Changesets
+-- ---------------------------------------------------------------------------
+
+listChangesetsForProgram :: ProgramId -> AppM [CodeChangeset]
+listChangesetsForProgram pid = runDb $ do
+  runEntities <- selectList [RunRowProgramId ==. toProgramRowId pid] []
+  let runKeys = map (\(Entity k _) -> k) runEntities
+  changesetEntities <- selectList [CodeChangesetRowRunId <-. runKeys] [Asc CodeChangesetRowCreatedAt]
+  traverse fetchChangeset changesetEntities
+  where
+    fetchChangeset csEntity@(Entity csKey _) = do
+      fileRows <- selectList [CodeFileChangeRowChangesetId ==. csKey] []
+      case changesetFromRows csEntity fileRows of
+        Left err -> fail $ "listChangesetsForProgram: " <> err
+        Right cs -> pure cs
+
+listChangesetsForRun :: RunId -> AppM [CodeChangeset]
+listChangesetsForRun rid = runDb $ do
+  changesetEntities <- selectList
+    [CodeChangesetRowRunId ==. toRunRowId rid]
+    [Asc CodeChangesetRowCreatedAt]
+  traverse fetchChangeset changesetEntities
+  where
+    fetchChangeset csEntity@(Entity csKey _) = do
+      fileRows <- selectList [CodeFileChangeRowChangesetId ==. csKey] []
+      case changesetFromRows csEntity fileRows of
+        Left err -> fail $ "listChangesetsForRun: " <> err
+        Right cs -> pure cs
+
+getChangeset :: CodeChangesetId -> AppM (Maybe CodeChangeset)
+getChangeset csId = runDb $ do
+  mRow <- get (toCodeChangesetRowId csId)
+  case mRow of
+    Nothing  -> pure Nothing
+    Just row -> do
+      let csKey = toCodeChangesetRowId csId
+      fileRows <- selectList [CodeFileChangeRowChangesetId ==. csKey] []
+      case changesetFromRows (Entity csKey row) fileRows of
+        Left err -> fail $ "getChangeset: " <> err
+        Right cs -> pure (Just cs)
+
+updateFileChangeStatus :: FileChangeId -> FileChangeStatus -> AppM ()
+updateFileChangeStatus fcId status = runDb $
+  update (toCodeFileChangeRowId fcId)
+    [CodeFileChangeRowStatus =. encodeState status]
+
+updateChangesetStatus :: CodeChangesetId -> CodeChangesetStatus -> AppM ()
+updateChangesetStatus csId status = runDb $
+  update (toCodeChangesetRowId csId)
+    [CodeChangesetRowStatus =. encodeState status]

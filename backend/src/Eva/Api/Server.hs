@@ -44,6 +44,14 @@ import qualified Data.Text.Encoding as TE
 
 import Eva.Api.Types
 import Eva.Api.WebSocket (wsServerApp)
+import Eva.Codebase.Api
+  ( ChangesetAPI
+  , CodebaseByIdAPI
+  , CodebaseByProgramAPI
+  , changesetHandlers
+  , codebaseByIdHandlers
+  , codebaseByProgramHandlers
+  )
 import Eva.Declarative (ParseError (..), graphToYaml, yamlToGraph)
 import Eva.App (AppEnv (..), AppM, runAppM)
 import Eva.Config (configStaticDir)
@@ -58,7 +66,14 @@ import Eva.Persistence.Queries
 -- API type
 -- ---------------------------------------------------------------------------
 
-type EvaAPI = HealthAPI :<|> ProgramsAPI :<|> RunsAPI :<|> CredentialsAPI
+type EvaAPI =
+       HealthAPI
+  :<|> ProgramsAPI
+  :<|> RunsAPI
+  :<|> CredentialsAPI
+  :<|> CodebaseByProgramAPI
+  :<|> CodebaseByIdAPI
+  :<|> ChangesetAPI
 
 type HealthAPI =
   "api" :> "health" :> Get '[JSON] HealthResponse
@@ -169,6 +184,9 @@ evaHandlers env =
   :<|> programsHandlers env
   :<|> runsHandlers env
   :<|> credentialsHandlers env
+  :<|> codebaseByProgramHandlers env
+  :<|> codebaseByIdHandlers env
+  :<|> changesetHandlers env
 
 healthHandler :: Handler HealthResponse
 healthHandler = pure (HealthResponse "ok")
