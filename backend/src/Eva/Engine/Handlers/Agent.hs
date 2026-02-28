@@ -106,7 +106,23 @@ handleAgent rid node inputs bindings = do
   -- 7. Assemble initial chat messages.
   --    Connector failure instruction is appended when connector tools are present.
   --    Auto-knowledge context is appended to the system prompt (step 4 above).
-  --    promptVariableBindings (EVA-99) will supply real bindings; for now use empty map.
+  --    promptVariableBindings supplies {{variable}} substitutions for the system prompt.
+  resolvedBindings <- case agentPromptVariableBindings cfg of
+    Nothing   -> pure Map.empty
+    Just pvbs -> do
+      let (resolved, missing) =
+            Map.foldrWithKey collectBinding (Map.empty, []) pvbs
+          collectBinding varName (LiteralBinding val) (acc, ms) =
+            (Map.insert varName val acc, ms)
+          collectBinding varName (PortBinding portId) (acc, ms) =
+            case Map.lookup (PortName portId) inputs of
+              Just msg -> (Map.insert varName (extractText (msgPayload msg)) acc, ms)
+              Nothing  -> (acc, varName : ms)
+      case missing of
+        [] -> pure ()
+        ms -> logMsg LogWarn $
+          "promptVariableBindings: no data on port(s) for variable(s): " <> T.intercalate ", " ms
+      pure resolved
   let connectorInstructions =
         "\n\nIf a connector tool returns an error and you cannot complete the " <>
         "task (e.g. authentication failure, service unavailable), respond with " <>
@@ -114,7 +130,7 @@ handleAgent rid node inputs bindings = do
       rawSystemPrompt = agentSystemPrompt cfg
         <> autoContextSection
         <> if null connectorTools then "" else connectorInstructions
-      (systemPrompt, unresolvedVars) = resolveTemplate rawSystemPrompt Map.empty
+      (systemPrompt, unresolvedVars) = resolveTemplate rawSystemPrompt resolvedBindings
       instructionText = extractText (msgPayload instructionMsg)
       userContent     = instructionText <> contextSection
       initMessages    =

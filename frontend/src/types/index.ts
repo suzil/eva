@@ -87,6 +87,12 @@ export type BackoffStrategy =
 
 export type LLMProvider = 'openai' | 'anthropic'
 
+export interface PromptVariableBinding {
+  source: 'port' | 'literal'
+  portId?: string
+  value?: string
+}
+
 // AgentConfig: dropPrefix "agent" -> strip "agent" prefix
 export interface AgentConfig {
   provider?: LLMProvider
@@ -97,6 +103,7 @@ export interface AgentConfig {
   maxTokens?: number
   maxIterations: number
   costBudgetUsd?: number
+  promptVariableBindings?: Record<string, PromptVariableBinding>
 }
 
 // KnowledgeConfig: dropPrefix "knowledge"

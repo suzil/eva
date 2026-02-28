@@ -153,6 +153,12 @@ instance Arbitrary BackoffStrategy where
 -- Arbitrary instances — node config types
 -- ---------------------------------------------------------------------------
 
+instance Arbitrary PromptVariableBinding where
+  arbitrary = oneof
+    [ PortBinding    <$> arbitraryText
+    , LiteralBinding <$> arbitraryText
+    ]
+
 instance Arbitrary AgentConfig where
   arbitrary =
     AgentConfig
@@ -165,6 +171,7 @@ instance Arbitrary AgentConfig where
       <*> choose (1, 10)
       <*> oneof [pure Nothing, Just <$> choose (0.01, 10.0)]
       <*> oneof [pure Nothing, Just <$> arbitrary]
+      <*> oneof [pure Nothing, Just <$> (Map.fromList <$> listOf ((,) <$> arbitraryText <*> arbitrary))]
 
 instance Arbitrary KnowledgeConfig where
   arbitrary = KnowledgeConfig <$> arbitrary <*> arbitrary <*> arbitrary
@@ -356,15 +363,16 @@ sampleProgram =
                       , nodeType =
                           AgentNode
                             AgentConfig
-                              { agentProvider = Nothing
-                              , agentModel = "gpt-4o"
-                              , agentSystemPrompt = "Summarize the sprint progress."
-                              , agentResponseFormat = ResponseText
-                              , agentTemperature = 0.7
-                              , agentMaxTokens = Just 1024
-                              , agentMaxIterations = 5
-                              , agentCostBudgetUsd = Just 0.5
-                              , agentRetryPolicy = Nothing
+                              { agentProvider               = Nothing
+                              , agentModel                  = "gpt-4o"
+                              , agentSystemPrompt           = "Summarize the sprint progress."
+                              , agentResponseFormat         = ResponseText
+                              , agentTemperature            = 0.7
+                              , agentMaxTokens              = Just 1024
+                              , agentMaxIterations          = 5
+                              , agentCostBudgetUsd          = Just 0.5
+                              , agentRetryPolicy            = Nothing
+                              , agentPromptVariableBindings = Nothing
                               }
                       , nodePosX = 550
                       , nodePosY = 200
@@ -426,6 +434,7 @@ spec = describe "Eva.Core.Types" $ do
     it "ErrorHandlingMode" $ property $ roundtrip @ErrorHandlingMode
     it "TriggerType" $ property $ roundtrip @TriggerType
     it "BackoffStrategy" $ property $ roundtrip @BackoffStrategy
+    it "PromptVariableBinding" $ property $ roundtrip @PromptVariableBinding
 
   describe "JSON roundtrip — node config types" $ do
     it "AgentConfig" $ property $ roundtrip @AgentConfig

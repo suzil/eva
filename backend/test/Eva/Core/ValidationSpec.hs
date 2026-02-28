@@ -71,10 +71,11 @@ mkAgent model prompt =
       , agentSystemPrompt   = prompt
       , agentResponseFormat = ResponseText
       , agentTemperature    = 0.7
-      , agentMaxTokens      = Nothing
-      , agentMaxIterations  = 3
-      , agentCostBudgetUsd  = Nothing
-      , agentRetryPolicy    = Nothing
+      , agentMaxTokens              = Nothing
+      , agentMaxIterations          = 3
+      , agentCostBudgetUsd          = Nothing
+      , agentRetryPolicy            = Nothing
+      , agentPromptVariableBindings = Nothing
       }
 
 mkAction :: NodeType

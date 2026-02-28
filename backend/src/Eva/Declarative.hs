@@ -322,15 +322,16 @@ parseAgentConfig pairs = do
   costBudgetUsd <- optField $ lookupDouble "costBudgetUsd" pairs
   retryPolicy   <- optField $ lookupMappingPairs "retryPolicy" pairs >>= parseRetryPolicy
   pure $ AgentConfig
-    { agentProvider       = provider
-    , agentModel          = model
-    , agentSystemPrompt   = systemPrompt
-    , agentResponseFormat = responseFormat
-    , agentTemperature    = temperature
-    , agentMaxTokens      = maxTokens
-    , agentMaxIterations  = maxIterations
-    , agentCostBudgetUsd  = costBudgetUsd
-    , agentRetryPolicy    = retryPolicy
+    { agentProvider               = provider
+    , agentModel                  = model
+    , agentSystemPrompt           = systemPrompt
+    , agentResponseFormat         = responseFormat
+    , agentTemperature            = temperature
+    , agentMaxTokens              = maxTokens
+    , agentMaxIterations          = maxIterations
+    , agentCostBudgetUsd          = costBudgetUsd
+    , agentRetryPolicy            = retryPolicy
+    , agentPromptVariableBindings = Nothing
     }
 
 parseKnowledgeConfig :: Pairs -> Either [ParseError] KnowledgeConfig

@@ -42,15 +42,16 @@ testRunId = RunId "test-run-001"
 
 agentCfg :: AgentConfig
 agentCfg = AgentConfig
-  { agentProvider       = Nothing
-  , agentModel          = "gpt-4o"
-  , agentSystemPrompt   = "You are a helpful assistant."
-  , agentResponseFormat = ResponseText
-  , agentTemperature    = 0.7
-  , agentMaxTokens      = Nothing
-  , agentMaxIterations  = 1
-  , agentCostBudgetUsd  = Nothing
-  , agentRetryPolicy    = Nothing
+  { agentProvider                = Nothing
+  , agentModel                   = "gpt-4o"
+  , agentSystemPrompt            = "You are a helpful assistant."
+  , agentResponseFormat          = ResponseText
+  , agentTemperature             = 0.7
+  , agentMaxTokens               = Nothing
+  , agentMaxIterations           = 1
+  , agentCostBudgetUsd           = Nothing
+  , agentRetryPolicy             = Nothing
+  , agentPromptVariableBindings  = Nothing
   }
 
 agentNode :: NodeId -> Node
@@ -266,6 +267,69 @@ spec = do
             T.unpack (chatContent userMsg) `shouldContain`    "Only this"
             T.unpack (chatContent userMsg) `shouldNotContain` "/some/file.txt"
             T.unpack (chatContent userMsg) `shouldNotContain` "https://example.com"
+
+  -- -------------------------------------------------------------------------
+  -- promptVariableBindings (EVA-99)
+  -- -------------------------------------------------------------------------
+
+  describe "promptVariableBindings" $ do
+
+    it "literal binding resolves {{variable}} in the system prompt" $ do
+      ref <- newIORef Nothing
+      let cfg' = agentCfg
+            { agentSystemPrompt           = "You are an assistant. Greeting: {{greeting}}"
+            , agentPromptVariableBindings = Just (Map.fromList [("greeting", LiteralBinding "Hello, world!")])
+            }
+          node' = (agentNode (NodeId "pvb-1")) { nodeType = AgentNode cfg' }
+          inputs = Map.fromList [("instruction", instructionMsg)]
+      withTestEnv (capturingLLMClient ref "ok") $ \env -> do
+        _ <- runAppM env $ handleAgent testRunId node' inputs emptyBindings
+        mReq <- readIORef ref
+        case mReq of
+          Nothing  -> expectationFailure "LLM client was never called"
+          Just req -> do
+            let sysMsg = head (llmMessages req)
+            T.unpack (chatContent sysMsg) `shouldContain` "Hello, world!"
+            T.unpack (chatContent sysMsg) `shouldNotContain` "{{greeting}}"
+
+    it "port binding resolves {{variable}} from an input port message" $ do
+      ref <- newIORef Nothing
+      let codeMsg = instructionMsg { msgPayload = Aeson.String "fn foo() {}" }
+          cfg' = agentCfg
+            { agentSystemPrompt           = "Review this code: {{code}}"
+            , agentPromptVariableBindings = Just (Map.fromList [("code", PortBinding "data_port")])
+            }
+          node' = (agentNode (NodeId "pvb-2")) { nodeType = AgentNode cfg' }
+          inputs = Map.fromList
+            [ ("instruction", instructionMsg)
+            , ("data_port",   codeMsg)
+            ]
+      withTestEnv (capturingLLMClient ref "ok") $ \env -> do
+        _ <- runAppM env $ handleAgent testRunId node' inputs emptyBindings
+        mReq <- readIORef ref
+        case mReq of
+          Nothing  -> expectationFailure "LLM client was never called"
+          Just req -> do
+            let sysMsg = head (llmMessages req)
+            T.unpack (chatContent sysMsg) `shouldContain` "fn foo() {}"
+            T.unpack (chatContent sysMsg) `shouldNotContain` "{{code}}"
+
+    it "unresolvable port binding leaves {{variable}} unreplaced in system prompt" $ do
+      ref <- newIORef Nothing
+      let cfg' = agentCfg
+            { agentSystemPrompt           = "Analyse: {{missing_var}}"
+            , agentPromptVariableBindings = Just (Map.fromList [("missing_var", PortBinding "no_such_port")])
+            }
+          node' = (agentNode (NodeId "pvb-3")) { nodeType = AgentNode cfg' }
+          inputs = Map.fromList [("instruction", instructionMsg)]
+      withTestEnv (capturingLLMClient ref "ok") $ \env -> do
+        _ <- runAppM env $ handleAgent testRunId node' inputs emptyBindings
+        mReq <- readIORef ref
+        case mReq of
+          Nothing  -> expectationFailure "LLM client was never called"
+          Just req -> do
+            let sysMsg = head (llmMessages req)
+            T.unpack (chatContent sysMsg) `shouldContain` "{{missing_var}}"
 
   -- -------------------------------------------------------------------------
   -- Tool-call loop (EVA-33)

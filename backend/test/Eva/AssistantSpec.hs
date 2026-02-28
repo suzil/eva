@@ -88,10 +88,11 @@ noTriggerGraph = Graph
                 , agentSystemPrompt   = "Be helpful."
                 , agentResponseFormat = ResponseText
                 , agentTemperature    = 0.7
-                , agentMaxTokens      = Nothing
-                , agentMaxIterations  = 3
-                , agentCostBudgetUsd  = Nothing
-                , agentRetryPolicy    = Nothing
+                , agentMaxTokens              = Nothing
+                , agentMaxIterations          = 3
+                , agentCostBudgetUsd          = Nothing
+                , agentRetryPolicy            = Nothing
+                , agentPromptVariableBindings = Nothing
                 }
             , nodePosX  = 0
             , nodePosY  = 0
