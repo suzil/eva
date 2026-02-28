@@ -48,6 +48,9 @@ interface CanvasState {
   /** Proposed graph from the assistant — rendered by GraphPreviewOverlay. Null when not in preview mode. */
   previewOverlayGraph: Graph | null
 
+  /** Node id currently hovered via a NodeReferenceChip in the AssistantPanel. Null when no chip is hovered. */
+  hoveredNodeId: string | null
+
   loadGraph: (graph: Graph, programId: string) => void
   applyNodeChanges: (changes: NodeChange<Node<EvaNodeData>>[]) => void
   applyEdgeChanges: (changes: EdgeChange[]) => void
@@ -84,6 +87,7 @@ interface CanvasState {
   setPreviewOverlayGraph: (graph: Graph | null) => void
   /** Mark the canvas as having unsaved changes (called after accepting a proposal via loadGraph). */
   markDirty: () => void
+  setHoveredNodeId: (id: string | null) => void
   /** Apply a GraphDiff as a single undoable batch (snapshot → remove → add → modify). */
   applyGraphDiff: (diff: GraphDiff) => void
 }
@@ -101,6 +105,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   future: [],
   triggerFitView: false,
   previewOverlayGraph: null,
+  hoveredNodeId: null,
 
   loadGraph: (graph, programId) => {
     const nodes: Node<EvaNodeData>[] = Object.values(graph.nodes).map((n) => ({
@@ -311,6 +316,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   setPreviewOverlayGraph: (graph) => set({ previewOverlayGraph: graph }),
   markDirty: () => set({ isDirty: true }),
+  setHoveredNodeId: (id) => set({ hoveredNodeId: id }),
 
   applyGraphDiff: (diff) => {
     get().snapshot()
