@@ -52,6 +52,12 @@ import Eva.Codebase.Api
   , codebaseByIdHandlers
   , codebaseByProgramHandlers
   )
+import Eva.Knowledge.Api
+  ( KnowledgeByIdAPI
+  , KnowledgeByProgramAPI
+  , knowledgeByIdHandlers
+  , knowledgeByProgramHandlers
+  )
 import Eva.Declarative (ParseError (..), graphToYaml, yamlToGraph)
 import Eva.App (AppEnv (..), AppM, runAppM)
 import Eva.Config (configStaticDir)
@@ -74,6 +80,8 @@ type EvaAPI =
   :<|> CodebaseByProgramAPI
   :<|> CodebaseByIdAPI
   :<|> ChangesetAPI
+  :<|> KnowledgeByProgramAPI
+  :<|> KnowledgeByIdAPI
 
 type HealthAPI =
   "api" :> "health" :> Get '[JSON] HealthResponse
@@ -187,6 +195,8 @@ evaHandlers env =
   :<|> codebaseByProgramHandlers env
   :<|> codebaseByIdHandlers env
   :<|> changesetHandlers env
+  :<|> knowledgeByProgramHandlers env
+  :<|> knowledgeByIdHandlers env
 
 healthHandler :: Handler HealthResponse
 healthHandler = pure (HealthResponse "ok")
