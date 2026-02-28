@@ -354,3 +354,97 @@ export type WsEvent =
   | { type: 'log_entry'; runId: RunId; stepId: StepId; level: LogLevel; message: string; timestamp: string }
   | { type: 'run_state'; runId: RunId; state: RunState; timestamp: string }
   | { type: 'tool_call'; runId: RunId; nodeId: NodeId; phase: 'invoke' | 'result'; data: Record<string, unknown>; timestamp: string }
+
+// ---------------------------------------------------------------------------
+// Codebase integration (P2-M4) — EVA-74
+// ---------------------------------------------------------------------------
+
+export type CodebaseId = string
+export type CodeChangesetId = string
+export type FileChangeId = string
+
+// Mirrors Haskell CodeChangesetStatus constructors stripped of "Changeset" prefix + lowercased
+export type CodeChangesetStatus = 'pending' | 'applied' | 'rejected'
+
+// Mirrors Haskell FileChangeAction constructors stripped of "FileAction" prefix + lowercased
+export type FileChangeAction = 'add' | 'modify' | 'delete'
+
+// Mirrors Haskell FileChangeStatus constructors stripped of "FileChange" prefix + lowercased
+export type FileChangeStatus = 'pending' | 'accepted' | 'rejected'
+
+// Map Text Int → JSON object keyed by file extension
+export type LangStats = Record<string, number>
+
+// FileNode: dropPrefix "fileNode"
+export interface FileNode {
+  name: string
+  path: string
+  isDir: boolean
+  children: FileNode[]
+  size?: number
+}
+
+// FileEntry: dropPrefix "fileEntry"
+export interface FileEntry {
+  path: string
+  language: string
+  content: string
+  size: number
+}
+
+// CodebaseMetadata: dropPrefix "codebaseMeta"
+export interface CodebaseMetadata {
+  id: CodebaseId
+  programId: ProgramId
+  path: string
+  languageStats: LangStats
+  keyFiles: string[]
+  gitBranch?: string
+  gitDirty: boolean
+  lastScannedAt: string
+}
+
+// CodeChangeset: dropPrefix "codeChangeset"
+export interface CodeChangeset {
+  id: CodeChangesetId
+  runId: RunId
+  stepId: StepId
+  status: CodeChangesetStatus
+  files: FileChange[]
+  createdAt: string
+}
+
+// FileChange: dropPrefix "fileChange"
+export interface FileChange {
+  id: FileChangeId
+  changesetId: CodeChangesetId
+  path: string
+  action: FileChangeAction
+  originalContent?: string
+  proposedContent: string
+  status: FileChangeStatus
+}
+
+export interface ConnectCodebaseReq {
+  path: string
+}
+
+export interface WriteFileReq {
+  path: string
+  content: string
+}
+
+export interface GitDiffFile {
+  status: string
+  path: string
+}
+
+export interface GitDiffResponse {
+  files: GitDiffFile[]
+}
+
+// FileTab represents an open file in the code editor — used by uiStore
+export interface FileTab {
+  codebaseId: CodebaseId
+  path: string
+}

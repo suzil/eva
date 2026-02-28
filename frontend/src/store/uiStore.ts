@@ -1,5 +1,7 @@
 import { create } from 'zustand'
-import type { LogEntry, RunId } from '../types'
+import type { LogEntry, RunId, FileTab } from '../types'
+
+export type { FileTab }
 
 export type ActivityKey = 'programs' | 'nodes' | 'knowledge' | 'runs' | 'settings'
 export type AppMode = 'author' | 'operate'
@@ -29,6 +31,12 @@ interface UiState {
   activeEditorTab: EditorTab
   specSyncState: SpecSyncState
   specDirty: boolean
+  /** Files currently open in the CODE tab editor. */
+  openFiles: FileTab[]
+  /** Path of the file currently visible in the CODE tab editor. */
+  activeFilePath: string | null
+  /** The codebase currently selected in the CodebasePanel. */
+  activeCodebaseId: string | null
 
   setActiveActivity: (activity: ActivityKey) => void
   setMode: (mode: AppMode) => void
@@ -51,6 +59,12 @@ interface UiState {
   setActiveEditorTab: (tab: EditorTab) => void
   setSpecSyncState: (state: SpecSyncState) => void
   setSpecDirty: (dirty: boolean) => void
+  /** Open a file in the CODE editor; brings it to front if already open. */
+  openFile: (tab: FileTab) => void
+  /** Close a file tab; adjusts activeFilePath to the last remaining tab or null. */
+  closeFile: (path: string) => void
+  setActiveFilePath: (path: string | null) => void
+  setActiveCodebaseId: (id: string | null) => void
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -70,6 +84,9 @@ export const useUiStore = create<UiState>((set) => ({
   activeEditorTab: 'graph',
   specSyncState: 'graph_source',
   specDirty: false,
+  openFiles: [],
+  activeFilePath: null,
+  activeCodebaseId: null,
 
   setActiveActivity: (activity) => set({ activeActivity: activity }),
   setMode: (mode) => set({ mode }),
@@ -90,4 +107,23 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveEditorTab: (tab) => set({ activeEditorTab: tab }),
   setSpecSyncState: (state) => set({ specSyncState: state }),
   setSpecDirty: (dirty) => set({ specDirty: dirty }),
+  openFile: (tab) =>
+    set((s) => {
+      const alreadyOpen = s.openFiles.some((f) => f.path === tab.path)
+      return {
+        openFiles: alreadyOpen ? s.openFiles : [...s.openFiles, tab],
+        activeFilePath: tab.path,
+      }
+    }),
+  closeFile: (path) =>
+    set((s) => {
+      const remaining = s.openFiles.filter((f) => f.path !== path)
+      const activeFilePath =
+        s.activeFilePath === path
+          ? (remaining[remaining.length - 1]?.path ?? null)
+          : s.activeFilePath
+      return { openFiles: remaining, activeFilePath }
+    }),
+  setActiveFilePath: (path) => set({ activeFilePath: path }),
+  setActiveCodebaseId: (id) => set({ activeCodebaseId: id }),
 }))
