@@ -53,7 +53,8 @@ execute rid node inputs bindings = do
     -- resolveConnectorRunner is called in Runner.resolveResourceBindings instead.
     -- This case is unreachable in practice but must be exhaustive.
     ConnectorNode cfg -> do
-      result <- Connector.resolveConnectorRunner cfg
+      dummySid <- liftIO $ StepId . UUID.toText <$> nextRandom
+      result   <- Connector.resolveConnectorRunner cfg rid dummySid
       case result of
         Left err ->
           pure $ Message "connector_error" (toJSON err) meta

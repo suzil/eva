@@ -286,6 +286,9 @@ spec = do
   -- AC5: resolveResourceBindings — monadic unit tests (needs AppEnv for cred lookup)
   -- -------------------------------------------------------------------------
 
+  let dummyRunId  = RunId  "test-run-id"
+      dummyStepId = StepId "test-step-id"
+
   describe "resolveResourceBindings" $ do
 
     it "AC5: returns Left when a wired connector has no credential" $
@@ -303,7 +306,7 @@ spec = do
                   ]
               , graphEdges = [eKnow, eConn]
               }
-        result <- runAppM env $ resolveResourceBindings graph "n-agent"
+        result <- runAppM env $ resolveResourceBindings graph "n-agent" dummyRunId dummyStepId
         case result of
           Left _  -> pure ()
           Right _ -> expectationFailure
@@ -318,7 +321,7 @@ spec = do
               { graphNodes = Map.fromList [("n-t", nTrigger), ("n-a", nAgent)]
               , graphEdges = [eData]
               }
-        result <- runAppM env $ resolveResourceBindings graph "n-a"
+        result <- runAppM env $ resolveResourceBindings graph "n-a" dummyRunId dummyStepId
         case result of
           Left err -> expectationFailure $ "unexpected error: " <> show err
           Right bindings -> do
@@ -332,7 +335,7 @@ spec = do
               { graphNodes = Map.fromList [("n-a", nAgent)]
               , graphEdges = []
               }
-        result <- runAppM env $ resolveResourceBindings graph "n-a"
+        result <- runAppM env $ resolveResourceBindings graph "n-a" dummyRunId dummyStepId
         case result of
           Left err -> expectationFailure $ "unexpected error: " <> show err
           Right bindings -> do
