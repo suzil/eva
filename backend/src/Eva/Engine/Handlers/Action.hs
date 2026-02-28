@@ -23,6 +23,7 @@ import Data.UUID.V4 (nextRandom)
 
 import Eva.App (AppM)
 import Eva.Core.Types
+import Eva.Prompt.Resolve (resolveTemplate)
 
 -- ---------------------------------------------------------------------------
 -- Handler
@@ -68,11 +69,14 @@ handleTemplate rid node cfg inputs = do
   let vars = case Map.elems inputs of
         []        -> Map.empty
         (msg : _) -> extractVars (msgPayload msg)
+      textVars = Map.map valueToText vars
 
   -- 3. Substitute {{varName}} markers.
-  result <- case substituteVars tmpl vars of
-    Left err -> liftIO $ throwIO $ userError (T.unpack err)
-    Right t  -> pure t
+  let (result, unresolved) = resolveTemplate tmpl textVars
+  case unresolved of
+    [] -> pure ()
+    (v : _) -> liftIO $ throwIO $ userError $ T.unpack $
+      "Missing template variable '{{" <> v <> "}}': not found in input"
 
   -- 4. Build and return the output message.
   now     <- liftIO getCurrentTime
@@ -115,25 +119,6 @@ extractVars (Aeson.Object obj) =
 extractVars (Aeson.String t) = Map.fromList [("input", Aeson.String t)]
 extractVars _ = Map.empty
 
--- | Pure template substitution.
--- Replaces every @{{varName}}@ marker with the corresponding value from
--- @vars@. Returns @Left errorMsg@ if any marker is not found in the map.
-substituteVars :: Text -> Map Text Value -> Either Text Text
-substituteVars tmpl vars = go "" tmpl
-  where
-    go acc t =
-      case T.breakOn "{{" t of
-        (prefix, "")   -> Right (acc <> prefix)
-        (prefix, rest) ->
-          case T.breakOn "}}" (T.drop 2 rest) of
-            (_, "")           -> Left "Unclosed '{{' in template"
-            (varName, suffix) ->
-              let key    = T.strip varName
-                  after  = T.drop 2 suffix
-              in case Map.lookup key vars of
-                   Nothing  -> Left $
-                     "Missing template variable '{{" <> key <> "}}': not found in input"
-                   Just val -> go (acc <> prefix <> valueToText val) after
-
-    valueToText (Aeson.String s) = s
-    valueToText v                = T.pack (show v)
+valueToText :: Value -> Text
+valueToText (Aeson.String s) = s
+valueToText v                = T.pack (show v)

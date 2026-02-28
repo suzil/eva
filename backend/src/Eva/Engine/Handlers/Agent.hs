@@ -36,13 +36,15 @@ import qualified Data.UUID as UUID
 import Data.UUID.V4 (nextRandom)
 
 import Eva.Api.WebSocket (llmTokenEvent, toolCallEvent)
-import Eva.App (AppM, broadcastEvent, runAppM)
+import Eva.App (AppM, broadcastEvent, logMsg, runAppM)
 import qualified Eva.App as App
+import Eva.Config (LogLevel (..))
 import Eva.Core.Types
 import Eva.Engine.LLM
 import Eva.Knowledge.Query (assembleAgentContext, search)
 import Eva.Knowledge.Types (SearchQuery (..), SearchResult (..))
 import Eva.Persistence.Queries (getRun)
+import Eva.Prompt.Resolve (resolveTemplate)
 
 -- ---------------------------------------------------------------------------
 -- Handler
@@ -104,19 +106,26 @@ handleAgent rid node inputs bindings = do
   -- 7. Assemble initial chat messages.
   --    Connector failure instruction is appended when connector tools are present.
   --    Auto-knowledge context is appended to the system prompt (step 4 above).
+  --    promptVariableBindings (EVA-99) will supply real bindings; for now use empty map.
   let connectorInstructions =
         "\n\nIf a connector tool returns an error and you cannot complete the " <>
         "task (e.g. authentication failure, service unavailable), respond with " <>
         "exactly:\nTASK_FAILED: <one-line reason>\nDo not add any other text."
-      systemPrompt    = agentSystemPrompt cfg
+      rawSystemPrompt = agentSystemPrompt cfg
         <> autoContextSection
         <> if null connectorTools then "" else connectorInstructions
+      (systemPrompt, unresolvedVars) = resolveTemplate rawSystemPrompt Map.empty
       instructionText = extractText (msgPayload instructionMsg)
       userContent     = instructionText <> contextSection
       initMessages    =
         [ ChatMessage "system" systemPrompt
         , ChatMessage "user"   userContent
         ]
+
+  case unresolvedVars of
+    [] -> pure ()
+    vs -> logMsg LogWarn $
+      "Agent system prompt has unresolved variables: " <> T.intercalate ", " vs
 
   -- 8. Select LLM client based on agentProvider config, then run tool-call loop.
   env <- ask
