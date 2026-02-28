@@ -3,7 +3,7 @@ import type { LogEntry, RunId, FileTab } from '../types'
 
 export type { FileTab }
 
-export type ActivityKey = 'programs' | 'nodes' | 'knowledge' | 'runs' | 'settings'
+export type ActivityKey = 'programs' | 'nodes' | 'knowledge' | 'runs' | 'codebase' | 'settings'
 export type AppMode = 'author' | 'operate'
 export type BottomTab = 'logs' | 'output' | 'timeline'
 export type EditorTab = 'graph' | 'code' | 'spec'
@@ -117,12 +117,12 @@ export const useUiStore = create<UiState>((set) => ({
           ...s.openFiles.slice(existingIdx + 1),
           s.openFiles[existingIdx],
         ]
-        return { openFiles: reordered, activeFilePath: tab.path }
+        return { openFiles: reordered, activeFilePath: tab.path, activeEditorTab: 'code' }
       }
       const withNew = [...s.openFiles, tab]
       // Evict LRU (first entry) when exceeding 8 open files
       const trimmed = withNew.length > 8 ? withNew.slice(1) : withNew
-      return { openFiles: trimmed, activeFilePath: tab.path }
+      return { openFiles: trimmed, activeFilePath: tab.path, activeEditorTab: 'code' }
     }),
   closeFile: (path) =>
     set((s) => {
