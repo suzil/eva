@@ -10,6 +10,7 @@ module Eva.Integration.Linear
   ( mkLinearRunner
   , mkLinearRunnerWith
   , LinearApiCall
+  , callLinearGraphQL
   ) where
 
 import Control.Exception (SomeException, try)
