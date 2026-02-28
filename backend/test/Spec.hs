@@ -8,6 +8,7 @@ import qualified Eva.Codebase.ApiSpec
 import qualified Eva.Codebase.TypesSpec
 import qualified Eva.Core.GraphSpec
 import qualified Eva.Knowledge.ExtractSpec
+import qualified Eva.Knowledge.QuerySpec
 import qualified Eva.Knowledge.StoreSpec
 import qualified Eva.Knowledge.TypesSpec
 import qualified Eva.Core.TypesSpec
@@ -33,6 +34,7 @@ main = hspec $ do
   Eva.Codebase.TypesSpec.spec
   Eva.Core.GraphSpec.spec
   Eva.Knowledge.ExtractSpec.spec
+  Eva.Knowledge.QuerySpec.spec
   Eva.Knowledge.StoreSpec.spec
   Eva.Knowledge.TypesSpec.spec
   Eva.Core.TypesSpec.spec
