@@ -129,6 +129,12 @@ export interface SearchResult {
   score: number
 }
 
+// Request body for PATCH /api/knowledge/:entryId (P2-M5)
+export interface PatchKnowledgeEntryReq {
+  title?: string
+  content?: string
+}
+
 // ConnectorConfig: dropPrefix "connector"
 export interface ConnectorConfig {
   system: SystemType

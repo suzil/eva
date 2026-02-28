@@ -16,13 +16,49 @@ import {
   type OnNodeDrag,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 import { nodeTypes } from '../nodes'
 import { NODE_TYPE_META } from '../nodes/constants'
 import { edgeTypes } from '../edges'
 import type { EvaNodeData, NodeType } from '../../types'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useUiStore } from '../../store/uiStore'
-import { useProgram } from '../../api/hooks'
+import { useProgram, useKnowledgeEntries, useRefreshKnowledge } from '../../api/hooks'
+
+// ---------------------------------------------------------------------------
+// KnowledgeStalenessBar — shown when any entry scanned_at is >24h old
+// ---------------------------------------------------------------------------
+
+const STALE_MS = 24 * 60 * 60 * 1000
+
+function KnowledgeStalenessBar({ programId }: { programId: string }) {
+  const { data: entries } = useKnowledgeEntries(programId)
+  const refresh = useRefreshKnowledge(programId)
+
+  if (!entries || entries.length === 0) return null
+
+  const now = Date.now()
+  const isStale = entries.some((e) => now - new Date(e.scannedAt).getTime() > STALE_MS)
+
+  if (!isStale) return null
+
+  return (
+    <div className="flex flex-shrink-0 items-center gap-2 border-b border-warn-amber-700 bg-warn-amber-950/60 px-3 py-1.5">
+      <AlertTriangle size={12} className="flex-shrink-0 text-warn-amber-400" />
+      <span className="flex-1 text-[11px] text-warn-amber-300">
+        Knowledge may be stale — some entries have not been refreshed in over 24 hours
+      </span>
+      <button
+        onClick={() => void refresh.mutate()}
+        disabled={refresh.isPending}
+        className="flex flex-shrink-0 items-center gap-1 rounded border border-warn-amber-700 bg-warn-amber-900/60 px-2 py-0.5 font-display text-[10px] uppercase tracking-widest text-warn-amber-300 transition-colors hover:bg-warn-amber-800 disabled:opacity-50"
+      >
+        {refresh.isPending && <Loader2 size={10} className="animate-spin" />}
+        Refresh All
+      </button>
+    </div>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Default configs for newly dropped nodes
@@ -217,6 +253,7 @@ function CanvasInner() {
 
   return (
     <div className="relative flex flex-1 flex-col">
+      {selectedProgramId && <KnowledgeStalenessBar programId={selectedProgramId} />}
       <ReactFlow
         proOptions={{ hideAttribution: true }}
         nodes={nodes}
