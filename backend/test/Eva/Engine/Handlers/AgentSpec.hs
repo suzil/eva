@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | Unit tests for EVA-24/EVA-33: Agent node handler.
+-- | Unit tests for EVA-24/EVA-33/EVA-81: Agent node handler.
 -- Tests are isolated from the DB and graph walker — handleAgent is called
 -- directly with a mock LLM client injected via 'envLLMClient'.
 module Eva.Engine.Handlers.AgentSpec (spec) where
@@ -16,6 +16,8 @@ import Data.IORef
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Time (UTCTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Database.Persist.Sqlite (createSqlitePool)
 import Test.Hspec
 
@@ -26,7 +28,10 @@ import Eva.Core.Types
 import Eva.Engine.Handlers.Agent (handleAgent)
 import Eva.Engine.LLM
 import Eva.Integration.Types
+import Eva.Knowledge.Store (insertEntry)
+import Eva.Knowledge.Types
 import Eva.Persistence.Migration (runMigrations)
+import Eva.Persistence.Queries (insertProgram, insertRun)
 
 -- ---------------------------------------------------------------------------
 -- Fixtures
@@ -433,6 +438,179 @@ spec = do
         readIORef streamCalledRef >>= (`shouldBe` True)
         readIORef callCalledRef   >>= (`shouldBe` False)
         msgPayload result `shouldBe` Aeson.String "from stream"
+
+  -- -------------------------------------------------------------------------
+  -- Auto-knowledge injection (EVA-81)
+  -- -------------------------------------------------------------------------
+
+  describe "auto-knowledge injection" $ do
+
+    it "search_knowledge tool is included in every LLM request" $ do
+      ref <- newIORef Nothing
+      withTestEnv (capturingLLMClient ref "ok") $ \env -> do
+        let inputs = Map.fromList [("instruction", instructionMsg)]
+        _ <- runAppM env $ handleAgent testRunId (agentNode (NodeId "ak-1")) inputs emptyBindings
+        mReq <- readIORef ref
+        case mReq of
+          Nothing  -> expectationFailure "LLM client was never called"
+          Just req -> any (\t -> toolName t == "search_knowledge") (llmTools req)
+                        `shouldBe` True
+
+    it "injects auto-knowledge context into the system prompt" $ do
+      ref <- newIORef Nothing
+      let pid = ProgramId "prog-ak-test"
+          rid = RunId "run-ak-test"
+      withTestEnv (capturingLLMClient ref "ok") $ \env -> do
+        -- Seed a Program (FK required by runs and knowledge_entries)
+        runAppM env $ insertProgram Program
+          { programId        = pid
+          , programName      = "Test Program"
+          , programState     = Draft
+          , programGraph     = Graph { graphNodes = Map.empty, graphEdges = [] }
+          , programCreatedAt = t0
+          , programUpdatedAt = t0
+          }
+        -- Seed a Run so getRun returns the expected ProgramId
+        runAppM env $ insertRun Run
+          { runId          = rid
+          , runProgramId   = pid
+          , runState       = RunPending
+          , runTriggerInfo = Nothing
+          , runStartedAt   = Nothing
+          , runFinishedAt  = Nothing
+          }
+        -- Seed a KnowledgeEntry scoped to this program
+        runAppM env $ insertEntry KnowledgeEntry
+          { knowledgeEntryId              = "ke-ak-1"
+          , knowledgeEntrySourceType      = SourceManual
+          , knowledgeEntrySourceId        = Nothing
+          , knowledgeEntryProgramId       = Just pid
+          , knowledgeEntryCategory        = CategorySummary
+          , knowledgeEntryTitle           = "Eva Architecture"
+          , knowledgeEntryContent         = "Eva is a graph-based prompt programming IDE."
+          , knowledgeEntryOriginalContent = Nothing
+          , knowledgeEntryMetadata        = Null
+          , knowledgeEntryConfidence      = 0.95
+          , knowledgeEntryIsEdited        = False
+          , knowledgeEntryCreatedAt       = t0
+          , knowledgeEntryUpdatedAt       = t0
+          , knowledgeEntryScannedAt       = t0
+          }
+        let inputs = Map.fromList [("instruction", instructionMsg)]
+        _ <- runAppM env $
+          handleAgent rid (agentNode (NodeId "ak-2")) inputs emptyBindings
+        mReq <- readIORef ref
+        case mReq of
+          Nothing  -> expectationFailure "LLM client was never called"
+          Just req -> do
+            let sysMsg = head (llmMessages req)
+            T.unpack (chatContent sysMsg) `shouldContain` "# Context from Knowledge Library"
+            T.unpack (chatContent sysMsg) `shouldContain` "Eva is a graph-based prompt programming IDE."
+
+    it "does not inject context when no knowledge entries exist for the program" $ do
+      ref <- newIORef Nothing
+      let rid = RunId "run-ak-empty"
+      withTestEnv (capturingLLMClient ref "ok") $ \env -> do
+        -- No Run record seeded: getRun returns Nothing → pid = ProgramId ""
+        -- → assembleAgentContext returns "" → no injection
+        let inputs = Map.fromList [("instruction", instructionMsg)]
+        _ <- runAppM env $
+          handleAgent rid (agentNode (NodeId "ak-3")) inputs emptyBindings
+        mReq <- readIORef ref
+        case mReq of
+          Nothing  -> expectationFailure "LLM client was never called"
+          Just req -> do
+            let sysMsg = head (llmMessages req)
+            T.unpack (chatContent sysMsg) `shouldNotContain` "# Context from Knowledge Library"
+
+    it "search_knowledge tool call executes a knowledge search and returns results" $ do
+      let pid = ProgramId "prog-sk-test"
+          rid = RunId "run-sk-test"
+          -- Round 1: LLM calls search_knowledge; round 2: LLM returns text.
+          searchCallResp = LLMResponse
+            { llmContent   = ""
+            , llmToolCalls = Just [ToolCall "call-sk" "search_knowledge"
+                                    (Aeson.object [("query", Aeson.String "Eva architecture")])]
+            , llmUsage     = TokenUsage 10 0 10
+            }
+          finalResp = LLMResponse
+            { llmContent   = "Found relevant knowledge."
+            , llmToolCalls = Nothing
+            , llmUsage     = TokenUsage 10 5 15
+            }
+      callCountRef    <- newIORef (0 :: Int)
+      capturedMsgsRef <- newIORef ([] :: [ChatMessage])
+      let sequentialClient = LLMClient
+            { clientCall   = \req -> do
+                n <- readIORef callCountRef
+                modifyIORef' callCountRef (+1)
+                when (n == 1) $ writeIORef capturedMsgsRef (llmMessages req)
+                pure $ Right $ if n == 0 then searchCallResp else finalResp
+            , clientStream = \_ _ -> pure (Right finalResp)
+            }
+          multiTurnCfg = agentCfg { agentMaxIterations = 5 }
+          -- A dummy connector forces the blocking (clientCall) path so round 1
+          -- can return a tool-call response instead of going through clientStream.
+          dummyRunner = ConnectorRunner
+            { connectorAvailableActions = pure
+                [ ActionSpec "dummy_action" "Unused dummy" (Aeson.object []) "json" ]
+            , connectorExecuteAction = \_ _ -> pure (Right (Aeson.String "unused"))
+            }
+          bindingsWithConnector = emptyBindings { rbConnectorRunners = [dummyRunner] }
+      withTestEnv sequentialClient $ \env -> do
+        -- Seed Program (FK required by runs and knowledge_entries)
+        runAppM env $ insertProgram Program
+          { programId        = pid
+          , programName      = "Test Program"
+          , programState     = Draft
+          , programGraph     = Graph { graphNodes = Map.empty, graphEdges = [] }
+          , programCreatedAt = t0
+          , programUpdatedAt = t0
+          }
+        -- Seed Run + KnowledgeEntry
+        runAppM env $ insertRun Run
+          { runId          = rid
+          , runProgramId   = pid
+          , runState       = RunPending
+          , runTriggerInfo = Nothing
+          , runStartedAt   = Nothing
+          , runFinishedAt  = Nothing
+          }
+        runAppM env $ insertEntry KnowledgeEntry
+          { knowledgeEntryId              = "ke-sk-1"
+          , knowledgeEntrySourceType      = SourceManual
+          , knowledgeEntrySourceId        = Nothing
+          , knowledgeEntryProgramId       = Just pid
+          , knowledgeEntryCategory        = CategorySummary
+          , knowledgeEntryTitle           = "Eva Architecture"
+          , knowledgeEntryContent         = "Eva is a graph-based prompt programming IDE."
+          , knowledgeEntryOriginalContent = Nothing
+          , knowledgeEntryMetadata        = Null
+          , knowledgeEntryConfidence      = 0.95
+          , knowledgeEntryIsEdited        = False
+          , knowledgeEntryCreatedAt       = t0
+          , knowledgeEntryUpdatedAt       = t0
+          , knowledgeEntryScannedAt       = t0
+          }
+        result <- runAppM env $
+          handleAgent rid
+            (agentNode (NodeId "sk-agent-1")) { nodeType = AgentNode multiTurnCfg }
+            (Map.fromList [("instruction", instructionMsg)])
+            bindingsWithConnector
+        -- Final output is the text response from round 2
+        msgType    result `shouldBe` "agent_output"
+        msgPayload result `shouldBe` Aeson.String "Found relevant knowledge."
+        -- The second LLM request should contain a ToolCallMsg + ToolResultMsg
+        msgs <- readIORef capturedMsgsRef
+        any isToolCallMsg  msgs `shouldBe` True
+        any isToolResultMsg msgs `shouldBe` True
+
+-- ---------------------------------------------------------------------------
+-- Fixtures for auto-knowledge tests
+-- ---------------------------------------------------------------------------
+
+t0 :: UTCTime
+t0 = posixSecondsToUTCTime 1_740_000_000
 
 -- ---------------------------------------------------------------------------
 -- Helpers for tool-call message inspection

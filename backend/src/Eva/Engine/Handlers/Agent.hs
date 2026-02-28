@@ -12,6 +12,8 @@
 --
 -- When no connectors are wired, the handler falls back to the original
 -- single-turn streaming path ('clientStream'), preserving token broadcast UX.
+-- 'search_knowledge' is always included as a built-in tool and is handled at
+-- the 'runToolLoop' level (not routed to a ConnectorRunner).
 module Eva.Engine.Handlers.Agent
   ( handleAgent
   ) where
@@ -21,6 +23,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
 import Data.Aeson (Value (..), encode, toJSON)
 import qualified Data.Aeson as Aeson
+import Data.Aeson.Types (parseMaybe)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
@@ -37,6 +40,9 @@ import Eva.App (AppM, broadcastEvent, runAppM)
 import qualified Eva.App as App
 import Eva.Core.Types
 import Eva.Engine.LLM
+import Eva.Knowledge.Query (assembleAgentContext, search)
+import Eva.Knowledge.Types (SearchQuery (..), SearchResult (..))
+import Eva.Persistence.Queries (getRun)
 
 -- ---------------------------------------------------------------------------
 -- Handler
@@ -62,35 +68,49 @@ handleAgent rid node inputs bindings = do
     AgentNode c -> pure c
     _           -> liftIO $ throwIO $ userError "handleAgent called on a non-Agent node"
 
-  -- 3. Build context section from wired Knowledge nodes.
+  -- 3. Look up ProgramId from the Run record (needed for auto-knowledge injection).
+  mRun <- getRun rid
+  let pid = maybe (ProgramId "") runProgramId mRun
+
+  -- 4. Assemble auto-knowledge context from the Knowledge Library and append
+  --    to the system prompt (if non-empty). This is programme-scoped: only
+  --    entries belonging to this program are considered.
+  autoContext <- assembleAgentContext pid (Just (nodeId node))
+  let autoContextSection
+        | T.null autoContext = ""
+        | otherwise          =
+            "\n\n# Context from Knowledge Library\n\n" <> autoContext
+
+  -- 5. Build context section from wired Knowledge nodes (inline text).
   let contextTexts   = mapMaybe resolveKnowledgeText (rbKnowledge bindings)
                     ++ map extractText (rbKnowledgeDynamic bindings)
       contextSection = case contextTexts of
         [] -> ""
         ts -> "\n\n## Context\n\n" <> T.intercalate "\n\n---\n\n" ts
 
-  -- 4. Collect ActionSpecs from wired ConnectorRunners (needed before building
+  -- 6. Collect ActionSpecs from wired ConnectorRunners (needed before building
   --    the system prompt so we know whether to append failure instructions).
   runnersWithActions <- liftIO $
     mapM (\r -> (r,) <$> connectorAvailableActions r) (rbConnectorRunners bindings)
-  let tools     = map actionSpecToTool $ concatMap snd runnersWithActions
-      actionMap = Map.fromList
+  let connectorTools = map actionSpecToTool $ concatMap snd runnersWithActions
+      actionMap      = Map.fromList
         [ (actionSpecName spec, runner)
         | (runner, specs) <- runnersWithActions
         , spec            <- specs
         ]
+      -- search_knowledge is always available as a built-in tool.
+      tools = connectorTools ++ [searchKnowledgeTool]
 
-  -- 5. Assemble initial chat messages.
-  --    When connector tools are available, append a failure-signal instruction
-  --    so the LLM can mark the step as failed when it cannot work around an
-  --    API error (rather than producing a misleading "success" with an error
-  --    description buried in the output).
+  -- 7. Assemble initial chat messages.
+  --    Connector failure instruction is appended when connector tools are present.
+  --    Auto-knowledge context is appended to the system prompt (step 4 above).
   let connectorInstructions =
         "\n\nIf a connector tool returns an error and you cannot complete the " <>
         "task (e.g. authentication failure, service unavailable), respond with " <>
         "exactly:\nTASK_FAILED: <one-line reason>\nDo not add any other text."
-      systemPrompt = agentSystemPrompt cfg <>
-        if null tools then "" else connectorInstructions
+      systemPrompt    = agentSystemPrompt cfg
+        <> autoContextSection
+        <> if null connectorTools then "" else connectorInstructions
       instructionText = extractText (msgPayload instructionMsg)
       userContent     = instructionText <> contextSection
       initMessages    =
@@ -98,13 +118,13 @@ handleAgent rid node inputs bindings = do
         , ChatMessage "user"   userContent
         ]
 
-  -- 6. Select LLM client based on agentProvider config, then run tool-call loop.
-  env       <- ask
+  -- 8. Select LLM client based on agentProvider config, then run tool-call loop.
+  env <- ask
   let provider  = maybe ProviderOpenAI id (agentProvider cfg)
       llmClient = case provider of
         ProviderOpenAI    -> App.envLLMClient env
         ProviderAnthropic -> App.envAnthropicClient env
-  runToolLoop env cfg rid node llmClient tools actionMap initMessages 0 0.0
+  runToolLoop env cfg pid rid node llmClient connectorTools tools actionMap initMessages 0 0.0
 
 -- ---------------------------------------------------------------------------
 -- Tool-call loop
@@ -113,16 +133,18 @@ handleAgent rid node inputs bindings = do
 runToolLoop
   :: App.AppEnv
   -> AgentConfig
+  -> ProgramId       -- ^ Programme owning this run (for search_knowledge)
   -> RunId
   -> Node
   -> LLMClient
-  -> [ToolSpec]
+  -> [ToolSpec]      -- ^ Connector tools only (controls streaming/blocking)
+  -> [ToolSpec]      -- ^ All tools passed to the LLM (connector + built-in)
   -> Map Text ConnectorRunner
   -> [ChatMessage]
-  -> Int     -- ^ current iteration
-  -> Double  -- ^ accumulated cost (USD)
+  -> Int             -- ^ Current iteration
+  -> Double          -- ^ Accumulated cost (USD)
   -> AppM Message
-runToolLoop env cfg rid node llmClient tools actionMap messages iteration cost = do
+runToolLoop env cfg pid rid node llmClient connectorTools tools actionMap messages iteration cost = do
 
   -- Guard: max iterations
   let maxIter = agentMaxIterations cfg
@@ -141,10 +163,11 @@ runToolLoop env cfg rid node llmClient tools actionMap messages iteration cost =
         , llmTools          = tools
         }
 
-  -- Call LLM: streaming when no tools (preserves token broadcast UX),
-  -- blocking when tools are present (intermediate rounds produce no user text).
+  -- Stream when no connector tools (preserves token broadcast UX).
+  -- search_knowledge is always present in 'tools' but does not prevent streaming;
+  -- the streaming decision is based on connector presence only.
   result <-
-    if null tools
+    if null connectorTools
       then do
         let onToken tok = do
               now <- getCurrentTime
@@ -177,8 +200,13 @@ runToolLoop env cfg rid node llmClient tools actionMap messages iteration cost =
             ])) now)
         ) calls
 
-      -- Execute each tool call
-      results <- liftIO $ mapM (executeToolCall actionMap) calls
+      -- Execute each tool call: intercept search_knowledge, route the rest
+      -- to the connector action map.
+      results <- mapM (\tc ->
+        if toolCallName tc == "search_knowledge"
+          then executeSearchKnowledge pid tc
+          else liftIO $ executeToolCall actionMap tc
+        ) calls
 
       -- Broadcast tool results
       mapM_ (\(tc, res) -> do
@@ -198,7 +226,7 @@ runToolLoop env cfg rid node llmClient tools actionMap messages iteration cost =
             ]
           newMessages = messages ++ [toolCallMsg] ++ toolResultMsgs
 
-      runToolLoop env cfg rid node llmClient tools actionMap
+      runToolLoop env cfg pid rid node llmClient connectorTools tools actionMap
                   newMessages (iteration + 1) newCost
 
     -- Text response (or budget breached — use whatever content we have).
@@ -222,7 +250,56 @@ runToolLoop env cfg rid node llmClient tools actionMap messages iteration cost =
           pure $ Message "agent_output" (toJSON outputText) meta
 
 -- ---------------------------------------------------------------------------
--- Tool execution
+-- Built-in tool: search_knowledge
+-- ---------------------------------------------------------------------------
+
+-- | ToolSpec for the built-in knowledge search tool.
+-- Always included in every agent's tool list so the LLM can search the
+-- programme's Knowledge Library during execution.
+searchKnowledgeTool :: ToolSpec
+searchKnowledgeTool = ToolSpec
+  { toolName        = "search_knowledge"
+  , toolDescription =
+      "Search the program's knowledge base for relevant information. " <>
+      "Returns the top 5 matching entries ranked by relevance."
+  , toolParameters  = Aeson.object
+      [ "type"       Aeson..= ("object" :: Text)
+      , "properties" Aeson..= Aeson.object
+          [ "query"    Aeson..= Aeson.object
+              [ "type"        Aeson..= ("string" :: Text)
+              , "description" Aeson..= ("Search terms to look up in the knowledge base" :: Text)
+              ]
+          , "category" Aeson..= Aeson.object
+              [ "type"        Aeson..= ("string" :: Text)
+              , "description" Aeson..= ("Optional category filter: structure, metadata, pattern, summary, or reference" :: Text)
+              ]
+          ]
+      , "required"   Aeson..= (["query"] :: [Text])
+      ]
+  }
+
+-- | Execute a search_knowledge tool call in AppM.
+-- Parses the 'query' argument from the tool call args, runs an FTS5 search
+-- scoped to the program, and returns up to 5 entries as a JSON array.
+executeSearchKnowledge :: ProgramId -> ToolCall -> AppM Value
+executeSearchKnowledge pid tc = do
+  let args   = toolCallArgs tc
+      mQuery = parseMaybe (Aeson.withObject "args" (Aeson..: "query")) args :: Maybe Text
+  case mQuery of
+    Nothing ->
+      pure $ toJSON ("search_knowledge: missing required 'query' argument" :: Text)
+    Just q -> do
+      results <- search SearchQuery
+        { searchQueryText       = q
+        , searchQuerySourceType = Nothing
+        , searchQueryCategory   = Nothing
+        , searchQueryProgramId  = Just pid
+        , searchQueryLimit      = Just 5
+        }
+      pure . toJSON $ map searchResultEntry results
+
+-- ---------------------------------------------------------------------------
+-- Connector tool execution
 -- ---------------------------------------------------------------------------
 
 executeToolCall :: Map Text ConnectorRunner -> ToolCall -> IO Value
@@ -235,8 +312,6 @@ executeToolCall actionMap tc = do
       case res of
         Right v  -> pure v
         -- Hard failures: credential/config problems the LLM cannot fix.
-        -- Throw so the step is marked failed rather than producing a
-        -- misleadingly "successful" run with an error buried in the output.
         Left err@(ConnectorMissingCredential _) -> throwIO (userError (T.unpack (connectorErrorText err)))
         Left err@(ConnectorInvalidCredential _) -> throwIO (userError (T.unpack (connectorErrorText err)))
         Left err@(ConnectorUnsupported _)       -> throwIO (userError (T.unpack (connectorErrorText err)))
