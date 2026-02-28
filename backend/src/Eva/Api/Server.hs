@@ -58,6 +58,7 @@ import Eva.Knowledge.Api
   , knowledgeByIdHandlers
   , knowledgeByProgramHandlers
   )
+import Eva.Prompt.Api (TemplatesAPI, templatesHandlers)
 import Eva.Declarative (ParseError (..), graphToYaml, yamlToGraph)
 import Eva.App (AppEnv (..), AppM, runAppM)
 import Eva.Config (configStaticDir)
@@ -82,6 +83,7 @@ type EvaAPI =
   :<|> ChangesetAPI
   :<|> KnowledgeByProgramAPI
   :<|> KnowledgeByIdAPI
+  :<|> TemplatesAPI
 
 type HealthAPI =
   "api" :> "health" :> Get '[JSON] HealthResponse
@@ -197,6 +199,7 @@ evaHandlers env =
   :<|> changesetHandlers env
   :<|> knowledgeByProgramHandlers env
   :<|> knowledgeByIdHandlers env
+  :<|> templatesHandlers env
 
 healthHandler :: Handler HealthResponse
 healthHandler = pure (HealthResponse "ok")

@@ -7,6 +7,8 @@ import type {
   ConnectCodebaseReq,
   WriteFileReq,
   PatchKnowledgeEntryReq,
+  CreateTemplateReq,
+  PatchTemplateReq,
 } from '../types/index.ts'
 import {
   cancelRun,
@@ -49,6 +51,11 @@ import {
   deleteKnowledgeEntry,
   resetKnowledgeEntry,
   refreshKnowledgeEntries,
+  fetchTemplates,
+  fetchTemplate,
+  createTemplate,
+  patchTemplate,
+  deleteTemplate,
 } from './client.ts'
 
 // ---------------------------------------------------------------------------
@@ -508,6 +515,63 @@ export function useRefreshKnowledge(programId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: knowledgeKeys.list(programId) })
       void queryClient.invalidateQueries({ queryKey: ['knowledge', 'search', programId] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Templates (P2-M7) — EVA-100
+// ---------------------------------------------------------------------------
+
+export const templateKeys = {
+  all:    ['templates'] as const,
+  lists:  () => [...templateKeys.all, 'list'] as const,
+  detail: (id: string) => [...templateKeys.all, 'detail', id] as const,
+}
+
+export function useTemplates() {
+  return useQuery({
+    queryKey: templateKeys.lists(),
+    queryFn: fetchTemplates,
+  })
+}
+
+export function useTemplate(id: string) {
+  return useQuery({
+    queryKey: templateKeys.detail(id),
+    queryFn: () => fetchTemplate(id),
+    enabled: Boolean(id),
+  })
+}
+
+export function useCreateTemplate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateTemplateReq) => createTemplate(body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: templateKeys.lists() })
+    },
+  })
+}
+
+export function usePatchTemplate(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: PatchTemplateReq) => patchTemplate(id, body),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(templateKeys.detail(id), updated)
+      void queryClient.invalidateQueries({ queryKey: templateKeys.lists() })
+    },
+  })
+}
+
+export function useDeleteTemplate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => deleteTemplate(id),
+    onSuccess: (_data, id) => {
+      queryClient.removeQueries({ queryKey: templateKeys.detail(id) })
+      void queryClient.invalidateQueries({ queryKey: templateKeys.lists() })
     },
   })
 }

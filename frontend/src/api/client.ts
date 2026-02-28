@@ -21,6 +21,9 @@ import type {
   SearchResult,
   KnowledgeEntry,
   PatchKnowledgeEntryReq,
+  PromptTemplate,
+  CreateTemplateReq,
+  PatchTemplateReq,
 } from '../types/index.ts'
 
 const BASE = '/api'
@@ -285,4 +288,34 @@ export function deleteKnowledgeEntry(entryId: string): Promise<void> {
 
 export function resetKnowledgeEntry(entryId: string): Promise<KnowledgeEntry> {
   return request<KnowledgeEntry>(`/knowledge/${entryId}/reset`, { method: 'POST' })
+}
+
+// ---------------------------------------------------------------------------
+// Templates (P2-M7) — EVA-100
+// ---------------------------------------------------------------------------
+
+export function fetchTemplates(): Promise<PromptTemplate[]> {
+  return request<PromptTemplate[]>('/templates')
+}
+
+export function fetchTemplate(id: string): Promise<PromptTemplate> {
+  return request<PromptTemplate>(`/templates/${id}`)
+}
+
+export function createTemplate(body: CreateTemplateReq): Promise<PromptTemplate> {
+  return request<PromptTemplate>('/templates', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function patchTemplate(id: string, body: PatchTemplateReq): Promise<PromptTemplate> {
+  return request<PromptTemplate>(`/templates/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export function deleteTemplate(id: string): Promise<void> {
+  return request<void>(`/templates/${id}`, { method: 'DELETE' })
 }

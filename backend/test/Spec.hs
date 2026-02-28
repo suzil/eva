@@ -31,6 +31,7 @@ import qualified Eva.Engine.SchedulerSpec
 import qualified Eva.Prompt.TypesSpec
 import qualified Eva.Prompt.StoreSpec
 import qualified Eva.Prompt.ResolveSpec
+import qualified Eva.Prompt.ApiSpec
 
 main :: IO ()
 main = hspec $ do
@@ -63,3 +64,4 @@ main = hspec $ do
   Eva.Prompt.TypesSpec.spec
   Eva.Prompt.StoreSpec.spec
   Eva.Prompt.ResolveSpec.spec
+  Eva.Prompt.ApiSpec.spec

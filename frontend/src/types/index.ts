@@ -525,3 +525,56 @@ export interface GraphDiff {
   addedEdges: Edge[]
   removedEdgeIds: string[]
 }
+
+// ---------------------------------------------------------------------------
+// Prompt Templates (P2-M7) — EVA-96/100
+// Fields via dropPrefix "promptTemplate"; TemplateCategory lowercase constructor names
+// ---------------------------------------------------------------------------
+
+export type TemplateCategory =
+  | 'summarizer'
+  | 'reviewer'
+  | 'classifier'
+  | 'extractor'
+  | 'formatter'
+  | 'analyst'
+  | 'custom'
+
+// dropPrefix "templateVariable"; defaultValue omitted when absent (omitNothingFields)
+export interface TemplateVariable {
+  name: string
+  description: string
+  required: boolean
+  defaultValue?: string
+}
+
+export interface PromptTemplate {
+  id: string
+  name: string
+  description: string
+  category: TemplateCategory
+  tags: string[]
+  body: string
+  variables: TemplateVariable[]
+  builtIn: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateTemplateReq {
+  name: string
+  description: string
+  category: TemplateCategory
+  tags: string[]
+  body: string
+  variables: TemplateVariable[]
+}
+
+export interface PatchTemplateReq {
+  name?: string
+  description?: string
+  category?: TemplateCategory
+  tags?: string[]
+  body?: string
+  variables?: TemplateVariable[]
+}
