@@ -80,15 +80,16 @@ sampleProgram =
                   { nodeId    = "n-agent"
                   , nodeLabel = "My Agent"
                   , nodeType  = AgentNode AgentConfig
-                      { agentProvider       = Nothing
-                      , agentModel          = "gpt-4o"
-                      , agentSystemPrompt   = "You are helpful."
-                      , agentResponseFormat = ResponseText
-                      , agentTemperature    = 0.7
-                      , agentMaxTokens      = Just 1024
-                      , agentMaxIterations  = 3
-                      , agentCostBudgetUsd  = Nothing
-                      , agentRetryPolicy    = Nothing
+                      { agentProvider               = Nothing
+                      , agentModel                  = "gpt-4o"
+                      , agentSystemPrompt           = "You are helpful."
+                      , agentResponseFormat         = ResponseText
+                      , agentTemperature            = 0.7
+                      , agentMaxTokens              = Just 1024
+                      , agentMaxIterations          = 3
+                      , agentCostBudgetUsd          = Nothing
+                      , agentRetryPolicy            = Nothing
+                      , agentPromptVariableBindings = Nothing
                       }
                   , nodePosX  = 100
                   , nodePosY  = 200
@@ -141,6 +142,7 @@ allNodeTypesProgram =
                   , agentMaxTokens = Just 512, agentMaxIterations = 1
                   , agentCostBudgetUsd = Just 1.0
                   , agentRetryPolicy = Nothing
+                  , agentPromptVariableBindings = Nothing
                   })
             , mk "n-knowledge"
                 (KnowledgeNode KnowledgeConfig

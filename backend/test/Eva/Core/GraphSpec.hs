@@ -63,10 +63,11 @@ agentNode =
       , agentSystemPrompt   = "test"
       , agentResponseFormat = ResponseText
       , agentTemperature    = 0.5
-      , agentMaxTokens      = Nothing
-      , agentMaxIterations  = 3
-      , agentCostBudgetUsd  = Nothing
-      , agentRetryPolicy    = Nothing
+      , agentMaxTokens              = Nothing
+      , agentMaxIterations          = 3
+      , agentCostBudgetUsd          = Nothing
+      , agentRetryPolicy            = Nothing
+      , agentPromptVariableBindings = Nothing
       }
 
 actionNode :: NodeType

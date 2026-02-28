@@ -102,10 +102,11 @@ agentNode nid = Node
       , agentSystemPrompt   = "You are a test agent."
       , agentResponseFormat = ResponseText
       , agentTemperature    = 0.7
-      , agentMaxTokens      = Nothing
-      , agentMaxIterations  = 1
-      , agentCostBudgetUsd  = Nothing
-      , agentRetryPolicy    = Nothing
+      , agentMaxTokens              = Nothing
+      , agentMaxIterations          = 1
+      , agentCostBudgetUsd          = Nothing
+      , agentRetryPolicy            = Nothing
+      , agentPromptVariableBindings = Nothing
       }
   , nodePosX  = 100
   , nodePosY  = 0

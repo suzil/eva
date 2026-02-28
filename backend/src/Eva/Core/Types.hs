@@ -37,6 +37,7 @@ module Eva.Core.Types
   , ErrorHandlingMode (..)
   , TriggerType (..)
   , BackoffStrategy (..)
+  , PromptVariableBinding (..)
 
     -- * Node config types
   , AgentConfig (..)
@@ -76,7 +77,7 @@ import Data.Aeson.Types (Parser)
 import Data.Char (isUpper, toLower)
 import Data.Map.Strict (Map)
 import Data.String (IsString)
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import Data.Time (UTCTime)
 import GHC.Generics (Generic)
 
@@ -416,6 +417,25 @@ instance FromJSON BackoffStrategy where
 -- Node Config Types
 -- ---------------------------------------------------------------------------
 
+data PromptVariableBinding
+  = PortBinding    { pvbPortId :: Text }
+  | LiteralBinding { pvbValue  :: Text }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON PromptVariableBinding where
+  toJSON (PortBinding pid) =
+    object ["source" .= ("port" :: Text), "portId" .= pid]
+  toJSON (LiteralBinding val) =
+    object ["source" .= ("literal" :: Text), "value" .= val]
+
+instance FromJSON PromptVariableBinding where
+  parseJSON = withObject "PromptVariableBinding" $ \o -> do
+    src <- o .: "source"
+    case (src :: Text) of
+      "port"    -> PortBinding    <$> o .: "portId"
+      "literal" -> LiteralBinding <$> o .: "value"
+      _         -> fail $ "Unknown source: " <> unpack src
+
 data AgentConfig = AgentConfig
   { agentProvider :: Maybe LLMProvider
   , agentModel :: Text
@@ -426,6 +446,7 @@ data AgentConfig = AgentConfig
   , agentMaxIterations :: Int
   , agentCostBudgetUsd :: Maybe Double
   , agentRetryPolicy :: Maybe RetryPolicy
+  , agentPromptVariableBindings :: Maybe (Map Text PromptVariableBinding)
   }
   deriving stock (Eq, Show, Generic)
 

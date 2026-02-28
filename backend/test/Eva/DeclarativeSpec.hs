@@ -18,15 +18,16 @@ import Eva.Declarative
 agentCfg :: AgentConfig
 agentCfg =
   AgentConfig
-    { agentProvider       = Just ProviderOpenAI
-    , agentModel          = "gpt-4o"
-    , agentSystemPrompt   = "Summarize the input.\nBe concise."
-    , agentResponseFormat = ResponseText
-    , agentTemperature    = 0.7
-    , agentMaxTokens      = Just 1024
-    , agentMaxIterations  = 3
-    , agentCostBudgetUsd  = Nothing
-    , agentRetryPolicy    = Nothing
+    { agentProvider               = Just ProviderOpenAI
+    , agentModel                  = "gpt-4o"
+    , agentSystemPrompt           = "Summarize the input.\nBe concise."
+    , agentResponseFormat         = ResponseText
+    , agentTemperature            = 0.7
+    , agentMaxTokens              = Just 1024
+    , agentMaxIterations          = 3
+    , agentCostBudgetUsd          = Nothing
+    , agentRetryPolicy            = Nothing
+    , agentPromptVariableBindings = Nothing
     }
 
 knowledgeCfg :: KnowledgeConfig
