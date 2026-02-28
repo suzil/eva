@@ -287,7 +287,7 @@ executeNodeStep env ctx graph node inputs = do
   lift $ broadcastEvent (rcRunId ctx)
     (stepStateEvent (rcRunId ctx) (nodeId node) (stepId stepRunning) StepRunning now)
 
-  eBindings <- lift $ resolveResourceBindings graph (nodeId node)
+  eBindings <- lift $ resolveResourceBindings graph (nodeId node) (rcRunId ctx) sid
   eResult <- case eBindings of
     Left connErr ->
       let msg = "Node '" <> T.unpack (nodeLabel node)
@@ -511,8 +511,8 @@ collectReadyInputs ctx graph dispatched =
 -- failure so 'executeNodeStep' can transition the step to Failed.
 -- Note: 'rbKnowledgeDynamic' is left empty here; it is populated in
 -- 'executeNodeStep' by reading 'rcKnowledgeCache' after this call.
-resolveResourceBindings :: Graph -> NodeId -> AppM (Either ConnectorError ResourceBindings)
-resolveResourceBindings graph nid = do
+resolveResourceBindings :: Graph -> NodeId -> RunId -> StepId -> AppM (Either ConnectorError ResourceBindings)
+resolveResourceBindings graph nid rid sid = do
   let resourceEdges =
         filter
           (\e -> edgeCategory e == PortResource && edgeTargetNode e == nid)
@@ -523,7 +523,7 @@ resolveResourceBindings graph nid = do
           resourceEdges
       knowledge  = [cfg | KnowledgeNode cfg <- map nodeType sourceNodes]
       connectors = [cfg | ConnectorNode cfg  <- map nodeType sourceNodes]
-  eRunners <- resolveConnectors connectors
+  eRunners <- resolveConnectors connectors rid sid
   pure $ case eRunners of
     Left err      -> Left err
     Right runners -> Right ResourceBindings
@@ -556,12 +556,12 @@ dynamicKnowledge graph cache targetNid =
 
 -- | Attempt to resolve each ConnectorConfig into a live ConnectorRunner.
 -- Short-circuits on the first resolution failure, returning 'Left'.
-resolveConnectors :: [ConnectorConfig] -> AppM (Either ConnectorError [ConnectorRunner])
-resolveConnectors = go []
+resolveConnectors :: [ConnectorConfig] -> RunId -> StepId -> AppM (Either ConnectorError [ConnectorRunner])
+resolveConnectors cfgs rid sid = go [] cfgs
   where
     go acc []       = pure (Right (reverse acc))
     go acc (c:cs)   = do
-      result <- resolveConnectorRunner c
+      result <- resolveConnectorRunner c rid sid
       case result of
         Left err     -> pure (Left err)
         Right runner -> go (runner : acc) cs

@@ -27,6 +27,7 @@ module Eva.Api.WebSocket
   , llmTokenEvent
   , logEntryEvent
   , toolCallEvent
+  , codeChangeEvent
 
     -- * Exported for testing
   , SubscribeMsg (..)
@@ -46,6 +47,7 @@ import Data.Time (UTCTime, getCurrentTime)
 import qualified Network.WebSockets as WS
 
 import Eva.App (AppEnv (..), runAppM)
+import Eva.Codebase.Types (CodeChangesetId)
 import Eva.Core.Types (NodeId, Run (..), RunId (..), RunState (..), StepId, StepState (..))
 import Eva.Persistence.Queries (getRun)
 
@@ -216,4 +218,18 @@ toolCallEvent rid nid phase payload ts =
     , "phase"     .= phase   -- "invoke" or "result"
     , "data"      .= payload
     , "timestamp" .= ts
+    ]
+
+-- | Build a @code_change_event@ for broadcast.
+-- Emitted by the SystemCodebase connector handler after staging a write
+-- operation as a pending CodeChangeset. EVA-86 adds this to the WS protocol
+-- enum; for now the type string is emitted directly.
+codeChangeEvent :: RunId -> CodeChangesetId -> Int -> UTCTime -> Value
+codeChangeEvent rid csId fileCount ts =
+  object
+    [ "type"        .= ("code_change_event" :: Text)
+    , "runId"       .= rid
+    , "changesetId" .= csId
+    , "fileCount"   .= fileCount
+    , "timestamp"   .= ts
     ]

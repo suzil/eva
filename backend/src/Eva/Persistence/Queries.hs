@@ -44,6 +44,8 @@ module Eva.Persistence.Queries
   , deleteCodebase
 
     -- * Changesets
+  , insertChangeset
+  , insertFileChange
   , listChangesetsForProgram
   , listChangesetsForRun
   , getChangeset
@@ -674,3 +676,25 @@ updateChangesetStatus :: CodeChangesetId -> CodeChangesetStatus -> AppM ()
 updateChangesetStatus csId status = runDb $
   update (toCodeChangesetRowId csId)
     [CodeChangesetRowStatus =. encodeState status]
+
+-- | Insert a new CodeChangeset record (header row only; use 'insertFileChange' for each file).
+insertChangeset :: CodeChangeset -> AppM ()
+insertChangeset cs = runDb $
+  insertKey (toCodeChangesetRowId (codeChangesetId cs)) CodeChangesetRow
+    { codeChangesetRowRunId     = toRunRowId  (codeChangesetRunId  cs)
+    , codeChangesetRowStepId    = toStepRowId (codeChangesetStepId cs)
+    , codeChangesetRowStatus    = encodeState (codeChangesetStatus cs)
+    , codeChangesetRowCreatedAt = codeChangesetCreatedAt cs
+    }
+
+-- | Insert a single FileChange row, associating it with an existing changeset.
+insertFileChange :: FileChange -> AppM ()
+insertFileChange fc = runDb $
+  insertKey (toCodeFileChangeRowId (fileChangeId fc)) CodeFileChangeRow
+    { codeFileChangeRowChangesetId     = toCodeChangesetRowId (fileChangeChangesetId fc)
+    , codeFileChangeRowPath            = fileChangePath fc
+    , codeFileChangeRowAction          = encodeState (fileChangeAction fc)
+    , codeFileChangeRowOriginalContent = fileChangeOriginalContent fc
+    , codeFileChangeRowProposedContent = fileChangeProposedContent fc
+    , codeFileChangeRowStatus          = encodeState (fileChangeStatus fc)
+    }
