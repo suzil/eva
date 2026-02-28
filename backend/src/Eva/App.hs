@@ -13,11 +13,14 @@ module Eva.App
     -- * Startup
   , makeAppEnv
 
-    -- * Broadcast helpers
+    -- * Broadcast helpers (runs)
   , broadcastEvent
   , broadcastAndUnregisterRun
   , registerRun
   , unregisterRun
+
+    -- * Broadcast helpers (assistant conversations)
+  , broadcastAssistantEvent
 
     -- * Logging
   , logMsg
@@ -88,18 +91,21 @@ type DispatchFn =
   RunId -> Node -> Map PortName Message -> ResourceBindings -> AppM Message
 
 data AppEnv = AppEnv
-  { envConfig          :: AppConfig
-  , envDbPool          :: ConnectionPool
-  , envLogger          :: LogEntry -> IO ()
-  , envDispatch        :: DispatchFn
-  , envLLMClient       :: LLMClient
+  { envConfig                :: AppConfig
+  , envDbPool                :: ConnectionPool
+  , envLogger                :: LogEntry -> IO ()
+  , envDispatch              :: DispatchFn
+  , envLLMClient             :: LLMClient
     -- ^ OpenAI client (or dummyLLMClient when EVA_LLM_API_KEY is unset).
-  , envAnthropicClient :: LLMClient
+  , envAnthropicClient       :: LLMClient
     -- ^ Anthropic client (or dummyLLMClient when EVA_ANTHROPIC_API_KEY is unset).
-  , envBroadcasts      :: TVar (Map RunId (TChan Value))
+  , envBroadcasts            :: TVar (Map RunId (TChan Value))
     -- ^ Registry of active run broadcast channels. Keyed by RunId.
     -- Engine writes events; WebSocket clients dupTChan and read.
-  , envCredentialKey   :: ByteString
+  , envAssistantBroadcasts   :: TVar (Map Text (TChan Value))
+    -- ^ Registry of active assistant conversation channels. Keyed by conversation ID text.
+    -- Conversation handler writes events; WebSocket clients dupTChan and read.
+  , envCredentialKey         :: ByteString
     -- ^ 32-byte AES-256 key derived from EVA_CREDENTIAL_KEY at startup.
   }
 
@@ -132,21 +138,23 @@ makeAppEnv cfg dispatch = do
   anthropicClient <- case configAnthropicApiKey cfg of
     Just key -> mkAnthropicClient key
     Nothing  -> pure dummyLLMClient
-  broadcasts <- newTVarIO Map.empty
+  broadcasts            <- newTVarIO Map.empty
+  assistantBroadcasts   <- newTVarIO Map.empty
   let minLevel = configLogLevel cfg
       credKey    = Crypto.deriveKey (TE.encodeUtf8 (configCredentialKey cfg))
       logger entry
         | leLevel entry < minLevel = pure ()
         | otherwise = BLC.putStrLn (encode entry) >> hFlush stdout
   pure AppEnv
-    { envConfig          = cfg
-    , envDbPool          = pool
-    , envLogger          = logger
-    , envDispatch        = dispatch
-    , envLLMClient       = llmClient
-    , envAnthropicClient = anthropicClient
-    , envBroadcasts      = broadcasts
-    , envCredentialKey   = credKey
+    { envConfig              = cfg
+    , envDbPool              = pool
+    , envLogger              = logger
+    , envDispatch            = dispatch
+    , envLLMClient           = llmClient
+    , envAnthropicClient     = anthropicClient
+    , envBroadcasts          = broadcasts
+    , envAssistantBroadcasts = assistantBroadcasts
+    , envCredentialKey       = credKey
     }
 
 -- ---------------------------------------------------------------------------
@@ -173,6 +181,16 @@ broadcastEvent :: RunId -> Value -> AppM ()
 broadcastEvent rid event = do
   broadcasts <- asks envBroadcasts
   mCh <- liftIO $ Map.lookup rid <$> readTVarIO broadcasts
+  case mCh of
+    Nothing -> pure ()
+    Just ch -> liftIO $ atomically $ writeTChan ch event
+
+-- | Write an event to the broadcast channel for the given assistant conversation.
+-- No-op if the conversation is not in the registry.
+broadcastAssistantEvent :: Text -> Value -> AppM ()
+broadcastAssistantEvent cid event = do
+  broadcasts <- asks envAssistantBroadcasts
+  mCh <- liftIO $ Map.lookup cid <$> readTVarIO broadcasts
   case mCh of
     Nothing -> pure ()
     Just ch -> liftIO $ atomically $ writeTChan ch event
