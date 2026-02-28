@@ -115,6 +115,7 @@ test-suite eva-test
   hs-source-dirs:   test
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   other-modules:
+    Eva.AssistantSpec
     Eva.Core.GraphSpec
     Eva.Core.TypesSpec
     Eva.Core.ValidationSpec

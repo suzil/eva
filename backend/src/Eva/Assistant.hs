@@ -1,14 +1,18 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Types and tool definitions for the MAGI AI assistant (EVA-84).
--- This module is pure declarations: context record, message tagged union,
--- graph diff types, 7 LLM tool specs, and the MAGI system prompt constant.
+-- | MAGI AI assistant: types, tool specs, system prompt, and conversation loop.
 --
--- Wiring (WebSocket topic, LLM dispatch, conversation loop) is in EVA-85/86.
+-- EVA-84 contributed the pure declarations (context, messages, diff, tool specs,
+-- system prompt). EVA-85 adds the LLM dispatch loop and all tool implementations.
+-- EVA-86 wires this into the WebSocket @assistant:<convId>@ topic.
 module Eva.Assistant
-  ( -- * Context
-    AssistantContext (..)
+  ( -- * Conversation
+    ConversationId (..)
+  , handleAssistantMessage
+
+    -- * Context
+  , AssistantContext (..)
   , GraphSummary (..)
   , NodeSummary (..)
   , ProgramSummary (..)
@@ -27,24 +31,61 @@ module Eva.Assistant
   , magiSystemPrompt
   ) where
 
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Reader (ask)
 import Data.Aeson
 import Data.Aeson.Key (fromText)
-import Data.Aeson.Types (Parser)
+import Data.Aeson.Types (Parser, parseMaybe)
 import Data.Char (toLower)
+import qualified Data.Map.Strict as Map
 import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
 import GHC.Generics (Generic)
 
+import Eva.Api.Types (RunDetail (..))
+import qualified Eva.App as App
+import Eva.App (AppM)
 import Eva.Core.Types
   ( EdgeId
   , Edge (..)
   , Graph (..)
   , Node (..)
-  , NodeId
-  , ProgramId
+  , NodeId (..)
+  , ProgramId (..)
   , ProgramState
-  , RunId
+  , Program (..)
+  , ResponseFormat (..)
+  , RunId (..)
+  , ValidationError (..)
   )
-import Eva.Engine.LLM (ToolSpec (..))
+import Eva.Core.Validation (validateGraph)
+import Eva.Engine.LLM
+  ( LLMClient (..)
+  , LLMRequest (..)
+  , LLMResponse (..)
+  , ChatMessage (..)
+  , ToolCall (..)
+  , ToolSpec (..)
+  )
+import Eva.Persistence.Queries
+  ( getProgram
+  , listPrograms
+  , getRun
+  , listStepsForRun
+  )
+
+-- ---------------------------------------------------------------------------
+-- ConversationId
+-- ---------------------------------------------------------------------------
+
+-- | Opaque identifier for an assistant conversation thread.
+-- One thread per program; key: @eva:assistant:conversations:{programId}@ in
+-- the frontend. The WS topic is @assistant:<conversationId>@ (EVA-86).
+newtype ConversationId = ConversationId Text
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving newtype (ToJSON, FromJSON)
 
 -- ---------------------------------------------------------------------------
 -- Local helpers
@@ -388,3 +429,296 @@ magiSystemPrompt =
   \For errors, identify the source directly: 'Step failure: Agent node returned 429.'\n\
   \Do not use emoji. Do not hedge excessively.\n\
   \When uncertain, ask one focused clarifying question rather than listing possibilities."
+
+-- ---------------------------------------------------------------------------
+-- Public entry point
+-- ---------------------------------------------------------------------------
+
+-- | Handle one user message in a MAGI conversation.
+--
+-- Assembles the context section + MAGI system prompt, then runs the
+-- LLM tool-call loop until a final 'AssistantMessage' is produced.
+-- The @onToken@ callback receives each streaming token as the LLM
+-- generates text content; EVA-86 wires this to the WS broadcast channel.
+handleAssistantMessage
+  :: ConversationId
+  -> Text                  -- ^ User message text
+  -> AssistantContext
+  -> (Text -> IO ())       -- ^ Streaming token callback
+  -> AppM AssistantMessage
+handleAssistantMessage _convId userMsg ctx onToken = do
+  env <- ask
+  let contextMsg   = ChatMessage "system" (buildContextSection ctx)
+      initMessages =
+        [ ChatMessage "system" magiSystemPrompt
+        , contextMsg
+        , ChatMessage "user" userMsg
+        ]
+  runConversationLoop env ctx onToken initMessages 0
+
+-- ---------------------------------------------------------------------------
+-- Conversation loop
+-- ---------------------------------------------------------------------------
+
+runConversationLoop
+  :: App.AppEnv
+  -> AssistantContext
+  -> (Text -> IO ())
+  -> [ChatMessage]
+  -> Int             -- ^ Tool call iteration count
+  -> AppM AssistantMessage
+runConversationLoop env ctx onToken messages iteration =
+  if iteration >= 8
+    then pure $ AsstText
+           "MAGI: analysis depth limit reached. \
+           \Simplify your request or provide more specific context."
+    else do
+      let llmReq = LLMRequest
+            { llmModel          = "gpt-4o"
+            , llmMessages       = messages
+            , llmTemperature    = 0.7
+            , llmMaxTokens      = Nothing
+            , llmResponseFormat = ResponseText
+            , llmTools          = assistantTools
+            }
+      result <- liftIO $ clientStream (App.envLLMClient env) llmReq onToken
+      case result of
+        Left err ->
+          pure $ AsstText ("MAGI error: " <> T.pack (show err))
+        Right resp ->
+          case llmToolCalls resp of
+            Nothing ->
+              pure $ AsstText (llmContent resp)
+            Just calls -> do
+              toolResults <- mapM (executeAssistantTool ctx) calls
+              case [msg | ToolResultTerminal msg <- toolResults] of
+                (terminal : _) -> pure terminal
+                [] -> do
+                  let toolCallMsg    = ToolCallMsg calls
+                      toolResultMsgs =
+                        [ ToolResultMsg (toolCallId tc) t
+                        | (tc, ToolResultText t) <- zip calls toolResults
+                        ]
+                      newMessages = messages ++ [toolCallMsg] ++ toolResultMsgs
+                  runConversationLoop env ctx onToken newMessages (iteration + 1)
+
+-- ---------------------------------------------------------------------------
+-- Tool result
+-- ---------------------------------------------------------------------------
+
+-- | Internal result from executing a single LLM tool call.
+-- 'ToolResultText' is fed back to the LLM as a tool result message so the
+-- loop can continue. 'ToolResultTerminal' short-circuits the loop and
+-- returns a structured 'AssistantMessage' directly to the user.
+data ToolResult
+  = ToolResultText     Text             -- ^ Feed back to LLM, continue loop
+  | ToolResultTerminal AssistantMessage -- ^ Stop loop, return this as reply
+
+-- ---------------------------------------------------------------------------
+-- Tool dispatcher
+-- ---------------------------------------------------------------------------
+
+executeAssistantTool :: AssistantContext -> ToolCall -> AppM ToolResult
+executeAssistantTool ctx tc =
+  case toolCallName tc of
+    "get_graph"         -> toolGetGraph (toolCallArgs tc)
+    "get_node"          -> toolGetNode ctx (toolCallArgs tc)
+    "get_run_detail"    -> toolGetRunDetail (toolCallArgs tc)
+    "search_programs"   -> toolSearchPrograms (toolCallArgs tc)
+    "propose_graph"     -> toolProposeGraph (toolCallArgs tc)
+    "propose_diff"      -> toolProposeDiff (toolCallArgs tc)
+    "execute_operation" -> toolExecuteOperation (toolCallArgs tc)
+    unknown             -> pure $ ToolResultText ("unknown tool: " <> unknown)
+
+-- ---------------------------------------------------------------------------
+-- Tool: get_graph
+-- ---------------------------------------------------------------------------
+
+toolGetGraph :: Value -> AppM ToolResult
+toolGetGraph args =
+  case parseMaybe (withObject "args" (.: "programId")) args of
+    Nothing  -> pure $ ToolResultText
+                  "get_graph: missing required 'programId' argument"
+    Just pid -> do
+      mProg <- getProgram (ProgramId pid)
+      case mProg of
+        Nothing -> pure $ ToolResultText
+                     ("get_graph: program not found: " <> pid)
+        Just p  -> pure $ ToolResultText (renderJson (toJSON (programGraph p)))
+
+-- ---------------------------------------------------------------------------
+-- Tool: get_node
+-- ---------------------------------------------------------------------------
+
+toolGetNode :: AssistantContext -> Value -> AppM ToolResult
+toolGetNode ctx args =
+  case parseMaybe (withObject "args" (.: "nodeId")) args of
+    Nothing  -> pure $ ToolResultText
+                  "get_node: missing required 'nodeId' argument"
+    Just nid ->
+      case ctxProgramId ctx of
+        Nothing  -> pure $ ToolResultText
+                      "get_node: no program in context; provide programId via get_graph first"
+        Just pid -> do
+          mProg <- getProgram pid
+          case mProg of
+            Nothing -> pure $ ToolResultText "get_node: program not found"
+            Just p  ->
+              case Map.lookup (NodeId nid) (graphNodes (programGraph p)) of
+                Nothing -> pure $ ToolResultText
+                             ("get_node: node not found: " <> nid)
+                Just n  -> pure $ ToolResultText (renderJson (toJSON n))
+
+-- ---------------------------------------------------------------------------
+-- Tool: get_run_detail
+-- ---------------------------------------------------------------------------
+
+toolGetRunDetail :: Value -> AppM ToolResult
+toolGetRunDetail args =
+  case parseMaybe (withObject "args" (.: "runId")) args of
+    Nothing  -> pure $ ToolResultText
+                  "get_run_detail: missing required 'runId' argument"
+    Just rid -> do
+      mRun <- getRun (RunId rid)
+      case mRun of
+        Nothing -> pure $ ToolResultText
+                     ("get_run_detail: run not found: " <> rid)
+        Just r  -> do
+          steps <- listStepsForRun (RunId rid)
+          pure $ ToolResultText (renderJson (toJSON (RunDetail r steps)))
+
+-- ---------------------------------------------------------------------------
+-- Tool: search_programs
+-- ---------------------------------------------------------------------------
+
+toolSearchPrograms :: Value -> AppM ToolResult
+toolSearchPrograms args =
+  case parseMaybe (withObject "args" (.: "query")) args of
+    Nothing -> pure $ ToolResultText
+                 "search_programs: missing required 'query' argument"
+    Just q  -> do
+      progs <- listPrograms
+      let q'      = T.toLower q
+          matches = filter (\p -> q' `T.isInfixOf` T.toLower (programName p)) progs
+          summaries = map (\p -> object
+              [ "id"    .= programId p
+              , "name"  .= programName p
+              , "state" .= programState p
+              ]) matches
+      pure $ ToolResultText (renderJson (toJSON summaries))
+
+-- ---------------------------------------------------------------------------
+-- Tool: propose_graph
+-- ---------------------------------------------------------------------------
+
+-- | Validate the LLM-produced graph before offering it to the user.
+-- If validation fails, return the errors as a tool result so the LLM can fix
+-- them in the next iteration rather than presenting a broken graph.
+toolProposeGraph :: Value -> AppM ToolResult
+toolProposeGraph args = do
+  let mGraph   = parseMaybe (withObject "args" (.: "graph"))   args :: Maybe Value
+      mSummary = parseMaybe (withObject "args" (.: "summary")) args :: Maybe Text
+  case (mGraph, mSummary) of
+    (Nothing, _) -> pure $ ToolResultText
+                      "propose_graph: missing required 'graph' argument"
+    (_, Nothing) -> pure $ ToolResultText
+                      "propose_graph: missing required 'summary' argument"
+    (Just gVal, Just summary) ->
+      case fromJSON gVal of
+        Error e -> pure $ ToolResultText
+                     ("propose_graph: invalid Graph JSON: " <> T.pack e)
+        Success g ->
+          let errs = validateGraph g
+          in  if null errs
+                then pure $ ToolResultTerminal (AsstGraphProposal g summary)
+                else pure $ ToolResultText
+                       ( "propose_graph: validation failed — fix these issues "
+                       <> "and call propose_graph again:\n"
+                       <> T.intercalate "\n" (map (("- " <>) . veMessage) errs)
+                       )
+
+-- ---------------------------------------------------------------------------
+-- Tool: propose_diff
+-- ---------------------------------------------------------------------------
+
+toolProposeDiff :: Value -> AppM ToolResult
+toolProposeDiff args = do
+  let mDiff    = parseMaybe (withObject "args" (.: "diff"))    args :: Maybe Value
+      mSummary = parseMaybe (withObject "args" (.: "summary")) args :: Maybe Text
+  case (mDiff, mSummary) of
+    (Nothing, _) -> pure $ ToolResultText
+                      "propose_diff: missing required 'diff' argument"
+    (_, Nothing) -> pure $ ToolResultText
+                      "propose_diff: missing required 'summary' argument"
+    (Just dVal, Just summary) ->
+      case fromJSON dVal of
+        Error e -> pure $ ToolResultText
+                     ("propose_diff: invalid GraphDiff JSON: " <> T.pack e)
+        Success d -> pure $ ToolResultTerminal (AsstGraphDiff d summary)
+
+-- ---------------------------------------------------------------------------
+-- Tool: execute_operation
+-- ---------------------------------------------------------------------------
+
+-- | Never executes directly — always returns an 'AsstActionConfirm' card
+-- requiring the user to confirm before the frontend calls the real API.
+toolExecuteOperation :: Value -> AppM ToolResult
+toolExecuteOperation args = do
+  let mOp  = parseMaybe (withObject "args" (.: "operation")) args :: Maybe Text
+      mPid = parseMaybe (withObject "args" (.: "programId")) args :: Maybe Text
+  case mOp of
+    Nothing -> pure $ ToolResultText
+                 "execute_operation: missing required 'operation' argument"
+    Just op ->
+      let baseDesc = case op of
+            "deploy"  -> "Deploy the program, transitioning it from Draft to Active."
+            "run"     -> "Start a new run of the program."
+            "pause"   -> "Pause the program, suspending cron trigger firing."
+            "resume"  -> "Resume a paused program."
+            "status"  -> "Check the current state of the program."
+            _         -> "Perform operation: " <> op
+          desc = case mPid of
+            Just pid -> baseDesc <> " (program: " <> pid <> ")"
+            Nothing  -> baseDesc
+      in  pure $ ToolResultTerminal (AsstActionConfirm op desc)
+
+-- ---------------------------------------------------------------------------
+-- Context injection
+-- ---------------------------------------------------------------------------
+
+-- | Format the 'AssistantContext' bundle as a structured text block injected
+-- as a second @system@ message before the user message. Omits empty fields.
+buildContextSection :: AssistantContext -> Text
+buildContextSection ctx =
+  T.intercalate "\n" $ filter (not . T.null)
+    [ "## Current Context"
+    , maybe "" (\n -> "Program: " <> n)         (ctxProgramName  ctx)
+    , maybe "" (\s -> "State: "   <> showState s) (ctxProgramState ctx)
+    , maybe "" fmtGraph                           (ctxGraphSummary ctx)
+    , maybe "" fmtNode                            (ctxSelectedNode ctx)
+    , "Mode: " <> ctxCurrentMode ctx
+    , maybe "" (\(RunId r) -> "Active run: " <> r) (ctxActiveRunId ctx)
+    , case ctxRecentErrors ctx of
+        [] -> ""
+        es -> "Recent errors:\n" <> T.intercalate "\n" (map ("  - " <>) es)
+    , case ctxProgramList ctx of
+        [] -> ""
+        ps -> "Workspace programs: " <> T.intercalate ", " (map psName ps)
+    ]
+  where
+    fmtGraph gs =
+      "Graph: " <> T.pack (show (gsNodeCount gs)) <> " nodes, "
+                <> T.pack (show (gsEdgeCount gs)) <> " edges"
+                <> if null (gsNodeTypes gs) then ""
+                   else " (" <> T.intercalate ", " (gsNodeTypes gs) <> ")"
+    fmtNode ns =
+      let NodeId nid = nsId ns
+      in  "Selected node: " <> nsLabel ns <> " (" <> nsType ns <> ", id: " <> nid <> ")"
+    showState s = T.pack (show s)
+
+-- ---------------------------------------------------------------------------
+-- Helpers
+-- ---------------------------------------------------------------------------
+
+renderJson :: Value -> Text
+renderJson = TL.toStrict . TLE.decodeUtf8 . encode

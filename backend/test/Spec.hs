@@ -2,6 +2,7 @@ module Main where
 
 import Test.Hspec
 
+import qualified Eva.AssistantSpec
 import qualified Eva.Api.ServerSpec
 import qualified Eva.Api.WebSocketSpec
 import qualified Eva.Codebase.ApiSpec
@@ -30,6 +31,7 @@ import qualified Eva.Engine.SchedulerSpec
 
 main :: IO ()
 main = hspec $ do
+  Eva.AssistantSpec.spec
   Eva.Api.ServerSpec.spec
   Eva.Api.WebSocketSpec.spec
   Eva.Codebase.ApiSpec.spec
