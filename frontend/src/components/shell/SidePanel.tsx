@@ -5,12 +5,14 @@ import { CredentialsPanel } from './CredentialsPanel'
 import { ProgramsPanel } from './ProgramsList'
 import { NodePalette } from './NodePalette'
 import { RunsPanel } from './RunsPanel'
+import { CodebasePanel } from '../panels/CodebasePanel'
 
 const ACTIVITY_LABELS: Record<string, string> = {
   programs: 'Programs',
   nodes: 'Node Palette',
   knowledge: 'Knowledge',
   runs: 'Runs',
+  codebase: 'Codebase',
   settings: 'Settings',
 }
 
@@ -82,6 +84,7 @@ export function SidePanel() {
         />
       )}
       {activeActivity === 'runs' && <RunsPanel />}
+      {activeActivity === 'codebase' && <CodebasePanel />}
       {activeActivity === 'settings' && <CredentialsPanel />}
 
       {/* Drag handle */}

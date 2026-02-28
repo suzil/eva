@@ -1,4 +1,4 @@
-import { LayoutList, Boxes, BookOpen, History, Settings } from 'lucide-react'
+import { LayoutList, Boxes, BookOpen, History, FolderCode, Settings } from 'lucide-react'
 import { type ActivityKey, useUiStore } from '../../store/uiStore'
 
 interface ActivityItem {
@@ -12,6 +12,7 @@ const ACTIVITIES: ActivityItem[] = [
   { key: 'nodes', label: 'Node Palette', Icon: Boxes },
   { key: 'knowledge', label: 'Knowledge', Icon: BookOpen },
   { key: 'runs', label: 'Runs', Icon: History },
+  { key: 'codebase', label: 'Codebase', Icon: FolderCode },
 ]
 
 const BOTTOM_ACTIVITIES: ActivityItem[] = [
