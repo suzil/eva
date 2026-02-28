@@ -7,6 +7,7 @@ import qualified Eva.Api.WebSocketSpec
 import qualified Eva.Codebase.ApiSpec
 import qualified Eva.Codebase.TypesSpec
 import qualified Eva.Core.GraphSpec
+import qualified Eva.Knowledge.TypesSpec
 import qualified Eva.Core.TypesSpec
 import qualified Eva.Core.ValidationSpec
 import qualified Eva.Engine.Handlers.ActionSpec
@@ -29,6 +30,7 @@ main = hspec $ do
   Eva.Codebase.ApiSpec.spec
   Eva.Codebase.TypesSpec.spec
   Eva.Core.GraphSpec.spec
+  Eva.Knowledge.TypesSpec.spec
   Eva.Core.TypesSpec.spec
   Eva.Core.ValidationSpec.spec
   Eva.Engine.Handlers.ActionSpec.spec

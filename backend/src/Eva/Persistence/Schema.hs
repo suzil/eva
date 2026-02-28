@@ -117,4 +117,21 @@ CodeFileChangeRow sql=code_file_changes
   proposedContent Text sql=proposed_content
   status Text
   deriving Show Eq
+
+KnowledgeEntryRow sql=knowledge_entries
+  Id Text sqltype=text
+  sourceType Text sql=source_type
+  sourceId Text Maybe sql=source_id
+  programId ProgramRowId Maybe sql=program_id
+  category Text
+  title Text
+  content Text
+  originalContent Text Maybe sql=original_content
+  metadata Text sqltype=text
+  confidence Double
+  isEdited Bool sql=is_edited
+  createdAt UTCTime sql=created_at
+  updatedAt UTCTime sql=updated_at
+  scannedAt UTCTime sql=scanned_at
+  deriving Show Eq
 |]
