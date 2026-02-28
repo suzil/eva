@@ -192,6 +192,7 @@ export function NodePanel() {
           {typeKey === 'agent' && (
             <>
               <AgentForm
+                nodeId={node.id}
                 config={node.data.nodeType.config as Parameters<typeof AgentForm>[0]['config']}
                 onChange={handleConfigChange}
               />
