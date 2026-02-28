@@ -14,6 +14,8 @@ module Eva.Api.Types
   , WriteFileReq (..)
   , CreateKnowledgeEntryReq (..)
   , PatchKnowledgeEntryReq (..)
+  , CreateTemplateReq (..)
+  , PatchTemplateReq (..)
 
     -- * Response bodies
   , HealthResponse (..)
@@ -34,6 +36,7 @@ import Data.Text (Text)
 import Eva.Core.Types (Run, Step, ValidationError (..), CredentialType (..), SystemType (..))
 import Eva.Declarative (ParseError)
 import Eva.Knowledge.Types (KnowledgeCategory (..))
+import Eva.Prompt.Types (TemplateCategory (..), TemplateVariable (..))
 
 -- ---------------------------------------------------------------------------
 -- Request bodies
@@ -231,3 +234,50 @@ instance FromJSON PatchKnowledgeEntryReq where
     PatchKnowledgeEntryReq
       <$> o .:? "title"
       <*> o .:? "content"
+
+-- ---------------------------------------------------------------------------
+-- Template request bodies (P2-M7) — EVA-100
+-- ---------------------------------------------------------------------------
+
+-- | Request body for POST /api/templates (create user template).
+-- 'builtIn' is forced to False in the handler — callers cannot set it.
+data CreateTemplateReq = CreateTemplateReq
+  { ctrName        :: Text
+  , ctrDescription :: Text
+  , ctrCategory    :: TemplateCategory
+  , ctrTags        :: [Text]
+  , ctrBody        :: Text
+  , ctrVariables   :: [TemplateVariable]
+  }
+
+instance FromJSON CreateTemplateReq where
+  parseJSON = withObject "CreateTemplateReq" $ \o ->
+    CreateTemplateReq
+      <$> o .:  "name"
+      <*> o .:  "description"
+      <*> o .:  "category"
+      <*> o .:  "tags"
+      <*> o .:  "body"
+      <*> o .:  "variables"
+
+-- | Request body for PATCH /api/templates/:id (update user template).
+-- All fields are optional; only supplied fields are applied.
+-- Returns 403 if the target template is built-in.
+data PatchTemplateReq = PatchTemplateReq
+  { ptrName        :: Maybe Text
+  , ptrDescription :: Maybe Text
+  , ptrCategory    :: Maybe TemplateCategory
+  , ptrTags        :: Maybe [Text]
+  , ptrBody        :: Maybe Text
+  , ptrVariables   :: Maybe [TemplateVariable]
+  }
+
+instance FromJSON PatchTemplateReq where
+  parseJSON = withObject "PatchTemplateReq" $ \o ->
+    PatchTemplateReq
+      <$> o .:? "name"
+      <*> o .:? "description"
+      <*> o .:? "category"
+      <*> o .:? "tags"
+      <*> o .:? "body"
+      <*> o .:? "variables"

@@ -35,6 +35,7 @@ library
     Eva.Prompt.Types
     Eva.Prompt.Store
     Eva.Prompt.Resolve
+    Eva.Prompt.Api
     Eva.Engine.Runner
     Eva.Engine.StateMachine
     Eva.Engine.Dispatch
@@ -149,6 +150,7 @@ test-suite eva-test
     Eva.Prompt.TypesSpec
     Eva.Prompt.StoreSpec
     Eva.Prompt.ResolveSpec
+    Eva.Prompt.ApiSpec
   build-depends:
       base              ^>=4.20
     , eva
