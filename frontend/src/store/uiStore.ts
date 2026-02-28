@@ -63,6 +63,8 @@ interface UiState {
   detailPanelTab: DetailPanelTab
   /** Whether the Cmd+K CommandBar overlay is open. */
   commandBarOpen: boolean
+  /** Message to auto-send to the assistant when the MAGI panel opens (set by CommandBar). */
+  pendingAssistantMessage: string | null
   /** Per-program assistant conversation threads, persisted to localStorage. */
   assistantConversations: Record<ProgramId, ConversationThread>
 
@@ -97,6 +99,7 @@ interface UiState {
   setDetailPanelTab: (tab: DetailPanelTab) => void
   setCommandBarOpen: (open: boolean) => void
   toggleCommandBar: () => void
+  setPendingAssistantMessage: (msg: string | null) => void
   appendAssistantMessage: (programId: ProgramId, message: AssistantMessage) => void
   setAssistantStreaming: (programId: ProgramId, streaming: boolean) => void
   clearAssistantConversation: (programId: ProgramId) => void
@@ -125,6 +128,7 @@ export const useUiStore = create<UiState>((set) => ({
   selectedKnowledgeEntryId: null,
   detailPanelTab: 'inspector',
   commandBarOpen: false,
+  pendingAssistantMessage: null,
   assistantConversations: loadConversations(),
 
   setActiveActivity: (activity) => set({ activeActivity: activity }),
@@ -178,6 +182,7 @@ export const useUiStore = create<UiState>((set) => ({
   setDetailPanelTab: (tab) => set({ detailPanelTab: tab }),
   setCommandBarOpen: (open) => set({ commandBarOpen: open }),
   toggleCommandBar: () => set((s) => ({ commandBarOpen: !s.commandBarOpen })),
+  setPendingAssistantMessage: (msg) => set({ pendingAssistantMessage: msg }),
   appendAssistantMessage: (programId, message) =>
     set((s) => {
       const existing = s.assistantConversations[programId] ?? {

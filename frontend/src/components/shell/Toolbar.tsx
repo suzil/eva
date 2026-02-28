@@ -90,6 +90,7 @@ export function Toolbar() {
 
   const setSpecSyncState = useUiStore((s) => s.setSpecSyncState)
   const setSpecDirty = useUiStore((s) => s.setSpecDirty)
+  const toggleCommandBar = useUiStore((s) => s.toggleCommandBar)
 
   const isDirty = useCanvasStore((s) => s.isDirty)
   const buildGraph = useCanvasStore((s) => s.buildGraph)
@@ -506,12 +507,11 @@ export function Toolbar() {
             />
           )}
 
-          {/* Command palette placeholder */}
+          {/* Command bar */}
           <ToolbarButton
             icon={<Command className="h-3.5 w-3.5" />}
             label="⌘K"
-            onClick={() => {}}
-            disabled
+            onClick={toggleCommandBar}
             variant="ghost"
             hideLabel
           />
