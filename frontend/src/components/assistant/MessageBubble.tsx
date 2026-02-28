@@ -3,6 +3,7 @@ import type { AssistantMessage } from '../../types'
 import { useCanvasStore } from '../../store/canvasStore'
 import { NodeReferenceChip } from './NodeReferenceChip'
 import { GraphProposalCard } from './GraphProposalCard'
+import { GraphDiffCard } from './GraphDiffCard'
 
 interface MessageBubbleProps {
   message: AssistantMessage
@@ -21,7 +22,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     case 'graph_proposal':
       return <GraphProposalCard graph={message.graph} summary={message.summary} />
     case 'graph_diff':
-      return <StubCard icon={<GitMerge className="h-4 w-4" />} label="Graph Diff" detail={message.summary} />
+      return <GraphDiffCard diff={message.diff} summary={message.summary} />
     case 'run_data':
       return <StubCard icon={<Activity className="h-4 w-4" />} label="Run Data" detail={message.summary} />
     case 'action_confirm':
