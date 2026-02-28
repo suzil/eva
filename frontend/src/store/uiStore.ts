@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { LogEntry, RunId, FileTab } from '../types'
+import type { AssistantMessage, ConversationThread, LogEntry, ProgramId, RunId, FileTab } from '../types'
 
 export type { FileTab }
 
@@ -8,6 +8,26 @@ export type AppMode = 'author' | 'operate'
 export type BottomTab = 'logs' | 'output' | 'timeline' | 'changes'
 export type EditorTab = 'graph' | 'code' | 'spec'
 export type SpecSyncState = 'graph_source' | 'yaml_source' | 'conflict'
+export type DetailPanelTab = 'inspector' | 'magi'
+
+const CONV_LS_KEY = 'eva:assistant:conversations'
+
+function loadConversations(): Record<ProgramId, ConversationThread> {
+  try {
+    const raw = localStorage.getItem(CONV_LS_KEY)
+    return raw ? (JSON.parse(raw) as Record<ProgramId, ConversationThread>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function persistConversations(conversations: Record<ProgramId, ConversationThread>): void {
+  try {
+    localStorage.setItem(CONV_LS_KEY, JSON.stringify(conversations))
+  } catch {
+    // storage quota exceeded — ignore
+  }
+}
 
 interface UiState {
   activeActivity: ActivityKey
@@ -39,6 +59,12 @@ interface UiState {
   activeCodebaseId: string | null
   /** The knowledge entry currently selected in the KnowledgeLibrary (opens KnowledgeEntryView). */
   selectedKnowledgeEntryId: string | null
+  /** Which tab is active in the right DetailPanel — Inspector or MAGI assistant. */
+  detailPanelTab: DetailPanelTab
+  /** Whether the Cmd+K CommandBar overlay is open. */
+  commandBarOpen: boolean
+  /** Per-program assistant conversation threads, persisted to localStorage. */
+  assistantConversations: Record<ProgramId, ConversationThread>
 
   setActiveActivity: (activity: ActivityKey) => void
   setMode: (mode: AppMode) => void
@@ -68,6 +94,12 @@ interface UiState {
   setActiveFilePath: (path: string | null) => void
   setActiveCodebaseId: (id: string | null) => void
   setSelectedKnowledgeEntryId: (id: string | null) => void
+  setDetailPanelTab: (tab: DetailPanelTab) => void
+  setCommandBarOpen: (open: boolean) => void
+  toggleCommandBar: () => void
+  appendAssistantMessage: (programId: ProgramId, message: AssistantMessage) => void
+  setAssistantStreaming: (programId: ProgramId, streaming: boolean) => void
+  clearAssistantConversation: (programId: ProgramId) => void
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -91,6 +123,9 @@ export const useUiStore = create<UiState>((set) => ({
   activeFilePath: null,
   activeCodebaseId: null,
   selectedKnowledgeEntryId: null,
+  detailPanelTab: 'inspector',
+  commandBarOpen: false,
+  assistantConversations: loadConversations(),
 
   setActiveActivity: (activity) => set({ activeActivity: activity }),
   setMode: (mode) => set({ mode }),
@@ -140,4 +175,43 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveFilePath: (path) => set({ activeFilePath: path }),
   setActiveCodebaseId: (id) => set({ activeCodebaseId: id }),
   setSelectedKnowledgeEntryId: (id) => set({ selectedKnowledgeEntryId: id }),
+  setDetailPanelTab: (tab) => set({ detailPanelTab: tab }),
+  setCommandBarOpen: (open) => set({ commandBarOpen: open }),
+  toggleCommandBar: () => set((s) => ({ commandBarOpen: !s.commandBarOpen })),
+  appendAssistantMessage: (programId, message) =>
+    set((s) => {
+      const existing = s.assistantConversations[programId] ?? {
+        id: programId,
+        programId,
+        messages: [],
+        isStreaming: false,
+      }
+      const updated: ConversationThread = {
+        ...existing,
+        messages: [...existing.messages, message],
+      }
+      const next = { ...s.assistantConversations, [programId]: updated }
+      persistConversations(next)
+      return { assistantConversations: next }
+    }),
+  setAssistantStreaming: (programId, streaming) =>
+    set((s) => {
+      const existing = s.assistantConversations[programId] ?? {
+        id: programId,
+        programId,
+        messages: [],
+        isStreaming: false,
+      }
+      const updated: ConversationThread = { ...existing, isStreaming: streaming }
+      const next = { ...s.assistantConversations, [programId]: updated }
+      persistConversations(next)
+      return { assistantConversations: next }
+    }),
+  clearAssistantConversation: (programId) =>
+    set((s) => {
+      const next = { ...s.assistantConversations }
+      delete next[programId]
+      persistConversations(next)
+      return { assistantConversations: next }
+    }),
 }))

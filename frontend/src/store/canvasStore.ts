@@ -7,7 +7,7 @@ import {
   type NodeChange,
   type EdgeChange,
 } from '@xyflow/react'
-import type { EvaNodeData, Graph, NodeId, NodeType, PortCategory, Step, StepState } from '../types'
+import type { EvaNodeData, Graph, GraphDiff, NodeId, NodeType, PortCategory, Step, StepState } from '../types'
 
 // ---------------------------------------------------------------------------
 // History
@@ -45,6 +45,9 @@ interface CanvasState {
   /** Set to true by setLayoutedNodes; CanvasInner watches it to call fitView(). */
   triggerFitView: boolean
 
+  /** Proposed graph from the assistant — rendered by GraphPreviewOverlay. Null when not in preview mode. */
+  previewOverlayGraph: Graph | null
+
   loadGraph: (graph: Graph, programId: string) => void
   applyNodeChanges: (changes: NodeChange<Node<EvaNodeData>>[]) => void
   applyEdgeChanges: (changes: EdgeChange[]) => void
@@ -77,6 +80,10 @@ interface CanvasState {
 
   /** Convert current store state to API Graph shape for PUT /programs/:id/graph */
   buildGraph: () => Graph
+
+  setPreviewOverlayGraph: (graph: Graph | null) => void
+  /** Apply a GraphDiff as a single undoable batch (snapshot → remove → add → modify). */
+  applyGraphDiff: (diff: GraphDiff) => void
 }
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
@@ -91,6 +98,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   past: [],
   future: [],
   triggerFitView: false,
+  previewOverlayGraph: null,
 
   loadGraph: (graph, programId) => {
     const nodes: Node<EvaNodeData>[] = Object.values(graph.nodes).map((n) => ({
@@ -297,5 +305,45 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       category: (e.type ?? 'data') as PortCategory,
     }))
     return { nodes: graphNodes, edges: graphEdges }
+  },
+
+  setPreviewOverlayGraph: (graph) => set({ previewOverlayGraph: graph }),
+
+  applyGraphDiff: (diff) => {
+    get().snapshot()
+    set((s) => {
+      // 1. Remove edges
+      const edges = s.edges.filter((e) => !diff.removedEdgeIds.includes(e.id))
+      // 2. Remove nodes
+      const nodesAfterRemove = s.nodes.filter((n) => !diff.removedNodeIds.includes(n.id))
+      // 3. Add nodes
+      const addedNodes: Node<EvaNodeData>[] = diff.addedNodes.map((n) => ({
+        id: n.id,
+        type: n.type.type,
+        position: { x: n.posX, y: n.posY },
+        data: { label: n.label, nodeType: n.type },
+      }))
+      // 4. Apply config modifications
+      const modifiedNodes = nodesAfterRemove.map((n) => {
+        const mod = diff.modifiedNodes.find((m) => m.nodeId === n.id)
+        if (!mod) return n
+        const nodeType = { ...n.data.nodeType, config: mod.after } as NodeType
+        return { ...n, data: { ...n.data, nodeType } }
+      })
+      // 5. Add edges
+      const addedEdges: Edge[] = diff.addedEdges.map((e) => ({
+        id: e.id,
+        source: e.sourceNode,
+        sourceHandle: e.sourcePort,
+        target: e.targetNode,
+        targetHandle: e.targetPort,
+        type: e.category,
+      }))
+      return {
+        nodes: [...modifiedNodes, ...addedNodes],
+        edges: [...edges, ...addedEdges],
+        isDirty: true,
+      }
+    })
   },
 }))

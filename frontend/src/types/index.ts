@@ -480,3 +480,39 @@ export interface FileTab {
   codebaseId: CodebaseId
   path: string
 }
+
+// ---------------------------------------------------------------------------
+// AI Assistant (P2-M6) — EVA-87
+// ---------------------------------------------------------------------------
+
+export type AssistantMessage =
+  | { type: 'user';           text: string; timestamp: number }
+  | { type: 'text';           text: string; timestamp: number }
+  | { type: 'graph_proposal'; graph: Graph; summary: string; timestamp: number }
+  | { type: 'graph_diff';     diff: GraphDiff; summary: string; timestamp: number }
+  | { type: 'node_reference'; nodeId: string; label: string; timestamp: number }
+  | { type: 'run_data';       runId: string; summary: string; detail: RunDetail; timestamp: number }
+  | { type: 'action_confirm'; operation: string; description: string; timestamp: number }
+  | { type: 'action_result';  success: boolean; message: string; timestamp: number }
+
+export interface ConversationThread {
+  id: string
+  programId: string
+  messages: AssistantMessage[]
+  isStreaming: boolean
+}
+
+export type GraphDiffOperation =
+  | { op: 'add_node';    node: Node }
+  | { op: 'modify_node'; nodeId: string; config: NodeType['config'] }
+  | { op: 'remove_node'; nodeId: string }
+  | { op: 'add_edge';    edge: Edge }
+  | { op: 'remove_edge'; edgeId: string }
+
+export interface GraphDiff {
+  addedNodes: Node[]
+  removedNodeIds: string[]
+  modifiedNodes: { nodeId: string; before: Partial<NodeType['config']>; after: Partial<NodeType['config']> }[]
+  addedEdges: Edge[]
+  removedEdgeIds: string[]
+}
