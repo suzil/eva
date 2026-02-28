@@ -15,6 +15,7 @@ library
   hs-source-dirs:   src
   exposed-modules:
     Eva.App
+    Eva.Assistant
     Eva.Config
     Eva.Crypto
     Eva.Core.Types
