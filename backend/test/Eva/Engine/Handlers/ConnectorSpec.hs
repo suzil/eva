@@ -17,6 +17,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time (UTCTime, getCurrentTime)
 import Database.Persist.Sqlite (createSqlitePool)
+import System.Directory (createFileLink)
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
 
@@ -388,6 +389,25 @@ spec = do
                     _ -> do
                       -- Verify the response contains the file content
                       show val `shouldContain` "hello from eva codebase connector"
+
+    it "read_file rejects a symlink that escapes the codebase root" $
+      withTestEnv $ \env ->
+        withSystemTempDirectory "eva-symlink-test" $ \dir -> do
+          -- Place a symlink inside the codebase root pointing at /tmp (outside root).
+          -- read_file should detect the escape and return an error.
+          createFileLink "/tmp" (dir <> "/evil-link")
+          insertTestCodebase env "cb-symlink-test" dir
+          result <- runAppM env $
+            resolveConnectorRunner (codebaseConfig "cb-symlink-test") dummyRunId dummyStepId
+          case result of
+            Left err -> expectationFailure $
+              "expected Right runner, got: " <> T.unpack (connectorErrorText err)
+            Right runner -> do
+              let args = object ["path" .= ("evil-link/passwd" :: Text)]
+              execResult <- connectorExecuteAction runner (ActionName "read_file") args
+              case execResult of
+                Right _ -> expectationFailure "expected Left (path escapes root), got Right"
+                Left _  -> pure ()  -- any error is acceptable — the point is it doesn't succeed
 
     it "write_file action creates a pending CodeChangeset in the DB" $
       withTestEnv $ \env ->

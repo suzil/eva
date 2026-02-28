@@ -26,6 +26,7 @@ import qualified Data.Text.Encoding as TE
 import Data.Time (getCurrentTime)
 import qualified Data.UUID as UUID
 import Data.UUID.V4 (nextRandom)
+import System.Directory (canonicalizePath)
 import System.Exit (ExitCode (..))
 import System.FilePath (isRelative, splitDirectories, (</>))
 import System.Process.Typed (proc, readProcessStdout, setWorkingDir)
@@ -236,8 +237,9 @@ runReadFile root args = do
   case extractTextField "path" args of
     Nothing ->
       pure $ Left $ ConnectorApiError "read_file requires 'path' parameter"
-    Just relPath ->
-      case validateRelPath root (T.unpack relPath) of
+    Just relPath -> do
+      pathResult <- validateRelPath root (T.unpack relPath)
+      case pathResult of
         Left msg -> pure $ Left $ ConnectorApiError msg
         Right absPath -> do
           readResult <-
@@ -298,7 +300,19 @@ runWriteFile env rid sid args =
       pure $ Left $ ConnectorApiError "write_file requires 'path' parameter"
     (_, Nothing) ->
       pure $ Left $ ConnectorApiError "write_file requires 'content' parameter"
-    (Just relPath, Just content) -> do
+    (Just relPath, Just content) ->
+      -- Basic path safety: reject absolute paths and .. components before
+      -- staging. The full confinement check runs at accept time via the
+      -- API's validateConfinedPath, but we validate here to prevent
+      -- misleading traversal paths from entering the changeset table.
+      let pathParts = splitDirectories (T.unpack relPath)
+      in if not (isRelative (T.unpack relPath))
+           then pure $ Left $ ConnectorApiError
+                  "path must be relative (no leading /)"
+         else if any (== "..") pathParts
+           then pure $ Left $ ConnectorApiError
+                  ("path traversal not allowed: " <> relPath)
+         else do
       let changeAction = case extractTextField "action" args of
             Just "add"    -> FileActionAdd
             Just "delete" -> FileActionDelete
@@ -345,18 +359,33 @@ extractTextField key (Object o) =
     _               -> Nothing
 extractTextField _ _ = Nothing
 
--- | Validate that @rel@ is a relative path with no @..@ components, and
--- compute the absolute path under @root@.
-validateRelPath :: FilePath -> FilePath -> Either Text FilePath
+-- | Validate that @rel@ is a relative path with no @..@ components, resolve
+-- symlinks via 'canonicalizePath', and verify the result is still confined
+-- within @root@. Returns 'Left' with an error message if any check fails.
+--
+-- This mirrors 'validateConfinedPath' in Eva.Codebase.Api. The IO round-trip
+-- is required to detect symlink escapes (e.g. a symlink at root\/evil -> \/etc
+-- that would otherwise allow reading outside the codebase root).
+validateRelPath :: FilePath -> FilePath -> IO (Either Text FilePath)
 validateRelPath root rel
   | not (isRelative rel) =
-      Left "path must be relative (no leading /)"
+      pure $ Left "path must be relative (no leading /)"
   | hasDotDot rel =
-      Left ("path traversal not allowed: " <> T.pack rel)
-  | otherwise =
-      Right (root </> rel)
+      pure $ Left ("path traversal not allowed: " <> T.pack rel)
+  | otherwise = do
+      result <- try (canonicalizePath (root </> rel)) :: IO (Either IOException FilePath)
+      case result of
+        Left _ ->
+          pure $ Left ("path does not exist: " <> T.pack rel)
+        Right absPath ->
+          if splitDirectories root `isPrefixOf` splitDirectories absPath
+            then pure $ Right absPath
+            else pure $ Left "path escapes codebase root"
   where
     hasDotDot = any (== "..") . splitDirectories
+    isPrefixOf [] _        = True
+    isPrefixOf _  []       = False
+    isPrefixOf (x:xs) (y:ys) = x == y && isPrefixOf xs ys
 
 -- ---------------------------------------------------------------------------
 -- Action filter
