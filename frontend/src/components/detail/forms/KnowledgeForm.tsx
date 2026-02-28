@@ -1,10 +1,13 @@
-import { AlertTriangle } from 'lucide-react'
+import { useState } from 'react'
+import { AlertTriangle, Search } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import type { KnowledgeConfig, KnowledgeFormat, RefreshPolicy } from '../../../types'
+import { useKnowledgeSearch } from '../../../api/hooks'
 
 interface Props {
   config: KnowledgeConfig
   onChange: (config: KnowledgeConfig) => void
+  programId?: string
 }
 
 const FORMATS: { value: KnowledgeFormat; label: string }[] = [
@@ -19,41 +22,50 @@ const REFRESH_POLICIES: { value: RefreshPolicy['type']; label: string }[] = [
   { value: 'periodic', label: 'Periodic — on a schedule' },
 ]
 
-export function KnowledgeForm({ config, onChange }: Props) {
+export function KnowledgeForm({ config, onChange, programId = '' }: Props) {
   const update = (patch: Partial<KnowledgeConfig>) => onChange({ ...config, ...patch })
 
-  const isInline = config.source.type === '_inline_text'
-  const inlineValue = config.source.type === '_inline_text' ? config.source.value : ''
+  const sourceType = config.source.type
+  const isInline = sourceType === '_inline_text'
+  const isLibrary = sourceType === '_library_ref'
+  const inlineValue = sourceType === '_inline_text' ? config.source.value : ''
 
   return (
     <div className="space-y-4">
       <SectionLabel>Source</SectionLabel>
 
-      {/* Source tabs — Inline only for MLP; File/URL deferred */}
+      {/* Source tabs */}
       <div className="flex gap-1 rounded border border-terminal-500 bg-terminal-900 p-0.5">
         {[
           { id: '_inline_text', label: 'Inline' },
           { id: '_file_ref', label: 'File' },
           { id: '_url_ref', label: 'URL' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            disabled={tab.id !== '_inline_text'}
-            onClick={() => {
-              if (tab.id === '_inline_text') {
-                update({ source: { type: '_inline_text', value: inlineValue } })
-              }
-            }}
-            className={[
-              'flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors duration-[150ms]',
-              isInline && tab.id === '_inline_text'
-                ? 'bg-terminal-600 text-terminal-50'
-                : 'text-terminal-400 hover:text-terminal-100 disabled:cursor-not-allowed disabled:opacity-40',
-            ].join(' ')}
-          >
-            {tab.label}
-          </button>
-        ))}
+          { id: '_library_ref', label: 'Library' },
+        ].map((tab) => {
+          const isActive = sourceType === tab.id
+          const isEnabled = tab.id === '_inline_text' || tab.id === '_library_ref'
+          return (
+            <button
+              key={tab.id}
+              disabled={!isEnabled}
+              onClick={() => {
+                if (tab.id === '_inline_text') {
+                  update({ source: { type: '_inline_text', value: inlineValue } })
+                } else if (tab.id === '_library_ref') {
+                  update({ source: { type: '_library_ref', value: '' } })
+                }
+              }}
+              className={[
+                'flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors duration-[150ms]',
+                isActive
+                  ? 'bg-terminal-600 text-terminal-50'
+                  : 'text-terminal-400 hover:text-terminal-100 disabled:cursor-not-allowed disabled:opacity-40',
+              ].join(' ')}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Inline content editor */}
@@ -89,6 +101,15 @@ export function KnowledgeForm({ config, onChange }: Props) {
             <AtFieldWarning message="Content required" />
           )}
         </div>
+      )}
+
+      {/* Library picker */}
+      {isLibrary && (
+        <LibraryPicker
+          programId={programId}
+          selectedId={sourceType === '_library_ref' ? config.source.value : ''}
+          onSelect={(entryId) => update({ source: { type: '_library_ref', value: entryId } })}
+        />
       )}
 
       <SectionLabel>Format</SectionLabel>
@@ -149,6 +170,87 @@ export function KnowledgeForm({ config, onChange }: Props) {
             className={inputClass}
           />
         </div>
+      )}
+    </div>
+  )
+}
+
+interface LibraryPickerProps {
+  programId: string
+  selectedId: string
+  onSelect: (entryId: string) => void
+}
+
+function LibraryPicker({ programId, selectedId, onSelect }: LibraryPickerProps) {
+  const [searchText, setSearchText] = useState('')
+  const { data: results, isLoading } = useKnowledgeSearch(programId, searchText)
+
+  const entries = results?.map((r) => r.entry) ?? []
+  const selectedEntry = entries.find((e) => e.id === selectedId)
+
+  if (!programId) {
+    return (
+      <AtFieldWarning message="Save the program first to browse the knowledge library" />
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Search input */}
+      <div className="relative">
+        <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-terminal-400" />
+        <input
+          type="text"
+          placeholder="Search entries…"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          className={[inputClass, 'pl-6'].join(' ')}
+          data-testid="library-search"
+        />
+      </div>
+
+      {/* Selected entry badge */}
+      {selectedId && selectedEntry && (
+        <div className="rounded border border-at-field-700 bg-at-field-950/40 px-2 py-1 text-[11px] text-at-field-300">
+          Selected: <span className="font-medium">{selectedEntry.title}</span>
+        </div>
+      )}
+      {selectedId && !selectedEntry && !isLoading && (
+        <div className="rounded border border-warn-amber-700 bg-warn-amber-950/40 px-2 py-1 text-[11px] text-warn-amber-400">
+          Entry ID: {selectedId}
+        </div>
+      )}
+
+      {/* Results list */}
+      <div className="max-h-48 overflow-y-auto rounded border border-terminal-600 bg-terminal-900">
+        {isLoading && (
+          <p className="px-3 py-2 text-[11px] text-terminal-400">Loading…</p>
+        )}
+        {!isLoading && entries.length === 0 && (
+          <p className="px-3 py-2 text-[11px] text-terminal-400">
+            {searchText ? 'No entries match your search' : 'No knowledge entries for this program'}
+          </p>
+        )}
+        {entries.map((entry) => (
+          <button
+            key={entry.id}
+            onClick={() => onSelect(entry.id)}
+            className={[
+              'w-full px-3 py-2 text-left text-[11px] transition-colors duration-[150ms]',
+              entry.id === selectedId
+                ? 'bg-at-field-900/60 text-at-field-200'
+                : 'text-terminal-200 hover:bg-terminal-700',
+            ].join(' ')}
+            data-testid={`entry-${entry.id}`}
+          >
+            <span className="block truncate font-medium">{entry.title}</span>
+            <span className="block truncate text-terminal-400">{entry.category}</span>
+          </button>
+        ))}
+      </div>
+
+      {selectedId && !selectedEntry && !isLoading && entries.length > 0 && (
+        <AtFieldWarning message="Selected entry not found in search results — it may have been deleted" />
       )}
     </div>
   )

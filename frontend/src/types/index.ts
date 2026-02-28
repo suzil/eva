@@ -48,11 +48,13 @@ export type ResponseFormat = 'text' | 'json'
 //   FileRef      -> "_file_ref"
 //   UrlRef       -> "_url_ref"
 //   UpstreamPort -> "_upstream_port"
+//   LibraryRef   -> "_library_ref"
 export type ContentSource =
   | { type: '_inline_text'; value: string }
   | { type: '_file_ref'; value: string }
   | { type: '_url_ref'; value: string }
   | { type: '_upstream_port' }
+  | { type: '_library_ref'; value: string }
 
 export type KnowledgeFormat = 'text' | 'json' | 'embedded'
 
@@ -102,6 +104,29 @@ export interface KnowledgeConfig {
   source: ContentSource
   format: KnowledgeFormat
   refreshPolicy: RefreshPolicy
+}
+
+// KnowledgeEntry: dropPrefix "knowledgeEntry" (P2-M5 Auto-Knowledge)
+export interface KnowledgeEntry {
+  id: string
+  sourceType: string
+  sourceId?: string
+  programId?: string
+  category: string
+  title: string
+  content: string
+  originalContent?: string
+  confidence: number
+  isEdited: boolean
+  createdAt: string
+  updatedAt: string
+  scannedAt: string
+}
+
+// SearchResult: dropPrefix "searchResult"
+export interface SearchResult {
+  entry: KnowledgeEntry
+  score: number
 }
 
 // ConnectorConfig: dropPrefix "connector"

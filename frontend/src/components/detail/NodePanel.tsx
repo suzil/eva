@@ -202,6 +202,7 @@ export function NodePanel() {
             <KnowledgeForm
               config={node.data.nodeType.config as Parameters<typeof KnowledgeForm>[0]['config']}
               onChange={handleConfigChange}
+              programId={selectedProgramId ?? ''}
             />
           )}
           {typeKey === 'connector' && (

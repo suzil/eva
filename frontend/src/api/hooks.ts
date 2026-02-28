@@ -41,6 +41,7 @@ import {
   rejectFile,
   acceptAllChanges,
   rejectAllChanges,
+  searchKnowledgeEntries,
 } from './client.ts'
 
 // ---------------------------------------------------------------------------
@@ -419,5 +420,18 @@ export function useRejectAll() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['changesets'] })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge search (P2-M5) — EVA-82
+// ---------------------------------------------------------------------------
+
+export function useKnowledgeSearch(programId: string, text: string) {
+  return useQuery({
+    queryKey: ['knowledge', 'search', programId, text],
+    queryFn: () => searchKnowledgeEntries(programId, text),
+    enabled: !!programId,
+    staleTime: 30_000,
   })
 }
