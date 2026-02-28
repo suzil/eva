@@ -21,6 +21,7 @@ library
     Eva.Core.Graph
     Eva.Core.Validation
     Eva.Codebase.Types
+    Eva.Codebase.Scanner
     Eva.Declarative
     Eva.Engine.Runner
     Eva.Engine.StateMachine
@@ -122,6 +123,7 @@ test-suite eva-test
     Eva.Api.ServerSpec
     Eva.Api.WebSocketSpec
     Eva.Codebase.TypesSpec
+    Eva.Codebase.ScannerSpec
     Eva.Integration.LinearSpec
     Eva.Engine.SchedulerSpec
   build-depends:
@@ -148,4 +150,6 @@ test-suite eva-test
     , cron              ^>=0.7
     , mtl               ^>=2.3
     , directory         ^>=1.3
+    , filepath          ^>=1.5
+    , temporary         ^>=1.3
     , HsYAML            ^>=0.2
