@@ -386,6 +386,8 @@ export type WsEvent =
   | { type: 'run_state'; runId: RunId; state: RunState; timestamp: string }
   | { type: 'tool_call'; runId: RunId; nodeId: NodeId; phase: 'invoke' | 'result'; data: Record<string, unknown>; timestamp: string }
   | { type: 'code_change_event'; runId: RunId; changesetId: CodeChangesetId; fileCount: number; timestamp: string }
+  | { type: 'assistant_token'; conversationId: string; token: string; timestamp: string }
+  | { type: 'assistant_reply'; conversationId: string; message: AssistantMessage; timestamp: string }
 
 // ---------------------------------------------------------------------------
 // Codebase integration (P2-M4) — EVA-74

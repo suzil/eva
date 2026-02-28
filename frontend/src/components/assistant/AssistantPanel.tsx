@@ -1,20 +1,33 @@
-import { useUiStore } from '../../store/uiStore'
+import { Trash2 } from 'lucide-react'
+import { usePrograms } from '../../api/hooks'
 import { useCanvasStore } from '../../store/canvasStore'
+import { useUiStore } from '../../store/uiStore'
+import { useAssistantStream } from '../../hooks/useAssistantStream'
+import { AssistantInput } from './AssistantInput'
 import { MessageList } from './MessageList'
 import { NodeReferenceChip } from './NodeReferenceChip'
 
 export function AssistantPanel() {
   const selectedProgramId = useUiStore((s) => s.selectedProgramId)
   const assistantConversations = useUiStore((s) => s.assistantConversations)
+  const clearAssistantConversation = useUiStore((s) => s.clearAssistantConversation)
 
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId)
   const nodes = useCanvasStore((s) => s.nodes)
+
+  const { data: programs = [] } = usePrograms()
 
   const thread = selectedProgramId ? assistantConversations[selectedProgramId] : undefined
   const messages = thread?.messages ?? []
   const isStreaming = thread?.isStreaming ?? false
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : undefined
+
+  const { sendMessage, streamingText } = useAssistantStream(selectedProgramId, programs)
+
+  function handleClear() {
+    if (selectedProgramId) clearAssistantConversation(selectedProgramId)
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -31,6 +44,21 @@ export function AssistantPanel() {
         </div>
       )}
 
+      {/* Clear button — only when there are messages */}
+      {messages.length > 0 && (
+        <div className="flex shrink-0 justify-end border-b border-terminal-600 px-3 py-1">
+          <button
+            type="button"
+            onClick={handleClear}
+            title="Clear conversation"
+            className="flex items-center gap-1 text-xs text-terminal-500 hover:text-nerv-red-400"
+          >
+            <Trash2 className="h-3 w-3" />
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Message list or empty state */}
       {messages.length === 0 && !isStreaming ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
@@ -40,14 +68,12 @@ export function AssistantPanel() {
           </p>
         </div>
       ) : (
-        <MessageList messages={messages} isStreaming={isStreaming} />
+        <MessageList messages={messages} isStreaming={isStreaming} streamingText={streamingText} />
       )}
 
-      {/* AssistantInput — wired in EVA-89 */}
+      {/* Input */}
       <div className="shrink-0 border-t border-terminal-600 p-2">
-        <div className="flex min-h-[40px] items-center rounded border border-terminal-600 bg-terminal-900 px-3">
-          <span className="text-xs italic text-terminal-500">Input — EVA-89</span>
-        </div>
+        <AssistantInput onSend={sendMessage} disabled={isStreaming || !selectedProgramId} />
       </div>
     </div>
   )
