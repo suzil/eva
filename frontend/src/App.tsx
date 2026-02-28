@@ -1,5 +1,5 @@
 import { AppShell } from './components/shell/AppShell'
-import { CommandPalette } from './components/shell/CommandPalette'
+import { CommandBar } from './components/shell/CommandPalette'
 import { ErrorBoundary } from './components/shell/ErrorBoundary'
 
 export default function App() {
@@ -8,7 +8,7 @@ export default function App() {
       <ErrorBoundary>
         <AppShell />
       </ErrorBoundary>
-      <CommandPalette />
+      <CommandBar />
     </>
   )
 }

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Trash2 } from 'lucide-react'
 import { usePrograms } from '../../api/hooks'
 import { useCanvasStore } from '../../store/canvasStore'
@@ -11,6 +12,8 @@ export function AssistantPanel() {
   const selectedProgramId = useUiStore((s) => s.selectedProgramId)
   const assistantConversations = useUiStore((s) => s.assistantConversations)
   const clearAssistantConversation = useUiStore((s) => s.clearAssistantConversation)
+  const pendingAssistantMessage = useUiStore((s) => s.pendingAssistantMessage)
+  const setPendingAssistantMessage = useUiStore((s) => s.setPendingAssistantMessage)
 
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId)
   const nodes = useCanvasStore((s) => s.nodes)
@@ -24,6 +27,14 @@ export function AssistantPanel() {
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : undefined
 
   const { sendMessage, streamingText } = useAssistantStream(selectedProgramId, programs)
+
+  // Auto-send a message promoted from the CommandBar (e.g. quick questions)
+  useEffect(() => {
+    if (pendingAssistantMessage && selectedProgramId) {
+      sendMessage(pendingAssistantMessage)
+      setPendingAssistantMessage(null)
+    }
+  }, [pendingAssistantMessage]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleClear() {
     if (selectedProgramId) clearAssistantConversation(selectedProgramId)
