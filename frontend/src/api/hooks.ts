@@ -406,8 +406,8 @@ export function useAcceptAll() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (changesetId: string) => acceptAllChanges(changesetId),
-    onSuccess: (_data, changesetId) => {
-      void queryClient.invalidateQueries({ queryKey: changesetKeys.detail(changesetId) })
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['changesets'] })
     },
   })
 }
@@ -416,8 +416,8 @@ export function useRejectAll() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (changesetId: string) => rejectAllChanges(changesetId),
-    onSuccess: (_data, changesetId) => {
-      void queryClient.invalidateQueries({ queryKey: changesetKeys.detail(changesetId) })
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['changesets'] })
     },
   })
 }

@@ -3,10 +3,12 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import { type BottomTab, useUiStore } from '../../store/uiStore'
 import { LogsPanel } from './LogsPanel'
 import { OutputPanel } from './OutputPanel'
+import { ChangesPanel } from '../panels/ChangesPanel'
 
 const TABS: { key: BottomTab; label: string; disabled?: boolean }[] = [
   { key: 'logs', label: 'Logs' },
   { key: 'output', label: 'Output' },
+  { key: 'changes', label: 'Changes' },
   { key: 'timeline', label: 'Timeline', disabled: true },
 ]
 
@@ -110,6 +112,7 @@ export function BottomPanel() {
         <div className="flex flex-1 overflow-hidden">
           {activeTab === 'logs' && <LogsPanel />}
           {activeTab === 'output' && <OutputPanel />}
+          {activeTab === 'changes' && <ChangesPanel />}
         </div>
       )}
     </div>
