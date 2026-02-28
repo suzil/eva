@@ -42,6 +42,12 @@ import System.Directory (doesFileExist)
 
 import Eva.App (AppM)
 import Eva.Core.Types
+import Eva.Knowledge.Store (getEntry)
+import Eva.Knowledge.Types
+  ( knowledgeEntryConfidence
+  , knowledgeEntryContent
+  , knowledgeEntryIsEdited
+  )
 
 -- ---------------------------------------------------------------------------
 -- Handler
@@ -126,6 +132,20 @@ resolveContent cfg inputs =
                               then stripHtmlTags rawText
                               else rawText
           pure $ encodeContent (knowledgeFormat cfg) content
+
+    LibraryRef entryId -> do
+      mEntry <- getEntry entryId
+      case mEntry of
+        Nothing ->
+          pure $ Aeson.String $
+            "Knowledge entry not found: " <> entryId
+        Just entry -> do
+          let base = knowledgeEntryContent entry
+              withHeader
+                | not (knowledgeEntryIsEdited entry) =
+                    "[Confidence: " <> T.pack (show (knowledgeEntryConfidence entry)) <> "]\n" <> base
+                | otherwise = base
+          pure $ encodeContent (knowledgeFormat cfg) withHeader
 
 -- ---------------------------------------------------------------------------
 -- Format encoding

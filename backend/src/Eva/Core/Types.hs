@@ -265,6 +265,7 @@ data ContentSource
   | FileRef Text
   | UrlRef Text
   | UpstreamPort
+  | LibraryRef Text
   deriving stock (Eq, Show, Generic)
 
 contentSourceOptions :: Options

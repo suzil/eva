@@ -18,6 +18,7 @@ import type {
   GitDiffResponse,
   CodeChangeset,
   FileChange,
+  SearchResult,
 } from '../types/index.ts'
 
 const BASE = '/api'
@@ -241,4 +242,15 @@ export function acceptAllChanges(changesetId: string): Promise<CodeChangeset> {
 
 export function rejectAllChanges(changesetId: string): Promise<CodeChangeset> {
   return request<CodeChangeset>(`/changesets/${changesetId}/reject-all`, { method: 'POST' })
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge (P2-M5) — EVA-82
+// ---------------------------------------------------------------------------
+
+export function searchKnowledgeEntries(programId: string, text = ''): Promise<SearchResult[]> {
+  return request<SearchResult[]>(`/programs/${programId}/knowledge/search`, {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  })
 }
