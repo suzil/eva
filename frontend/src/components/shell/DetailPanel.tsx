@@ -4,6 +4,7 @@ import { useCanvasStore } from '../../store/canvasStore'
 import { EmptyPanel } from '../detail/EmptyPanel'
 import { EdgePanel } from '../detail/EdgePanel'
 import { NodePanel } from '../detail/NodePanel'
+import { KnowledgeEntryView } from '../detail/KnowledgeEntryView'
 
 export function DetailPanel() {
   const width = useUiStore((s) => s.detailPanelWidth)
@@ -12,6 +13,7 @@ export function DetailPanel() {
 
   const selectedNodeId = useCanvasStore((s) => s.selectedNodeId)
   const selectedEdgeId = useCanvasStore((s) => s.selectedEdgeId)
+  const selectedKnowledgeEntryId = useUiStore((s) => s.selectedKnowledgeEntryId)
 
   const handleDragStart = (e: React.PointerEvent) => {
     e.preventDefault()
@@ -49,12 +51,20 @@ export function DetailPanel() {
       {/* Header */}
       <div className="flex h-9 shrink-0 items-center border-b border-terminal-500 px-3">
         <span className="font-display text-xs uppercase tracking-widest text-terminal-300">
-          {selectedNodeId ? 'Node' : selectedEdgeId ? 'Edge' : 'Detail'}
+          {selectedKnowledgeEntryId
+            ? 'Knowledge Entry'
+            : selectedNodeId
+              ? 'Node'
+              : selectedEdgeId
+                ? 'Edge'
+                : 'Detail'}
         </span>
       </div>
 
       {/* Content — adapts to selection */}
-      {selectedNodeId ? (
+      {selectedKnowledgeEntryId ? (
+        <KnowledgeEntryView entryId={selectedKnowledgeEntryId} />
+      ) : selectedNodeId ? (
         <NodePanel />
       ) : selectedEdgeId ? (
         <EdgePanel />

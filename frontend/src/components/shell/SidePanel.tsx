@@ -1,11 +1,11 @@
 import { useRef } from 'react'
-import { BookOpen } from 'lucide-react'
 import { useUiStore } from '../../store/uiStore'
 import { CredentialsPanel } from './CredentialsPanel'
 import { ProgramsPanel } from './ProgramsList'
 import { NodePalette } from './NodePalette'
 import { RunsPanel } from './RunsPanel'
 import { CodebasePanel } from '../panels/CodebasePanel'
+import { KnowledgeLibrary } from '../panels/KnowledgeLibrary'
 
 const ACTIVITY_LABELS: Record<string, string> = {
   programs: 'Programs',
@@ -14,24 +14,6 @@ const ACTIVITY_LABELS: Record<string, string> = {
   runs: 'Runs',
   codebase: 'Codebase',
   settings: 'Settings',
-}
-
-function StubPanel({
-  icon: Icon,
-  label,
-  note,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  note: string
-}) {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4">
-      <Icon className="h-7 w-7 text-terminal-600" />
-      <p className="text-xs font-medium text-terminal-400">{label}</p>
-      <p className="text-center text-[10px] text-terminal-500">{note}</p>
-    </div>
-  )
 }
 
 export function SidePanel() {
@@ -76,13 +58,7 @@ export function SidePanel() {
       {/* Panel content — routed by active activity */}
       {activeActivity === 'programs' && <ProgramsPanel />}
       {activeActivity === 'nodes' && <NodePalette />}
-      {activeActivity === 'knowledge' && (
-        <StubPanel
-          icon={BookOpen}
-          label="Knowledge Library"
-          note="Shared knowledge sources across programs. Available in M5."
-        />
-      )}
+      {activeActivity === 'knowledge' && <KnowledgeLibrary />}
       {activeActivity === 'runs' && <RunsPanel />}
       {activeActivity === 'codebase' && <CodebasePanel />}
       {activeActivity === 'settings' && <CredentialsPanel />}

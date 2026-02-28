@@ -6,6 +6,7 @@ import type {
   CreateCredentialReq,
   ConnectCodebaseReq,
   WriteFileReq,
+  PatchKnowledgeEntryReq,
 } from '../types/index.ts'
 import {
   cancelRun,
@@ -42,6 +43,12 @@ import {
   acceptAllChanges,
   rejectAllChanges,
   searchKnowledgeEntries,
+  fetchKnowledgeEntries,
+  fetchKnowledgeEntry,
+  patchKnowledgeEntry,
+  deleteKnowledgeEntry,
+  resetKnowledgeEntry,
+  refreshKnowledgeEntries,
 } from './client.ts'
 
 // ---------------------------------------------------------------------------
@@ -424,14 +431,83 @@ export function useRejectAll() {
 }
 
 // ---------------------------------------------------------------------------
-// Knowledge search (P2-M5) — EVA-82
+// Knowledge (P2-M5) — EVA-82 / EVA-83
 // ---------------------------------------------------------------------------
+
+export const knowledgeKeys = {
+  list: (programId: string) => ['knowledge', 'list', programId] as const,
+  search: (programId: string, text: string) => ['knowledge', 'search', programId, text] as const,
+  detail: (entryId: string) => ['knowledge', 'entry', entryId] as const,
+}
+
+export function useKnowledgeEntries(programId: string | null) {
+  return useQuery({
+    queryKey: knowledgeKeys.list(programId ?? ''),
+    queryFn: () => fetchKnowledgeEntries(programId!),
+    enabled: Boolean(programId),
+    staleTime: 30_000,
+  })
+}
 
 export function useKnowledgeSearch(programId: string, text: string) {
   return useQuery({
-    queryKey: ['knowledge', 'search', programId, text],
+    queryKey: knowledgeKeys.search(programId, text),
     queryFn: () => searchKnowledgeEntries(programId, text),
     enabled: !!programId,
     staleTime: 30_000,
+  })
+}
+
+export function useKnowledgeEntry(entryId: string | null) {
+  return useQuery({
+    queryKey: knowledgeKeys.detail(entryId ?? ''),
+    queryFn: () => fetchKnowledgeEntry(entryId!),
+    enabled: Boolean(entryId),
+  })
+}
+
+export function usePatchKnowledgeEntry(entryId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: PatchKnowledgeEntryReq) => patchKnowledgeEntry(entryId, body),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(knowledgeKeys.detail(entryId), updated)
+      void queryClient.invalidateQueries({ queryKey: ['knowledge', 'list'] })
+      void queryClient.invalidateQueries({ queryKey: ['knowledge', 'search'] })
+    },
+  })
+}
+
+export function useDeleteKnowledgeEntry() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (entryId: string) => deleteKnowledgeEntry(entryId),
+    onSuccess: (_data, entryId) => {
+      queryClient.removeQueries({ queryKey: knowledgeKeys.detail(entryId) })
+      void queryClient.invalidateQueries({ queryKey: ['knowledge', 'list'] })
+      void queryClient.invalidateQueries({ queryKey: ['knowledge', 'search'] })
+    },
+  })
+}
+
+export function useResetKnowledgeEntry(entryId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => resetKnowledgeEntry(entryId),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(knowledgeKeys.detail(entryId), updated)
+      void queryClient.invalidateQueries({ queryKey: ['knowledge', 'list'] })
+    },
+  })
+}
+
+export function useRefreshKnowledge(programId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => refreshKnowledgeEntries(programId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: knowledgeKeys.list(programId) })
+      void queryClient.invalidateQueries({ queryKey: ['knowledge', 'search', programId] })
+    },
   })
 }

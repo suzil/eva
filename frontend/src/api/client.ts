@@ -19,6 +19,8 @@ import type {
   CodeChangeset,
   FileChange,
   SearchResult,
+  KnowledgeEntry,
+  PatchKnowledgeEntryReq,
 } from '../types/index.ts'
 
 const BASE = '/api'
@@ -245,12 +247,42 @@ export function rejectAllChanges(changesetId: string): Promise<CodeChangeset> {
 }
 
 // ---------------------------------------------------------------------------
-// Knowledge (P2-M5) — EVA-82
+// Knowledge (P2-M5) — EVA-80 / EVA-83
 // ---------------------------------------------------------------------------
+
+export function fetchKnowledgeEntries(programId: string): Promise<KnowledgeEntry[]> {
+  return request<KnowledgeEntry[]>(`/programs/${programId}/knowledge`)
+}
 
 export function searchKnowledgeEntries(programId: string, text = ''): Promise<SearchResult[]> {
   return request<SearchResult[]>(`/programs/${programId}/knowledge/search`, {
     method: 'POST',
     body: JSON.stringify({ text }),
   })
+}
+
+export function refreshKnowledgeEntries(programId: string): Promise<void> {
+  return request<void>(`/programs/${programId}/knowledge/refresh`, { method: 'POST' })
+}
+
+export function fetchKnowledgeEntry(entryId: string): Promise<KnowledgeEntry> {
+  return request<KnowledgeEntry>(`/knowledge/${entryId}`)
+}
+
+export function patchKnowledgeEntry(
+  entryId: string,
+  body: PatchKnowledgeEntryReq,
+): Promise<KnowledgeEntry> {
+  return request<KnowledgeEntry>(`/knowledge/${entryId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export function deleteKnowledgeEntry(entryId: string): Promise<void> {
+  return request<void>(`/knowledge/${entryId}`, { method: 'DELETE' })
+}
+
+export function resetKnowledgeEntry(entryId: string): Promise<KnowledgeEntry> {
+  return request<KnowledgeEntry>(`/knowledge/${entryId}/reset`, { method: 'POST' })
 }

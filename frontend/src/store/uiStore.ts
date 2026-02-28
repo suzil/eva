@@ -37,6 +37,8 @@ interface UiState {
   activeFilePath: string | null
   /** The codebase currently selected in the CodebasePanel. */
   activeCodebaseId: string | null
+  /** The knowledge entry currently selected in the KnowledgeLibrary (opens KnowledgeEntryView). */
+  selectedKnowledgeEntryId: string | null
 
   setActiveActivity: (activity: ActivityKey) => void
   setMode: (mode: AppMode) => void
@@ -65,6 +67,7 @@ interface UiState {
   closeFile: (path: string) => void
   setActiveFilePath: (path: string | null) => void
   setActiveCodebaseId: (id: string | null) => void
+  setSelectedKnowledgeEntryId: (id: string | null) => void
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -87,6 +90,7 @@ export const useUiStore = create<UiState>((set) => ({
   openFiles: [],
   activeFilePath: null,
   activeCodebaseId: null,
+  selectedKnowledgeEntryId: null,
 
   setActiveActivity: (activity) => set({ activeActivity: activity }),
   setMode: (mode) => set({ mode }),
@@ -135,4 +139,5 @@ export const useUiStore = create<UiState>((set) => ({
     }),
   setActiveFilePath: (path) => set({ activeFilePath: path }),
   setActiveCodebaseId: (id) => set({ activeCodebaseId: id }),
+  setSelectedKnowledgeEntryId: (id) => set({ selectedKnowledgeEntryId: id }),
 }))
