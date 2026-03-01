@@ -60,6 +60,8 @@ interface UiState {
   activeCodebaseId: string | null
   /** The knowledge entry currently selected in the KnowledgeLibrary (opens KnowledgeEntryView). */
   selectedKnowledgeEntryId: string | null
+  /** Whether the WebSocket connection to the backend is live. null = no connection opened yet. */
+  wsConnected: boolean | null
   /** Which tab is active in the right DetailPanel — Inspector or MAGI assistant. */
   detailPanelTab: DetailPanelTab
   /** Whether the Cmd+K CommandBar overlay is open. */
@@ -99,6 +101,7 @@ interface UiState {
   setActiveFilePath: (path: string | null) => void
   setActiveCodebaseId: (id: string | null) => void
   setSelectedKnowledgeEntryId: (id: string | null) => void
+  setWsConnected: (connected: boolean | null) => void
   setDetailPanelTab: (tab: DetailPanelTab) => void
   setCommandBarOpen: (open: boolean) => void
   toggleCommandBar: () => void
@@ -130,6 +133,7 @@ export const useUiStore = create<UiState>((set) => ({
   activeFilePath: null,
   activeCodebaseId: null,
   selectedKnowledgeEntryId: null,
+  wsConnected: null,
   detailPanelTab: 'inspector',
   commandBarOpen: false,
   pendingAssistantMessage: null,
@@ -144,7 +148,7 @@ export const useUiStore = create<UiState>((set) => ({
   setSidePanelWidth: (width) => set({ sidePanelWidth: Math.min(500, Math.max(180, width)) }),
   setDetailPanelWidth: (width) => set({ detailPanelWidth: Math.min(600, Math.max(280, width)) }),
   setBottomPanelHeight: (height) => set({ bottomPanelHeight: Math.min(600, Math.max(100, height)) }),
-  setSelectedProgramId: (id) => set({ selectedProgramId: id }),
+  setSelectedProgramId: (id) => set({ selectedProgramId: id, wsConnected: null }),
   setActiveRunId: (id) => set({ activeRunId: id }),
   setInspectedRunId: (id) => set({ inspectedRunId: id }),
   setRunError: (msg) => set({ runError: msg }),
@@ -184,6 +188,7 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveFilePath: (path) => set({ activeFilePath: path }),
   setActiveCodebaseId: (id) => set({ activeCodebaseId: id }),
   setSelectedKnowledgeEntryId: (id) => set({ selectedKnowledgeEntryId: id }),
+  setWsConnected: (connected) => set({ wsConnected: connected }),
   setDetailPanelTab: (tab) => set({ detailPanelTab: tab }),
   setCommandBarOpen: (open) => set({ commandBarOpen: open }),
   toggleCommandBar: () => set((s) => ({ commandBarOpen: !s.commandBarOpen })),
