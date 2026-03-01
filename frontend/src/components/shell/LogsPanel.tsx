@@ -85,7 +85,7 @@ export function LogsPanel() {
           <table className="w-full border-collapse font-mono text-xs">
             <tbody>
               {visible.map((entry, i) => (
-                <tr key={i} className="group hover:bg-terminal-700/50">
+                <tr key={`${entry.stepId}-${entry.timestamp}-${i}`} className="group hover:bg-terminal-700/50">
                   <td className="w-[140px] select-none whitespace-nowrap py-0.5 pr-3 text-terminal-400">
                     {formatTimestamp(entry.timestamp)}
                   </td>

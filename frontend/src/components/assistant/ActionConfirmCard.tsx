@@ -10,6 +10,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   deployProgram,
   pauseProgram,
@@ -19,6 +20,7 @@ import {
   fetchRuns,
   fetchRunDetail,
 } from '../../api/client'
+import { programKeys } from '../../api/hooks'
 import { useUiStore } from '../../store/uiStore'
 import type { RunDetail } from '../../types'
 
@@ -83,6 +85,7 @@ export function ActionConfirmCard({
   const [status, setStatus] = useState<Status>('pending')
   const [resultMsg, setResultMsg] = useState<string | null>(null)
   const appendAssistantMessage = useUiStore((s) => s.appendAssistantMessage)
+  const queryClient = useQueryClient()
 
   const meta = OPERATION_META[operation] ?? DEFAULT_META
 
@@ -98,6 +101,8 @@ export function ActionConfirmCard({
       switch (operation) {
         case 'deploy': {
           await deployProgram(programId)
+          void queryClient.invalidateQueries({ queryKey: programKeys.detail(programId) })
+          void queryClient.invalidateQueries({ queryKey: programKeys.all })
           setResultMsg('Program deployed successfully.')
           break
         }
@@ -121,11 +126,15 @@ export function ActionConfirmCard({
         }
         case 'pause': {
           await pauseProgram(programId)
+          void queryClient.invalidateQueries({ queryKey: programKeys.detail(programId) })
+          void queryClient.invalidateQueries({ queryKey: programKeys.all })
           setResultMsg('Program paused.')
           break
         }
         case 'resume': {
           await resumeProgram(programId)
+          void queryClient.invalidateQueries({ queryKey: programKeys.detail(programId) })
+          void queryClient.invalidateQueries({ queryKey: programKeys.all })
           setResultMsg('Program resumed.')
           break
         }
