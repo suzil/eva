@@ -16,7 +16,13 @@ const MAX_CONVERSATION_MESSAGES = 50
 function loadConversations(): Record<ProgramId, ConversationThread> {
   try {
     const raw = localStorage.getItem(CONV_LS_KEY)
-    return raw ? (JSON.parse(raw) as Record<ProgramId, ConversationThread>) : {}
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<ProgramId, ConversationThread>
+    // Streaming state must never survive a page reload — clear it on load.
+    for (const thread of Object.values(parsed)) {
+      thread.isStreaming = false
+    }
+    return parsed
   } catch {
     return {}
   }

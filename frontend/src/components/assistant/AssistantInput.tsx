@@ -6,6 +6,8 @@ import { TemplatePicker } from './TemplatePicker'
 interface AssistantInputProps {
   onSend: (text: string) => void
   disabled?: boolean
+  /** True when the assistant is actively generating a response. Used for placeholder text only. */
+  isStreaming?: boolean
   /** Pre-fill the textarea with this text without auto-sending. Cleared by the parent after being consumed. */
   initialValue?: string | null
   onInitialValueConsumed?: () => void
@@ -17,7 +19,7 @@ interface AssistantInputProps {
  * Selecting a command inserts it as the input text.
  * Enter sends; Shift+Enter inserts a newline.
  */
-export function AssistantInput({ onSend, disabled = false, initialValue, onInitialValueConsumed }: AssistantInputProps) {
+export function AssistantInput({ onSend, disabled = false, isStreaming = false, initialValue, onInitialValueConsumed }: AssistantInputProps) {
   const [value, setValue] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false)
@@ -126,7 +128,7 @@ export function AssistantInput({ onSend, disabled = false, initialValue, onIniti
           onKeyDown={handleKeyDown}
           disabled={disabled}
           aria-label="Message MAGI"
-          placeholder={disabled ? 'MAGI is thinking…' : 'Ask MAGI or type /'}
+          placeholder={isStreaming ? 'MAGI is thinking…' : 'Ask MAGI or type /'}
           className="flex-1 resize-none bg-transparent text-sm text-terminal-100 placeholder:text-terminal-500 outline-none"
         />
 

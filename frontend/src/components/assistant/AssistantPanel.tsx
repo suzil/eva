@@ -92,6 +92,7 @@ export function AssistantPanel() {
         <AssistantInput
           onSend={sendMessage}
           disabled={isStreaming || !selectedProgramId}
+          isStreaming={isStreaming}
           initialValue={prefillAssistantMessage}
           onInitialValueConsumed={() => setPrefillAssistantMessage(null)}
         />

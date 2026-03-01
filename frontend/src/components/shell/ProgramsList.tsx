@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, LayoutList, Loader2 } from 'lucide-react'
 import { usePrograms, useCreateProgram, usePatchProgram } from '../../api/hooks'
 import { useUiStore } from '../../store/uiStore'
@@ -131,6 +131,13 @@ export function ProgramsPanel() {
   const selectedProgramId = useUiStore((s) => s.selectedProgramId)
   const setSelectedProgramId = useUiStore((s) => s.setSelectedProgramId)
   const isDirty = useCanvasStore((s) => s.isDirty)
+
+  // Auto-select the first program on load when nothing is selected yet.
+  useEffect(() => {
+    if (!selectedProgramId && programs && programs.length > 0) {
+      setSelectedProgramId(programs[0].id)
+    }
+  }, [programs, selectedProgramId, setSelectedProgramId])
 
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
