@@ -137,8 +137,8 @@ resolveContent cfg inputs =
       mEntry <- getEntry entryId
       case mEntry of
         Nothing ->
-          pure $ Aeson.String $
-            "Knowledge entry not found: " <> entryId
+          liftIO $ throwIO $ userError $
+            "Knowledge LibraryRef: entry not found: " <> T.unpack entryId
         Just entry -> do
           let base = knowledgeEntryContent entry
               withHeader

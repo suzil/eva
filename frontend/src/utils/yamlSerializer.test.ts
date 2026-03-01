@@ -236,6 +236,98 @@ describe('round-trip: graphToYaml → yamlFromSpec', () => {
 })
 
 // ---------------------------------------------------------------------------
+// ContentSource variants
+// ---------------------------------------------------------------------------
+
+describe('round-trip: ContentSource variants', () => {
+  function knowledgeGraph(source: Graph['nodes'][string]['type']): Graph {
+    return {
+      nodes: {
+        k1: {
+          id: 'k1',
+          label: 'KnowledgeNode',
+          type: source,
+          posX: 0,
+          posY: 0,
+        },
+      },
+      edges: [],
+    }
+  }
+
+  it('round-trips _library_ref content source', () => {
+    const graph = knowledgeGraph({
+      type: 'knowledge',
+      config: {
+        source: { type: '_library_ref', value: 'entry-uuid-123' },
+        format: 'text',
+        refreshPolicy: { type: 'static' },
+      },
+    })
+
+    const yaml = graphToYaml(graph)
+    expect(yaml).toContain('_library_ref')
+    expect(yaml).toContain('entry-uuid-123')
+
+    const result = yamlFromSpec(yaml)
+    expect(Array.isArray(result)).toBe(false)
+    const parsed = result as Graph
+    const node = parsed.nodes['k1']
+    expect(node.type.type).toBe('knowledge')
+    if (node.type.type === 'knowledge') {
+      const src = node.type.config.source
+      expect(src.type).toBe('_library_ref')
+      if (src.type === '_library_ref') {
+        expect(src.value).toBe('entry-uuid-123')
+      }
+    }
+  })
+
+  it('round-trips _upstream_port content source', () => {
+    const graph = knowledgeGraph({
+      type: 'knowledge',
+      config: {
+        source: { type: '_upstream_port' },
+        format: 'text',
+        refreshPolicy: { type: 'on_run' },
+      },
+    })
+
+    const yaml = graphToYaml(graph)
+    const result = yamlFromSpec(yaml)
+    expect(Array.isArray(result)).toBe(false)
+    const parsed = result as Graph
+    const node = parsed.nodes['k1']
+    if (node.type.type === 'knowledge') {
+      expect(node.type.config.source.type).toBe('_upstream_port')
+    }
+  })
+
+  it('returns ParseError[] for unknown ContentSource type', () => {
+    const yaml = [
+      'eva.version: "1"',
+      'nodes:',
+      '  k1:',
+      '    type: knowledge',
+      '    label: KnowledgeNode',
+      '    posX: 0',
+      '    posY: 0',
+      '    source:',
+      '      type: _unknown_source',
+      '    format: text',
+      '    refreshPolicy:',
+      '      type: static',
+      'edges: []',
+    ].join('\n')
+
+    const result = yamlFromSpec(yaml)
+    expect(Array.isArray(result)).toBe(true)
+    const errors = result as { message: string }[]
+    expect(errors.some((e) => e.message.includes('unknown ContentSource type'))).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Comment preservation
 // ---------------------------------------------------------------------------
 

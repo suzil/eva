@@ -480,6 +480,11 @@ function parseContentSource(
     }
     case '_upstream_port':
       return { type: '_upstream_port' }
+    case '_library_ref': {
+      const val = raw['value']
+      if (typeof val !== 'string') return [{ message: `${ctx}: source.value: expected a string` }]
+      return { type: '_library_ref', value: val }
+    }
     default:
       return [{ message: `${ctx}: unknown ContentSource type: ${String(typeStr)}` }]
   }
