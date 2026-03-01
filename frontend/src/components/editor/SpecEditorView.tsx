@@ -40,7 +40,7 @@ export function SpecEditorView() {
   const specDataRef = useRef(specData)
   const programIdRef = useRef(programId)
   const localYamlRef = useRef('')
-  const handleSaveRef = useRef<() => Promise<void>>()
+  const handleSaveRef = useRef<(() => Promise<void>) | undefined>(undefined)
 
   const [localYaml, setLocalYaml] = useState('')
   const [saveErrors, setSaveErrors] = useState<string[]>([])
