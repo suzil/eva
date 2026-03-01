@@ -262,7 +262,7 @@ function EmptyView({ programId }: EmptyViewProps) {
           onChange={(e) => setPath(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
           placeholder="/absolute/path/to/repo"
-          className="w-full rounded border border-terminal-600 bg-terminal-900 px-2.5 py-1.5 text-xs text-terminal-100 placeholder-terminal-500 focus:border-at-field-500 focus:outline-none transition-colors"
+          className="w-full rounded border border-terminal-600 bg-terminal-900 px-2.5 py-1.5 text-xs text-terminal-100 placeholder:text-terminal-500 focus:border-at-field-500 focus:outline-none transition-colors"
         />
         <button
           onClick={handleConnect}

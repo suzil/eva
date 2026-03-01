@@ -232,16 +232,16 @@ export function SpecEditorView() {
 
       {/* Save error banner */}
       {saveErrors.length > 0 && (
-        <div className="flex flex-shrink-0 flex-col gap-1 border-t border-error-red-500/30 bg-error-red-500/10 px-4 py-2">
+        <div className="flex flex-shrink-0 flex-col gap-1 border-t border-nerv-red-500/30 bg-nerv-red-500/10 px-4 py-2">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-3 w-3 flex-shrink-0 text-error-red-400" />
-            <p className="font-display text-xs uppercase tracking-widest text-error-red-400">
+            <AlertTriangle className="h-3 w-3 flex-shrink-0 text-nerv-red-400" />
+            <p className="font-display text-xs uppercase tracking-widest text-nerv-red-400">
               Spec errors
             </p>
           </div>
           <ul className="ml-5 space-y-0.5">
             {saveErrors.map((msg, i) => (
-              <li key={i} className="text-xs text-error-red-300">
+              <li key={i} className="text-xs text-nerv-red-300">
                 {msg}
               </li>
             ))}
