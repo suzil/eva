@@ -34,11 +34,13 @@ import Control.Exception (SomeException, try)
 import Control.Monad (unless)
 import Data.Aeson (Value (..), decode, encode, object, (.:), (.:?), (.=))
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KM
 import Data.Aeson.Types (Pair, Parser, parseMaybe)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
+import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -213,51 +215,77 @@ doStream apiKey mgr req onToken = do
           Left err -> pure (Left err)
           Right () -> pure (Left (LLMApiError status "unexpected non-200 response"))
       else do
-        tokensRef  <- newIORef ([] :: [Text])
-        usageRef   <- newIORef (Nothing :: Maybe TokenUsage)
-        leftoverRef <- newIORef BS.empty
+        tokensRef      <- newIORef ([] :: [Text])
+        usageRef       <- newIORef (Nothing :: Maybe TokenUsage)
+        leftoverRef    <- newIORef BS.empty
+        -- Accumulate streaming tool-call deltas: index -> (id, name, args_fragments)
+        toolCallsRef   <- newIORef (Map.empty :: Map.Map Int (Text, Text, [Text]))
+        finishRef      <- newIORef (Nothing :: Maybe Text)
         let loop = do
               chunk <- bodyReader
               unless (BS.null chunk) $ do
                 prev <- readIORef leftoverRef
-                let combined         = prev <> chunk
+                let combined        = prev <> chunk
                     (ls, remainder) = splitOnNewlines combined
                 writeIORef leftoverRef remainder
-                mapM_ (processLine tokensRef usageRef onToken) ls
+                mapM_ (processLine tokensRef usageRef toolCallsRef finishRef onToken) ls
                 loop
         loop
         -- Flush any unterminated final line.
         remaining <- readIORef leftoverRef
         unless (BS.null remaining) $
-          processLine tokensRef usageRef onToken remaining
-        tokens <- readIORef tokensRef
-        mUsage <- readIORef usageRef
+          processLine tokensRef usageRef toolCallsRef finishRef onToken remaining
+        tokens      <- readIORef tokensRef
+        mUsage      <- readIORef usageRef
+        tcMap       <- readIORef toolCallsRef
+        mFinish     <- readIORef finishRef
         let content = T.concat (reverse tokens)
             usage   = case mUsage of
               Just u  -> u
               Nothing -> TokenUsage 0 0 0
-        pure (Right (LLMResponse content Nothing usage))
+            mToolCalls
+              | mFinish == Just "tool_calls" && not (Map.null tcMap) =
+                  Just
+                    [ ToolCall
+                        { toolCallId   = tcId
+                        , toolCallName = tcName
+                        , toolCallArgs =
+                            let argsText = T.concat (reverse tcArgFrags)
+                            in  case decode (BL.fromStrict (TE.encodeUtf8 argsText)) of
+                                  Just v  -> v
+                                  Nothing -> Aeson.String argsText
+                        }
+                    | (_, (tcId, tcName, tcArgFrags)) <- Map.toAscList tcMap
+                    ]
+              | otherwise = Nothing
+        pure (Right (LLMResponse content mToolCalls usage))
 
 -- | Decode and process one SSE line, updating the accumulators.
 processLine
   :: IORef [Text]
   -> IORef (Maybe TokenUsage)
+  -> IORef (Map.Map Int (Text, Text, [Text]))
+  -> IORef (Maybe Text)
   -> (Text -> IO ())
   -> ByteString
   -> IO ()
-processLine tokensRef usageRef onToken raw =
+processLine tokensRef usageRef toolCallsRef finishRef onToken raw =
   case parseSseLine (TE.decodeUtf8Lenient raw) of
     Nothing  -> pure ()
     Just val ->
       case parseMaybe parseStreamChunk val of
-        Nothing            -> pure ()
-        Just (mTok, mUsage) -> do
+        Nothing                                 -> pure ()
+        Just (mTok, mUsage, mFinish, tcDeltas) -> do
           case mTok of
             Just t  -> do modifyIORef' tokensRef (t :); onToken t
             Nothing -> pure ()
           case mUsage of
             Just u  -> writeIORef usageRef (Just u)
             Nothing -> pure ()
+          case mFinish of
+            Just f  -> writeIORef finishRef (Just f)
+            Nothing -> pure ()
+          mapM_ (applyToolCallDelta toolCallsRef) tcDeltas
 
 -- ---------------------------------------------------------------------------
 -- SSE / JSON parsing helpers (exported for testing)
@@ -425,16 +453,36 @@ parseToolCall = Aeson.withObject "ToolCall" $ \o -> do
                Nothing -> Aeson.String argsText  -- fallback: treat as raw text
   pure ToolCall { toolCallId = callId, toolCallName = name, toolCallArgs = args }
 
--- | Parse a streaming chunk: returns optional token delta and optional usage
--- (the final chunk carries usage when @stream_options.include_usage@ is set).
-parseStreamChunk :: Value -> Parser (Maybe Text, Maybe TokenUsage)
+-- | Merge one streaming tool-call delta into the accumulator map.
+-- Each delta arrives as (index, optional_id, optional_name, optional_args_fragment).
+applyToolCallDelta
+  :: IORef (Map.Map Int (Text, Text, [Text]))
+  -> (Int, Maybe Text, Maybe Text, Maybe Text)
+  -> IO ()
+applyToolCallDelta ref (idx, mId, mName, mArgs) =
+  modifyIORef' ref $ \m ->
+    let (existId, existName, existFrags) = Map.findWithDefault ("", "", []) idx m
+        newId    = case mId   of { Just i -> i; Nothing -> existId   }
+        newName  = case mName of { Just n -> n; Nothing -> existName }
+        newFrags = case mArgs of { Just a -> a : existFrags; Nothing -> existFrags }
+    in  Map.insert idx (newId, newName, newFrags) m
+
+-- | Parse a streaming chunk: returns (content delta, usage, finish_reason, tool_call_deltas).
+-- Handles both text content chunks and tool-call delta chunks in one pass.
+parseStreamChunk :: Value -> Parser (Maybe Text, Maybe TokenUsage, Maybe Text, [(Int, Maybe Text, Maybe Text, Maybe Text)])
 parseStreamChunk = Aeson.withObject "StreamChunk" $ \o -> do
   choices <- o .: "choices"
-  mTok <- case choices of
+  (mTok, mFinish, tcDeltas) <- case choices of
     (first : _) -> do
-      delta <- first .: "delta"
-      delta Aeson..:? "content"
-    [] -> pure Nothing
+      delta        <- first .: "delta"
+      mContent     <- delta  Aeson..:? "content"
+      mFinishR     <- first  Aeson..:? "finish_reason"
+      mToolCalls   <- delta  Aeson..:? "tool_calls"
+      deltas <- case mToolCalls of
+        Nothing  -> pure []
+        Just tcs -> mapM parseToolCallDelta tcs
+      pure (mContent, mFinishR, deltas)
+    [] -> pure (Nothing, Nothing, [])
   mUsageObj <- o Aeson..:? "usage"
   mUsage <- case mUsageObj of
     Nothing -> pure Nothing
@@ -447,7 +495,20 @@ parseStreamChunk = Aeson.withObject "StreamChunk" $ \o -> do
         , usageCompletionTokens = completionTok
         , usageTotalTokens      = totalTok
         }
-  pure (mTok, mUsage)
+  pure (mTok, mUsage, mFinish, tcDeltas)
+
+-- | Parse one element from the @tool_calls@ delta array.
+parseToolCallDelta :: Value -> Parser (Int, Maybe Text, Maybe Text, Maybe Text)
+parseToolCallDelta = Aeson.withObject "ToolCallDelta" $ \o -> do
+  idx  <- o .: "index"
+  mId  <- o Aeson..:? "id"
+  mFn  <- o Aeson..:? "function" :: Parser (Maybe Aeson.Object)
+  let extractStr km key = case KM.lookup key km of
+        Just (String t) -> Just t
+        _               -> Nothing
+      mName = mFn >>= \km -> extractStr km "name"
+      mArgs = mFn >>= \km -> extractStr km "arguments"
+  pure (idx, mId, mName, mArgs)
 
 -- ---------------------------------------------------------------------------
 -- Anthropic — client constructor

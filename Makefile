@@ -1,4 +1,4 @@
-.PHONY: dev build test install install-ghcid reset-db docker-build docker-run
+.PHONY: dev build test install install-ghcid install-hooks reset-db docker-build docker-run
 
 # Start backend (ghcid hot-reload) and frontend (Vite) concurrently.
 # Ctrl+C kills both.
@@ -17,6 +17,11 @@ install-ghcid:
 
 install:
 	cd frontend && npm install
+
+# Install git hooks (gitleaks secret scanning on every commit).
+# Requires: brew install pre-commit gitleaks
+install-hooks:
+	pre-commit install
 
 # Build backend and frontend.
 build:
