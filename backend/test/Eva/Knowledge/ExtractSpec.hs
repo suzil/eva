@@ -110,9 +110,10 @@ testProgramId = ProgramId "prog-extract-test"
 
 testProgram :: Program
 testProgram = Program
-  { programId        = testProgramId
-  , programName      = "Extract Test"
-  , programState     = Draft
+  { programId          = testProgramId
+  , programName        = "Extract Test"
+  , programDescription = Nothing
+  , programState       = Draft
   , programGraph     = Graph { graphNodes = Map.empty, graphEdges = [] }
   , programCreatedAt = read "2026-01-01 00:00:00 UTC"
   , programUpdatedAt = read "2026-01-01 00:00:00 UTC"

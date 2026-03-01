@@ -169,11 +169,33 @@ spec = describe "validateGraph" $ do
       validateGraph g `shouldBe` []
 
   -- ------------------------------------------------------------------
+  describe "dangling edge detection" $ do
+    it "rejects an edge whose source node does not exist" $ do
+      let g =
+            mkGraph
+              [ mkNode "a1" "Agent" (mkAgent "gpt-4o" "x")
+              ]
+              [ mkEdge "e1" "deleted-node" "event" "a1" "instruction" PortData
+              ]
+      let errs = veMessage <$> validateGraph g
+      errs `shouldSatisfy` any (T.isInfixOf "references source node 'deleted-node'")
+
+    it "rejects an edge whose target node does not exist" $ do
+      let g =
+            mkGraph
+              [ mkNode "t1" "Trigger" mkTrigger
+              ]
+              [ mkEdge "e1" "t1" "event" "deleted-node" "instruction" PortData
+              ]
+      let errs = veMessage <$> validateGraph g
+      errs `shouldSatisfy` any (T.isInfixOf "references target node 'deleted-node'")
+
+  -- ------------------------------------------------------------------
   describe "trigger presence" $ do
     it "rejects a graph with no Trigger node" $ do
       let g = mkGraph [mkNode "a1" "Agent" (mkAgent "gpt-4o" "x")] []
       veMessage <$> validateGraph g
-        `shouldContain` ["Graph must contain at least one Trigger node"]
+        `shouldContain` ["Program must contain at least one Trigger node"]
 
   -- ------------------------------------------------------------------
   describe "DAG check" $ do

@@ -164,9 +164,10 @@ resourceEdge eid src srcPort tgt tgtPort = Edge
 
 mkProgram :: [Node] -> [Edge] -> Program
 mkProgram nodes edges = Program
-  { programId        = "prog-runner-1"
-  , programName      = "Runner Test Program"
-  , programState     = Draft
+  { programId          = "prog-runner-1"
+  , programName        = "Runner Test Program"
+  , programDescription = Nothing
+  , programState       = Draft
   , programGraph     = Graph
       { graphNodes = Map.fromList [(nodeId n, n) | n <- nodes]
       , graphEdges = edges

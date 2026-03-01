@@ -529,12 +529,13 @@ spec = do
       withTestEnv (capturingLLMClient ref "ok") $ \env -> do
         -- Seed a Program (FK required by runs and knowledge_entries)
         runAppM env $ insertProgram Program
-          { programId        = pid
-          , programName      = "Test Program"
-          , programState     = Draft
-          , programGraph     = Graph { graphNodes = Map.empty, graphEdges = [] }
-          , programCreatedAt = t0
-          , programUpdatedAt = t0
+          { programId          = pid
+          , programName        = "Test Program"
+          , programDescription = Nothing
+          , programState       = Draft
+          , programGraph       = Graph { graphNodes = Map.empty, graphEdges = [] }
+          , programCreatedAt   = t0
+          , programUpdatedAt   = t0
           }
         -- Seed a Run so getRun returns the expected ProgramId
         runAppM env $ insertRun Run
@@ -626,12 +627,13 @@ spec = do
       withTestEnv sequentialClient $ \env -> do
         -- Seed Program (FK required by runs and knowledge_entries)
         runAppM env $ insertProgram Program
-          { programId        = pid
-          , programName      = "Test Program"
-          , programState     = Draft
-          , programGraph     = Graph { graphNodes = Map.empty, graphEdges = [] }
-          , programCreatedAt = t0
-          , programUpdatedAt = t0
+          { programId          = pid
+          , programName        = "Test Program"
+          , programDescription = Nothing
+          , programState       = Draft
+          , programGraph       = Graph { graphNodes = Map.empty, graphEdges = [] }
+          , programCreatedAt   = t0
+          , programUpdatedAt   = t0
           }
         -- Seed Run + KnowledgeEntry
         runAppM env $ insertRun Run

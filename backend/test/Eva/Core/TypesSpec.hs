@@ -282,7 +282,7 @@ instance Arbitrary Program where
     Program
       <$> arbitrary
       <*> arbitraryText
-      <*> arbitrary
+      <*> oneof [pure Nothing, Just <$> arbitraryText]
       <*> arbitrary
       <*> arbitrary
       <*> arbitraryUTCTime
@@ -304,6 +304,7 @@ sampleProgram =
   Program
     { programId = "prog-001"
     , programName = "Weekly Project Summarizer"
+    , programDescription = Nothing
     , programState = Draft
     , programGraph =
         Graph

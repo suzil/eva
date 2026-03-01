@@ -193,9 +193,10 @@ errorEdgeFrom eid src tgt tgtPort = Edge
 
 mkProgram :: ProgramId -> [Node] -> [Edge] -> Program
 mkProgram pid nodes edges = Program
-  { programId        = pid
-  , programName      = "Retry Test"
-  , programState     = Draft
+  { programId          = pid
+  , programName        = "Retry Test"
+  , programDescription = Nothing
+  , programState       = Draft
   , programGraph     = Graph
       { graphNodes = Map.fromList [(nodeId n, n) | n <- nodes]
       , graphEdges = edges

@@ -77,9 +77,10 @@ t1 = posixSecondsToUTCTime 1_740_001_000
 -- | Minimal program required to satisfy the runs.program_id FK.
 smProgram :: Program
 smProgram = Program
-  { programId        = "prog-sm-1"
-  , programName      = "SM Test Program"
-  , programState     = Draft
+  { programId          = "prog-sm-1"
+  , programName        = "SM Test Program"
+  , programDescription = Nothing
+  , programState       = Draft
   , programGraph     = Graph { graphNodes = Map.empty, graphEdges = [] }
   , programCreatedAt = t0
   , programUpdatedAt = t0

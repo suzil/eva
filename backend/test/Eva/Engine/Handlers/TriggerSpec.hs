@@ -35,9 +35,10 @@ epoch = read "2026-01-01 00:00:00 UTC"
 
 testProgram :: Program
 testProgram = Program
-  { programId        = testProgramId
-  , programName      = "Trigger Test Program"
-  , programState     = Draft
+  { programId          = testProgramId
+  , programName        = "Trigger Test Program"
+  , programDescription = Nothing
+  , programState       = Draft
   , programGraph     = Graph { graphNodes = Map.empty, graphEdges = [] }
   , programCreatedAt = epoch
   , programUpdatedAt = epoch
