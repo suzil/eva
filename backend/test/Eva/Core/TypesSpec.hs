@@ -284,6 +284,7 @@ instance Arbitrary Program where
       <*> arbitraryText
       <*> arbitrary
       <*> arbitrary
+      <*> arbitrary
       <*> arbitraryUTCTime
       <*> arbitraryUTCTime
 

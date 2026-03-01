@@ -58,10 +58,11 @@ import Eva.Persistence.Migration (runMigrations)
 -- gets an isolated SQLite database.
 makeTestApp :: IO Application
 makeTestApp = do
-  pool       <- runNoLoggingT $ createSqlitePool ":memory:" 1
+  pool                <- runNoLoggingT $ createSqlitePool ":memory:" 1
   runMigrations pool
-  broadcasts <- newTVarIO Map.empty
-  cancelTokens <- newTVarIO Map.empty
+  broadcasts          <- newTVarIO Map.empty
+  assistantBroadcasts <- newTVarIO Map.empty
+  cancelTokens        <- newTVarIO Map.empty
   let env = AppEnv
         { envConfig = AppConfig
             { configDbPath          = ":memory:"
@@ -70,16 +71,17 @@ makeTestApp = do
             , configAnthropicApiKey = Nothing
             , configLogLevel        = LogError
             , configCredentialKey   = "test-key"
-        , configStaticDir       = Nothing
+            , configStaticDir       = Nothing
             }
-        , envDbPool          = pool
-        , envLogger          = \_ -> pure ()
-        , envDispatch        = execute
-        , envLLMClient       = dummyLLMClient
-        , envAnthropicClient = dummyLLMClient
-        , envBroadcasts      = broadcasts
-        , envCredentialKey   = Crypto.deriveKey "test-key"
-        , envCancelTokens    = cancelTokens
+        , envDbPool              = pool
+        , envLogger              = \_ -> pure ()
+        , envDispatch            = execute
+        , envLLMClient           = dummyLLMClient
+        , envAnthropicClient     = dummyLLMClient
+        , envBroadcasts          = broadcasts
+        , envAssistantBroadcasts = assistantBroadcasts
+        , envCredentialKey       = Crypto.deriveKey "test-key"
+        , envCancelTokens        = cancelTokens
         }
   pure (makeApp env)
 

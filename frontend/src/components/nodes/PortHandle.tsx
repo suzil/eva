@@ -17,7 +17,6 @@ export function PortHandle({ port, handleType, topPercent, accentColor }: PortHa
   const baseStyle =
     'absolute -translate-y-1/2 border-2 transition-colors duration-150'
 
-  const connectedStyle = isConnected ? '' : ''
   const optionalStyle = port.optional ? 'opacity-60' : ''
 
   const shapeStyle =
@@ -50,7 +49,6 @@ export function PortHandle({ port, handleType, topPercent, accentColor }: PortHa
       className={[
         'transition-all duration-150 hover:scale-110 hover:brightness-125',
         optionalStyle,
-        connectedStyle,
         baseStyle,
         shapeStyle,
         colorStyle,

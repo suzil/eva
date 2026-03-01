@@ -108,10 +108,11 @@ noTriggerGraph = Graph
 
 withTestEnv :: LLMClient -> (AppEnv -> IO ()) -> IO ()
 withTestEnv llmClient action = do
-  pool       <- runNoLoggingT $ createSqlitePool ":memory:" 2
+  pool                <- runNoLoggingT $ createSqlitePool ":memory:" 2
   runMigrations pool
-  broadcasts <- newTVarIO Map.empty
-  cancelTokens <- newTVarIO Map.empty
+  broadcasts          <- newTVarIO Map.empty
+  assistantBroadcasts <- newTVarIO Map.empty
+  cancelTokens        <- newTVarIO Map.empty
   let cfg = AppConfig
         { configDbPath          = ":memory:"
         , configPort            = 8080
@@ -122,15 +123,16 @@ withTestEnv llmClient action = do
         , configStaticDir       = Nothing
         }
       env = AppEnv
-        { envConfig          = cfg
-        , envDbPool          = pool
-        , envLogger          = \_ -> pure ()
-        , envDispatch        = \_ _ _ _ -> error "dispatch not used in assistant tests"
-        , envLLMClient       = llmClient
-        , envAnthropicClient = dummyLLMClient
-        , envBroadcasts      = broadcasts
-        , envCredentialKey   = Crypto.deriveKey "test-key"
-        , envCancelTokens    = cancelTokens
+        { envConfig              = cfg
+        , envDbPool              = pool
+        , envLogger              = \_ -> pure ()
+        , envDispatch            = \_ _ _ _ -> error "dispatch not used in assistant tests"
+        , envLLMClient           = llmClient
+        , envAnthropicClient     = dummyLLMClient
+        , envBroadcasts          = broadcasts
+        , envAssistantBroadcasts = assistantBroadcasts
+        , envCredentialKey       = Crypto.deriveKey "test-key"
+        , envCancelTokens        = cancelTokens
         }
   action env
 
@@ -168,7 +170,7 @@ spec = do
             emptyContext
             (\_ -> pure ())
         case result of
-          AsstGraphProposal g summary -> do
+          AsstGraphProposal g _ summary -> do
             -- Graph payload contains the trigger node from the proposal
             Map.member (NodeId "t1") (graphNodes g) `shouldBe` True
             summary `shouldBe` expectedSummary
@@ -249,7 +251,7 @@ spec = do
             (\_ -> pure ())
         -- Must NOT produce a proposal from a broken graph
         case result of
-          AsstGraphProposal _ _ -> expectationFailure
+          AsstGraphProposal _ _ _ -> expectationFailure
             "must not produce AsstGraphProposal for a graph that fails validation"
           AsstText t ->
             -- LLM acknowledged the validation error
