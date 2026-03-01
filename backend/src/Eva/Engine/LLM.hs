@@ -257,7 +257,7 @@ doStream apiKey mgr req onToken = do
                             let argsText = T.concat (reverse tcArgFrags)
                             in  case decode (BL.fromStrict (TE.encodeUtf8 argsText)) of
                                   Just v  -> v
-                                  Nothing -> Aeson.String argsText
+                                  Nothing -> Aeson.object []
                         }
                     | (_, (tcId, tcName, tcArgFrags)) <- Map.toAscList tcMap
                     ]
@@ -455,7 +455,7 @@ parseToolCall = Aeson.withObject "ToolCall" $ \o -> do
   argsText <- fn .: "arguments"  -- JSON-encoded string
   let args = case Aeson.decode (BL.fromStrict (TE.encodeUtf8 argsText)) of
                Just v  -> v
-               Nothing -> Aeson.String argsText  -- fallback: treat as raw text
+               Nothing -> Aeson.object []
   pure ToolCall { toolCallId = callId, toolCallName = name, toolCallArgs = args }
 
 -- | Merge one streaming tool-call delta into the accumulator map.
@@ -624,7 +624,7 @@ doAnthropicStream apiKey mgr req onToken = do
                             let argsText = T.concat (reverse tcArgFrags)
                             in  case decode (BL.fromStrict (TE.encodeUtf8 argsText)) of
                                   Just v  -> v
-                                  Nothing -> Aeson.String argsText
+                                  Nothing -> Aeson.object []
                         }
                     | (_, (tcId, tcName, tcArgFrags)) <- Map.toAscList tcMap
                     ]

@@ -31,6 +31,7 @@ module Eva.Assistant
   , magiSystemPrompt
   ) where
 
+import Control.Monad (join)
 import Control.Monad.IO.Class (liftIO)
 import System.IO (hPutStrLn, stderr)
 import Control.Monad.Reader (ask)
@@ -314,10 +315,10 @@ assistantTools :: [ToolSpec]
 assistantTools =
   [ ToolSpec
       { toolName        = "get_graph"
-      , toolDescription = "Retrieve the full graph (all nodes with configs, all edges) for a program."
+      , toolDescription = "Retrieve the full graph (all nodes with configs, all edges) for a program. If programId is omitted, uses the currently selected program from context."
       , toolParameters  = objSchema
-          [("programId", strProp "The program ID to retrieve the graph for.")]
-          ["programId"]
+          [("programId", strProp "The program ID to retrieve. Omit to use the currently selected program from context.")]
+          []
       }
   , ToolSpec
       { toolName        = "get_node"
@@ -476,6 +477,8 @@ handleAssistantMessage
   -> AppM AssistantMessage
 handleAssistantMessage _convId userMsg ctx onToken = do
   env <- ask
+  liftIO $ hPutStrLn stderr $
+    "[MAGI] ctx.programId=" <> show (ctxProgramId ctx)
   let contextMsg   = ChatMessage "system" (buildContextSection ctx)
       initMessages =
         [ ChatMessage "system" magiSystemPrompt
@@ -588,7 +591,7 @@ data ToolResult
 executeAssistantTool :: AssistantContext -> ToolCall -> AppM ToolResult
 executeAssistantTool ctx tc =
   case toolCallName tc of
-    "get_graph"         -> toolGetGraph (toolCallArgs tc)
+    "get_graph"         -> toolGetGraph ctx (toolCallArgs tc)
     "get_node"          -> toolGetNode ctx (toolCallArgs tc)
     "get_run_detail"    -> toolGetRunDetail (toolCallArgs tc)
     "search_programs"   -> toolSearchPrograms (toolCallArgs tc)
@@ -601,11 +604,19 @@ executeAssistantTool ctx tc =
 -- Tool: get_graph
 -- ---------------------------------------------------------------------------
 
-toolGetGraph :: Value -> AppM ToolResult
-toolGetGraph args =
-  case parseMaybe (withObject "args" (.: "programId")) args of
+toolGetGraph :: AssistantContext -> Value -> AppM ToolResult
+toolGetGraph ctx args = do
+  -- Resolve: explicit arg → context fallback → error
+  let mArgPid = join $ parseMaybe (withObject "args" (.:? "programId")) args
+      resolvedPid = case (mArgPid, ctxProgramId ctx) of
+        (Just p,  _)                  -> Just p
+        (Nothing, Just (ProgramId p)) -> Just p
+        _                             -> Nothing
+  liftIO $ hPutStrLn stderr $
+    "[MAGI] get_graph arg=" <> show mArgPid <> " resolved=" <> show resolvedPid
+  case resolvedPid of
     Nothing  -> pure $ ToolResultText
-                  "get_graph: missing required 'programId' argument"
+                  "get_graph: no program ID — provide programId or select a program in the UI"
     Just pid -> do
       mProg <- getProgram (ProgramId pid)
       case mProg of
@@ -771,7 +782,10 @@ buildContextSection ctx =
         es -> "Recent errors:\n" <> T.intercalate "\n" (map ("  - " <>) es)
     , case ctxProgramList ctx of
         [] -> ""
-        ps -> "Workspace programs: " <> T.intercalate ", " (map psName ps)
+        ps -> "Workspace programs:\n"
+               <> T.unlines [ "  - " <> psName p
+                               <> " (id: " <> (\(ProgramId i) -> i) (psId p) <> ")"
+                             | p <- ps ]
     ]
   where
     fmtGraph gs =
