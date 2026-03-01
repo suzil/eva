@@ -1,3 +1,6 @@
+import { useEffect, useRef } from 'react'
+import { useFocusTrap } from '../../hooks/useFocusTrap'
+
 interface ConfirmDialogProps {
   open: boolean
   title: string
@@ -17,6 +20,21 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // Trap Tab focus inside the dialog when open
+  useFocusTrap(dialogRef, open)
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [open, onCancel])
+
   if (!open) return null
 
   return (
@@ -25,6 +43,8 @@ export function ConfirmDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
+      aria-describedby="confirm-dialog-desc"
+      ref={dialogRef}
       onClick={onCancel}
     >
       <div
@@ -37,7 +57,9 @@ export function ConfirmDialog({
         >
           {title}
         </h2>
-        <p className="mb-5 text-xs leading-relaxed text-terminal-300">{message}</p>
+        <p id="confirm-dialog-desc" className="mb-5 text-xs leading-relaxed text-terminal-300">
+          {message}
+        </p>
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}
