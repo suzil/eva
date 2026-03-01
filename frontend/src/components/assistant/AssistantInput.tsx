@@ -127,7 +127,7 @@ export function AssistantInput({ onSend, disabled = false, initialValue, onIniti
           disabled={disabled}
           aria-label="Message MAGI"
           placeholder={disabled ? 'MAGI is thinking…' : 'Ask MAGI or type /'}
-          className="flex-1 resize-none bg-transparent text-sm text-terminal-100 placeholder-terminal-500 outline-none"
+          className="flex-1 resize-none bg-transparent text-sm text-terminal-100 placeholder:text-terminal-500 outline-none"
         />
 
         <button

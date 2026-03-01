@@ -36,7 +36,7 @@ export function SyncWarningModal({ onReplace, onKeep }: SyncWarningModalProps) {
       aria-modal="true"
       aria-labelledby="sync-warning-title"
       aria-describedby="sync-warning-desc"
-      className="absolute inset-0 z-50 flex items-center justify-center bg-void-900/80 backdrop-blur-sm"
+      className="absolute inset-0 z-50 flex items-center justify-center bg-terminal-950/80 backdrop-blur-sm"
     >
       <div className="w-full max-w-sm rounded border border-warn-amber-500/40 bg-terminal-800 p-6 shadow-xl">
         <div className="mb-4 flex items-start gap-3">
