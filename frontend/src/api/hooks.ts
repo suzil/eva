@@ -9,6 +9,7 @@ import type {
   PatchKnowledgeEntryReq,
   CreateTemplateReq,
   PatchTemplateReq,
+  LlmSettingsReq,
 } from '../types/index.ts'
 import {
   cancelRun,
@@ -56,6 +57,8 @@ import {
   createTemplate,
   patchTemplate,
   deleteTemplate,
+  fetchLlmSettings,
+  updateLlmSettings,
 } from './client.ts'
 
 // ---------------------------------------------------------------------------
@@ -572,6 +575,31 @@ export function useDeleteTemplate() {
     onSuccess: (_data, id) => {
       queryClient.removeQueries({ queryKey: templateKeys.detail(id) })
       void queryClient.invalidateQueries({ queryKey: templateKeys.lists() })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// LLM settings
+// ---------------------------------------------------------------------------
+
+export const llmSettingsKeys = {
+  all: ['llm-settings'] as const,
+}
+
+export function useLlmSettings() {
+  return useQuery({
+    queryKey: llmSettingsKeys.all,
+    queryFn: fetchLlmSettings,
+  })
+}
+
+export function useUpdateLlmSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: updateLlmSettings,
+    onSuccess: (updated) => {
+      queryClient.setQueryData(llmSettingsKeys.all, updated)
     },
   })
 }

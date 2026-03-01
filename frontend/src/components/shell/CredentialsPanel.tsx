@@ -70,7 +70,7 @@ export function CredentialsPanel() {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex flex-col">
       {/* Header row */}
       <div className="flex items-center justify-between border-b border-terminal-500 px-3 py-2">
         <span className="font-display text-xs uppercase tracking-widest text-terminal-300">
@@ -167,7 +167,7 @@ export function CredentialsPanel() {
       )}
 
       {/* Credential list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 size={16} className="animate-spin text-terminal-400" />

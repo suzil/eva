@@ -68,13 +68,19 @@ import Eva.Engine.LLM
   , ChatMessage (..)
   , ToolCall (..)
   , ToolSpec (..)
+  , mkOpenAIClient
+  , mkAnthropicClient
   )
 import Eva.Persistence.Queries
   ( getProgram
   , listPrograms
   , getRun
   , listStepsForRun
+  , getLlmSettings
   )
+import Eva.Persistence.Schema (LlmSettingsRow (..))
+import qualified Eva.Crypto as Crypto
+import qualified Data.Text.Encoding as TE
 
 -- ---------------------------------------------------------------------------
 -- ConversationId
@@ -473,6 +479,38 @@ handleAssistantMessage _convId userMsg ctx onToken = do
   runConversationLoop env ctx onToken initMessages 0
 
 -- ---------------------------------------------------------------------------
+-- LLM client resolution
+-- ---------------------------------------------------------------------------
+
+-- | Resolve the LLM client and model to use for MAGI, in priority order:
+--   1. DB-stored API key → build a fresh client with that key
+--   2. No DB key but provider set → use the env-configured client for that provider
+--   3. No settings row at all → fall back to the env OpenAI client with gpt-4o
+resolveLlmClient :: App.AppEnv -> AppM (LLMClient, Text)
+resolveLlmClient env = do
+  mRow <- getLlmSettings
+  case mRow of
+    Nothing -> pure (App.envLLMClient env, "gpt-4o")
+    Just row -> do
+      let provider = llmSettingsRowProvider row
+          model    = llmSettingsRowMagiModel row
+      client <- case llmSettingsRowEncryptedApiKey row of
+        Nothing -> pure $ if provider == "anthropic"
+                            then App.envAnthropicClient env
+                            else App.envLLMClient env
+        Just encKey -> do
+          let credKey = App.envCredentialKey env
+          case Crypto.decrypt credKey encKey of
+            Left _     -> pure $ if provider == "anthropic"
+                                   then App.envAnthropicClient env
+                                   else App.envLLMClient env
+            Right keyBs -> liftIO $
+              if provider == "anthropic"
+                then mkAnthropicClient (T.strip (TE.decodeUtf8 keyBs))
+                else mkOpenAIClient    (T.strip (TE.decodeUtf8 keyBs))
+      pure (client, model)
+
+-- ---------------------------------------------------------------------------
 -- Conversation loop
 -- ---------------------------------------------------------------------------
 
@@ -489,15 +527,16 @@ runConversationLoop env ctx onToken messages iteration =
            "MAGI: analysis depth limit reached. \
            \Simplify your request or provide more specific context."
     else do
+      (llmClient, model) <- resolveLlmClient env
       let llmReq = LLMRequest
-            { llmModel          = "gpt-4o"
+            { llmModel          = model
             , llmMessages       = messages
             , llmTemperature    = 0.7
             , llmMaxTokens      = Nothing
             , llmResponseFormat = ResponseText
             , llmTools          = assistantTools
             }
-      result <- liftIO $ clientStream (App.envLLMClient env) llmReq onToken
+      result <- liftIO $ clientStream llmClient llmReq onToken
       case result of
         Left err ->
           pure $ AsstText ("MAGI error: " <> T.pack (show err))

@@ -147,4 +147,11 @@ PromptTemplateRow sql=prompt_templates
   createdAt UTCTime sql=created_at
   updatedAt UTCTime sql=updated_at
   deriving Show Eq
+
+LlmSettingsRow sql=llm_settings
+  Id Text sqltype=text
+  provider Text
+  magiModel Text sql=magi_model
+  encryptedApiKey ByteString Maybe sql=encrypted_api_key
+  deriving Show Eq
 |]

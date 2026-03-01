@@ -16,6 +16,7 @@ module Eva.Api.Types
   , PatchKnowledgeEntryReq (..)
   , CreateTemplateReq (..)
   , PatchTemplateReq (..)
+  , LlmSettingsReq (..)
 
     -- * Response bodies
   , HealthResponse (..)
@@ -24,10 +25,11 @@ module Eva.Api.Types
   , SpecResponse (..)
   , GitDiffFile (..)
   , GitDiffResponse (..)
+  , LlmSettingsResp (..)
 
     -- * Error response
   , ApiError (..)
-  , SpecError (..)
+  , SpecError (..) 
   ) where
 
 import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
@@ -281,3 +283,37 @@ instance FromJSON PatchTemplateReq where
       <*> o .:? "tags"
       <*> o .:? "body"
       <*> o .:? "variables"
+
+-- ---------------------------------------------------------------------------
+-- LLM settings request / response
+-- ---------------------------------------------------------------------------
+
+-- | Request body for PUT /api/llm-settings.
+-- 'apiKey' is optional — omit it to keep the existing stored key.
+data LlmSettingsReq = LlmSettingsReq
+  { lsrProvider :: Text          -- ^ "openai" | "anthropic"
+  , lsrModel    :: Text          -- ^ Model name for MAGI
+  , lsrApiKey   :: Maybe Text    -- ^ Raw API key; absent = preserve existing
+  }
+
+instance FromJSON LlmSettingsReq where
+  parseJSON = withObject "LlmSettingsReq" $ \o ->
+    LlmSettingsReq
+      <$> o .:  "provider"
+      <*> o .:  "model"
+      <*> o .:? "apiKey"
+
+-- | Response body for GET/PUT /api/llm-settings.
+-- Never includes the raw API key.
+data LlmSettingsResp = LlmSettingsResp
+  { lsProvider :: Text   -- ^ "openai" | "anthropic"
+  , lsModel    :: Text   -- ^ MAGI model name
+  , lsHasKey   :: Bool   -- ^ True when an encrypted key is stored
+  }
+
+instance ToJSON LlmSettingsResp where
+  toJSON r = object
+    [ "provider" .= lsProvider r
+    , "model"    .= lsModel    r
+    , "hasKey"   .= lsHasKey   r
+    ]

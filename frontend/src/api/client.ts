@@ -24,6 +24,8 @@ import type {
   PromptTemplate,
   CreateTemplateReq,
   PatchTemplateReq,
+  LlmSettingsResp,
+  LlmSettingsReq,
 } from '../types/index.ts'
 
 const BASE = '/api'
@@ -318,4 +320,19 @@ export function patchTemplate(id: string, body: PatchTemplateReq): Promise<Promp
 
 export function deleteTemplate(id: string): Promise<void> {
   return request<void>(`/templates/${id}`, { method: 'DELETE' })
+}
+
+// ---------------------------------------------------------------------------
+// LLM settings
+// ---------------------------------------------------------------------------
+
+export function fetchLlmSettings(): Promise<LlmSettingsResp> {
+  return request<LlmSettingsResp>('/llm-settings')
+}
+
+export function updateLlmSettings(body: LlmSettingsReq): Promise<LlmSettingsResp> {
+  return request<LlmSettingsResp>('/llm-settings', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
 }

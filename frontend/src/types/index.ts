@@ -578,3 +578,21 @@ export interface PatchTemplateReq {
   body?: string
   variables?: TemplateVariable[]
 }
+
+// ---------------------------------------------------------------------------
+// LLM settings
+// ---------------------------------------------------------------------------
+
+export type LlmProvider = 'openai' | 'anthropic'
+
+export interface LlmSettingsResp {
+  provider: LlmProvider
+  model: string
+  hasKey: boolean
+}
+
+export interface LlmSettingsReq {
+  provider: LlmProvider
+  model: string
+  apiKey?: string
+}

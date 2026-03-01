@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { useUiStore } from '../../store/uiStore'
 import { CredentialsPanel } from './CredentialsPanel'
+import { LlmSettingsPanel } from './LlmSettingsPanel'
 import { ProgramsPanel } from './ProgramsList'
 import { NodePalette } from './NodePalette'
 import { RunsPanel } from './RunsPanel'
@@ -61,7 +62,12 @@ export function SidePanel() {
       {activeActivity === 'knowledge' && <KnowledgeLibrary />}
       {activeActivity === 'runs' && <RunsPanel />}
       {activeActivity === 'codebase' && <CodebasePanel />}
-      {activeActivity === 'settings' && <CredentialsPanel />}
+      {activeActivity === 'settings' && (
+        <div className="flex flex-1 flex-col overflow-y-auto">
+          <LlmSettingsPanel />
+          <CredentialsPanel />
+        </div>
+      )}
 
       {/* Drag handle */}
       <div

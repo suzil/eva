@@ -37,6 +37,10 @@ module Eva.Persistence.Queries
   , deleteCredential
   , getDecryptedCredential
 
+    -- * LLM settings
+  , getLlmSettings
+  , upsertLlmSettings
+
     -- * Codebases
   , insertCodebase
   , getCodebase
@@ -76,6 +80,7 @@ import Database.Persist.Sql
   , get
   , insertKey
   , rawExecute
+  , repsert
   , runSqlPool
   , selectList
   , update
@@ -726,4 +731,27 @@ insertFileChange fc = runDb $
     , codeFileChangeRowOriginalContent = fileChangeOriginalContent fc
     , codeFileChangeRowProposedContent = fileChangeProposedContent fc
     , codeFileChangeRowStatus          = encodeState (fileChangeStatus fc)
+    }
+
+-- ---------------------------------------------------------------------------
+-- LLM settings (singleton row, key = "singleton")
+-- ---------------------------------------------------------------------------
+
+llmSettingsKey :: LlmSettingsRowId
+llmSettingsKey = LlmSettingsRowKey "singleton"
+
+-- | Retrieve the stored LLM settings, if any. Returns Nothing when the table
+-- has never been written (i.e. the user hasn't configured a provider yet).
+getLlmSettings :: AppM (Maybe LlmSettingsRow)
+getLlmSettings = runDb $ get llmSettingsKey
+
+-- | Upsert the LLM settings singleton row. Pass Nothing for the encrypted key
+-- to keep the existing key unchanged; pass Just bytes to replace it.
+-- When updating without a key change, read the current key first and re-pass it.
+upsertLlmSettings :: Text -> Text -> Maybe ByteString -> AppM ()
+upsertLlmSettings provider model mEncKey = runDb $
+  repsert llmSettingsKey LlmSettingsRow
+    { llmSettingsRowProvider      = provider
+    , llmSettingsRowMagiModel     = model
+    , llmSettingsRowEncryptedApiKey = mEncKey
     }

@@ -68,6 +68,7 @@ import qualified Eva.Crypto as Crypto
 import Eva.Engine.Runner (startRun)
 import Eva.Engine.StateMachine (RunContext (..))
 import Eva.Persistence.Queries
+import Eva.Persistence.Schema (LlmSettingsRow (..))
 
 -- ---------------------------------------------------------------------------
 -- API type
@@ -78,6 +79,7 @@ type EvaAPI =
   :<|> ProgramsAPI
   :<|> RunsAPI
   :<|> CredentialsAPI
+  :<|> LlmSettingsAPI
   :<|> CodebaseByProgramAPI
   :<|> CodebaseByIdAPI
   :<|> ChangesetAPI
@@ -129,6 +131,12 @@ type CredentialsAPI =
     (    Get '[JSON] [Credential]
     :<|> ReqBody '[JSON] CreateCredentialReq :> PostCreated '[JSON] Credential
     :<|> Capture "id" Text :> DeleteNoContent
+    )
+
+type LlmSettingsAPI =
+  "api" :> "llm-settings" :>
+    (    Get  '[JSON] LlmSettingsResp
+    :<|> ReqBody '[JSON] LlmSettingsReq :> Put '[JSON] LlmSettingsResp
     )
 
 -- ---------------------------------------------------------------------------
@@ -194,6 +202,7 @@ evaHandlers env =
   :<|> programsHandlers env
   :<|> runsHandlers env
   :<|> credentialsHandlers env
+  :<|> llmSettingsHandlers env
   :<|> codebaseByProgramHandlers env
   :<|> codebaseByIdHandlers env
   :<|> changesetHandlers env
@@ -464,6 +473,49 @@ credentialsHandlers env = listH :<|> createH :<|> deleteH
     deleteH rawId = do
       run (deleteCredential (CredentialId rawId))
       pure NoContent
+
+-- ---------------------------------------------------------------------------
+-- LLM settings handlers (/api/llm-settings)
+-- ---------------------------------------------------------------------------
+
+llmSettingsHandlers :: AppEnv -> Server LlmSettingsAPI
+llmSettingsHandlers env = getH :<|> putH
+  where
+    run :: AppM a -> Handler a
+    run = liftIO . runAppM env
+
+    toResp :: LlmSettingsRow -> LlmSettingsResp
+    toResp row = LlmSettingsResp
+      { lsProvider = llmSettingsRowProvider row
+      , lsModel    = llmSettingsRowMagiModel row
+      , lsHasKey   = maybe False (const True) (llmSettingsRowEncryptedApiKey row)
+      }
+
+    -- GET /api/llm-settings — returns defaults when no row exists yet
+    getH :: Handler LlmSettingsResp
+    getH = do
+      mRow <- run getLlmSettings
+      pure $ case mRow of
+        Nothing  -> LlmSettingsResp { lsProvider = "openai", lsModel = "gpt-4o", lsHasKey = False }
+        Just row -> toResp row
+
+    -- PUT /api/llm-settings
+    putH :: LlmSettingsReq -> Handler LlmSettingsResp
+    putH req = do
+      let credKey = envCredentialKey env
+      mEncKey <- case lsrApiKey req of
+        Just rawKey -> do
+          enc <- liftIO (Crypto.encrypt credKey (TE.encodeUtf8 (T.strip rawKey)))
+          pure (Just enc)
+        Nothing -> do
+          -- Keep existing key if present
+          mRow <- run getLlmSettings
+          pure $ mRow >>= llmSettingsRowEncryptedApiKey
+      run (upsertLlmSettings (lsrProvider req) (lsrModel req) mEncKey)
+      mRow <- run getLlmSettings
+      case mRow of
+        Nothing  -> throwError err500 { errBody = encode (ApiError "failed to persist settings") }
+        Just row -> pure (toResp row)
 
 -- ---------------------------------------------------------------------------
 -- State transition logic
