@@ -54,7 +54,8 @@ outputPorts (TriggerNode _)   = [PortSpec "event"   PortData     False]
 -- Checks are ordered: structural checks first, semantic checks after.
 validateGraph :: Graph -> [ValidationError]
 validateGraph g =
-  checkTriggerPresence g
+  checkDanglingEdges g
+    <> checkTriggerPresence g
     <> checkDag g
     <> checkEdgePortNames g
     <> checkPortCategories g
@@ -63,7 +64,53 @@ validateGraph g =
     <> checkReachability g
 
 -- ---------------------------------------------------------------------------
--- Check 1: Trigger presence
+-- Check 1: Dangling edges
+-- ---------------------------------------------------------------------------
+
+-- | Detect edges whose source or target node ID does not exist in graphNodes.
+-- Runs first so that later checks never silently swallow dangling-edge cases.
+checkDanglingEdges :: Graph -> [ValidationError]
+checkDanglingEdges g =
+  concatMap checkEdge (graphEdges g)
+  where
+    nodeIds :: Set NodeId
+    nodeIds = Map.keysSet (graphNodes g)
+
+    checkEdge :: Edge -> [ValidationError]
+    checkEdge e = srcErr e <> tgtErr e
+
+    srcErr :: Edge -> [ValidationError]
+    srcErr e
+      | Set.member (edgeSourceNode e) nodeIds = []
+      | otherwise =
+          [ ValidationError
+              { veMessage =
+                  "Edge '"
+                    <> unEdgeId (edgeId e)
+                    <> "' references source node '"
+                    <> unNodeId (edgeSourceNode e)
+                    <> "' which does not exist in the graph"
+              , veNodeId = Nothing
+              }
+          ]
+
+    tgtErr :: Edge -> [ValidationError]
+    tgtErr e
+      | Set.member (edgeTargetNode e) nodeIds = []
+      | otherwise =
+          [ ValidationError
+              { veMessage =
+                  "Edge '"
+                    <> unEdgeId (edgeId e)
+                    <> "' references target node '"
+                    <> unNodeId (edgeTargetNode e)
+                    <> "' which does not exist in the graph"
+              , veNodeId = Nothing
+              }
+          ]
+
+-- ---------------------------------------------------------------------------
+-- Check 2: Trigger presence
 -- ---------------------------------------------------------------------------
 
 checkTriggerPresence :: Graph -> [ValidationError]
@@ -78,7 +125,7 @@ checkTriggerPresence g =
       _             -> False
 
 -- ---------------------------------------------------------------------------
--- Check 2: DAG (no cycles in data edges)
+-- Check 3: DAG (no cycles in data edges)
 -- ---------------------------------------------------------------------------
 
 checkDag :: Graph -> [ValidationError]
@@ -95,7 +142,7 @@ checkDag g =
       ]
 
 -- ---------------------------------------------------------------------------
--- Check 3 & 4: Edge port names valid on source and target node types
+-- Check 4 & 5: Edge port names valid on source and target node types
 -- ---------------------------------------------------------------------------
 
 checkEdgePortNames :: Graph -> [ValidationError]
@@ -156,7 +203,7 @@ checkEdgePortNames g =
                  ]
 
 -- ---------------------------------------------------------------------------
--- Check 5: Port category compatibility
+-- Check 6: Port category compatibility
 -- ---------------------------------------------------------------------------
 
 checkPortCategories :: Graph -> [ValidationError]
@@ -224,7 +271,7 @@ checkPortCategories g =
                   ]
 
 -- ---------------------------------------------------------------------------
--- Check 6: Required connections wired
+-- Check 7: Required connections wired
 -- ---------------------------------------------------------------------------
 
 checkRequiredWiring :: Graph -> [ValidationError]
@@ -269,7 +316,7 @@ checkRequiredWiring g =
               }
 
 -- ---------------------------------------------------------------------------
--- Check 7: Config completeness
+-- Check 8: Config completeness
 -- ---------------------------------------------------------------------------
 
 checkConfigComplete :: Graph -> [ValidationError]
@@ -327,7 +374,7 @@ checkConfigComplete g =
         _ -> []
 
 -- ---------------------------------------------------------------------------
--- Check 8: Reachability (Agent and Action nodes only)
+-- Check 9: Reachability (Agent and Action nodes only)
 -- ---------------------------------------------------------------------------
 
 -- | Every Agent and Action node must be reachable from at least one Trigger
@@ -403,6 +450,9 @@ bfsReach adj frontier visited
 
 unNodeId :: NodeId -> Text
 unNodeId (NodeId t) = t
+
+unEdgeId :: EdgeId -> Text
+unEdgeId (EdgeId t) = t
 
 unPortName :: PortName -> Text
 unPortName (PortName t) = t
