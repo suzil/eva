@@ -344,18 +344,18 @@ spec = describe "Eva.Knowledge.Query" $ do
         results `shouldSatisfy` (const True)
 
   -- -------------------------------------------------------------------------
-  -- Latency benchmark
+  -- Latency benchmarks (EVA-106: all 4 search modes must be <10ms at 1000
+  -- entries; assembleAgentContext must be <50ms at 1000 entries)
   -- -------------------------------------------------------------------------
 
   describe "search latency" $ do
 
-    it "keyword search over 100 entries completes in under 10ms" $ do
+    it "keyword (FTS5) search over 1000 entries completes in under 10ms" $ do
       withTestEnv $ \env -> do
         runTest env $ insertProgram testProg
-        -- Insert 100 entries covering a variety of terms
-        forM_ [1 .. 100 :: Int] $ \i ->
+        forM_ [1 .. 1000 :: Int] $ \i ->
           runTest env $ insertEntry (baseEntry
-            (KnowledgeEntryId ("ke-lat-" <> T.pack (show i)))
+            (KnowledgeEntryId ("ke-lat-kw-" <> T.pack (show i)))
             ("Title " <> T.pack (show i))
             ("Content about performance benchmarking entry number " <> T.pack (show i)))
         t0' <- getCurrentTime
@@ -363,3 +363,84 @@ spec = describe "Eva.Knowledge.Query" $ do
         t1' <- getCurrentTime
         let diffMs = realToFrac (diffUTCTime t1' t0') * 1000 :: Double
         diffMs `shouldSatisfy` (< 10.0)
+
+    it "structured (SQL WHERE) search over 1000 entries completes in under 10ms" $ do
+      withTestEnv $ \env -> do
+        runTest env $ insertProgram testProg
+        forM_ [1 .. 1000 :: Int] $ \i ->
+          runTest env $ insertEntry (baseEntry
+            (KnowledgeEntryId ("ke-lat-st-" <> T.pack (show i)))
+            ("Title " <> T.pack (show i))
+            ("Structured content entry number " <> T.pack (show i)))
+        t0' <- getCurrentTime
+        _ <- runTest env $ search emptyQuery
+              { searchQueryProgramId = Just testPid
+              , searchQueryCategory  = Just CategoryStructure
+              }
+        t1' <- getCurrentTime
+        let diffMs = realToFrac (diffUTCTime t1' t0') * 1000 :: Double
+        diffMs `shouldSatisfy` (< 10.0)
+
+    it "combined (FTS5 + WHERE) search over 1000 entries completes in under 10ms" $ do
+      withTestEnv $ \env -> do
+        runTest env $ insertProgram testProg
+        forM_ [1 .. 1000 :: Int] $ \i ->
+          runTest env $ insertEntry (baseEntry
+            (KnowledgeEntryId ("ke-lat-co-" <> T.pack (show i)))
+            ("Title " <> T.pack (show i))
+            ("Combined benchmarking content entry " <> T.pack (show i)))
+        t0' <- getCurrentTime
+        _ <- runTest env $ search emptyQuery
+              { searchQueryText      = "benchmarking"
+              , searchQueryProgramId = Just testPid
+              }
+        t1' <- getCurrentTime
+        let diffMs = realToFrac (diffUTCTime t1' t0') * 1000 :: Double
+        diffMs `shouldSatisfy` (< 10.0)
+
+    it "path search over 1000 entries completes in under 10ms" $ do
+      withTestEnv $ \env -> do
+        runTest env $ insertProgram testProg
+        forM_ [1 .. 1000 :: Int] $ \i ->
+          runTest env $ insertEntry
+            (baseEntry
+              (KnowledgeEntryId ("ke-lat-pa-" <> T.pack (show i)))
+              ("Title " <> T.pack (show i))
+              ("Path entry content " <> T.pack (show i)))
+            { knowledgeEntryMetadata = object [ "path" .= ("/src/Eva/Module" <> T.pack (show i) <> ".hs" :: Text) ]
+            }
+        t0' <- getCurrentTime
+        _ <- runTest env $ searchByPath "%.hs" (Just testPid)
+        t1' <- getCurrentTime
+        let diffMs = realToFrac (diffUTCTime t1' t0') * 1000 :: Double
+        diffMs `shouldSatisfy` (< 10.0)
+
+    it "assembleAgentContext over 1000 entries completes in under 50ms" $ do
+      withTestEnv $ \env -> do
+        let otherPid = "query-prog-2" :: ProgramId
+            otherProg = testProg
+              { programId   = otherPid
+              , programName = "Other Program"
+              }
+        runTest env $ insertProgram testProg
+        runTest env $ insertProgram otherProg
+        -- Insert 500 entries for testPid, 500 for another program
+        forM_ [1 .. 500 :: Int] $ \i ->
+          runTest env $ insertEntry
+            (baseEntry
+              (KnowledgeEntryId ("ke-lat-ac-a-" <> T.pack (show i)))
+              ("Context Title " <> T.pack (show i))
+              ("Context content entry " <> T.pack (show i)))
+            { knowledgeEntryConfidence = fromIntegral i / 500.0 }
+        forM_ [1 .. 500 :: Int] $ \i ->
+          runTest env $ insertEntry
+            (baseEntry
+              (KnowledgeEntryId ("ke-lat-ac-b-" <> T.pack (show i)))
+              ("Other Title " <> T.pack (show i))
+              ("Other content entry " <> T.pack (show i)))
+            { knowledgeEntryProgramId = Just otherPid }
+        t0' <- getCurrentTime
+        _ <- runTest env $ assembleAgentContext testPid Nothing
+        t1' <- getCurrentTime
+        let diffMs = realToFrac (diffUTCTime t1' t0') * 1000 :: Double
+        diffMs `shouldSatisfy` (< 50.0)
