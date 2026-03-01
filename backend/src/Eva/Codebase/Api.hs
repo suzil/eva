@@ -20,8 +20,9 @@ module Eva.Codebase.Api
   , changesetHandlers
   ) where
 
+import Control.Concurrent.Async (async)
 import Control.Exception (IOException, catch)
-import Control.Monad (forM, unless, when)
+import Control.Monad (forM, unless, void, when)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (encode)
 import qualified Data.ByteString.Lazy as BL
@@ -47,6 +48,8 @@ import Eva.Codebase.Scanner
   )
 import Eva.Codebase.Types
 import Eva.Core.Types (ProgramId (..), RunId (..))
+import Eva.Knowledge.Extract (extractForSource)
+import Eva.Knowledge.Types (KnowledgeSourceType (..))
 import Eva.Persistence.Queries
 
 -- ---------------------------------------------------------------------------
@@ -150,7 +153,11 @@ codebaseByProgramHandlers env rawId =
             Left err ->
               throwError err500
                 { errBody = encode (ApiError ("Scan failed: " <> T.pack (show err))) }
-            Right sr ->
+            Right sr -> do
+              -- Fire knowledge extraction in the background so the handler
+              -- returns immediately while entries are being populated.
+              liftIO $ void $ async $
+                runAppM env (extractForSource SourceCodebase (Just (T.pack canonPath)) pid)
               pure (scanResultToMeta cbId pid (T.pack canonPath) sr)
 
     -- DELETE /api/programs/:id/codebase/:cbId

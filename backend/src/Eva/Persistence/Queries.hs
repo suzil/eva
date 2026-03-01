@@ -68,12 +68,14 @@ import qualified Data.UUID as UUID
 import Data.UUID.V4 (nextRandom)
 import Database.Persist.Sql
   ( Entity (..)
+  , PersistValue (..)
   , SelectOpt (..)
   , SqlPersistT
   , delete
   , deleteWhere
   , get
   , insertKey
+  , rawExecute
   , runSqlPool
   , selectList
   , update
@@ -353,8 +355,35 @@ updateProgram p = runDb $
     , ProgramRowUpdatedAt =. programUpdatedAt p
     ]
 
+-- | Delete a program and all its dependent records in foreign-key order.
+-- Cascades: log_entries → code_file_changes → code_changesets → steps →
+-- runs → codebases → knowledge_entries → nodes → edges → program.
 deleteProgram :: ProgramId -> AppM ()
 deleteProgram pid = runDb $ do
+  let pidText = case pid of ProgramId t -> t
+  rawExecute
+    "DELETE FROM log_entries WHERE step_id IN \
+    \  (SELECT id FROM steps WHERE run_id IN \
+    \    (SELECT id FROM runs WHERE program_id = ?))"
+    [PersistText pidText]
+  rawExecute
+    "DELETE FROM code_file_changes WHERE changeset_id IN \
+    \  (SELECT id FROM code_changesets WHERE run_id IN \
+    \    (SELECT id FROM runs WHERE program_id = ?))"
+    [PersistText pidText]
+  rawExecute
+    "DELETE FROM code_changesets WHERE run_id IN \
+    \  (SELECT id FROM runs WHERE program_id = ?)"
+    [PersistText pidText]
+  rawExecute
+    "DELETE FROM steps WHERE run_id IN \
+    \  (SELECT id FROM runs WHERE program_id = ?)"
+    [PersistText pidText]
+  deleteWhere [RunRowProgramId    ==. toProgramRowId pid]
+  deleteWhere [CodebaseRowProgramId ==. toProgramRowId pid]
+  rawExecute
+    "DELETE FROM knowledge_entries WHERE program_id = ?"
+    [PersistText pidText]
   deleteWhere [NodeRowProgramId ==. toProgramRowId pid]
   deleteWhere [EdgeRowProgramId ==. toProgramRowId pid]
   delete (toProgramRowId pid)
