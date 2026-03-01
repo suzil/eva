@@ -31,17 +31,17 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-gray-950 text-white">
-          <AlertTriangle className="h-10 w-10 text-red-400" />
+        <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-terminal-950 text-white">
+          <AlertTriangle className="h-10 w-10 text-nerv-red-400" />
           <div className="text-center">
             <p className="text-lg font-semibold">Something went wrong</p>
-            <p className="mt-1 max-w-sm text-sm text-gray-400">
+            <p className="mt-1 max-w-sm text-sm text-terminal-300">
               {this.state.error?.message ?? 'An unexpected error occurred.'}
             </p>
           </div>
           <button
             onClick={this.handleReload}
-            className="rounded bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+            className="rounded bg-terminal-700 px-4 py-2 text-sm font-medium text-white hover:bg-terminal-600"
           >
             Reload
           </button>
