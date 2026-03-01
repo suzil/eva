@@ -75,8 +75,10 @@ handleTemplate rid node cfg inputs = do
   let (result, unresolved) = resolveTemplate tmpl textVars
   case unresolved of
     [] -> pure ()
-    (v : _) -> liftIO $ throwIO $ userError $ T.unpack $
-      "Missing template variable '{{" <> v <> "}}': not found in input"
+    vs -> liftIO $ throwIO $ userError $ T.unpack $
+      "Missing template variable(s): "
+        <> T.intercalate ", " ["{{" <> v <> "}}" | v <- vs]
+        <> " — not found in input"
 
   -- 4. Build and return the output message.
   now     <- liftIO getCurrentTime

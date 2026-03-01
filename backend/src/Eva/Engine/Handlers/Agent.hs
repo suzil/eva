@@ -19,6 +19,7 @@ module Eva.Engine.Handlers.Agent
   ) where
 
 import Control.Exception (throwIO)
+import Text.Printf (printf)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
 import Data.Aeson (Value (..), encode, toJSON)
@@ -201,15 +202,14 @@ runToolLoop env cfg pid rid node llmClient connectorTools tools actionMap messag
       else liftIO $ clientCall llmClient llmReq
 
   resp <- case result of
-    Left err -> liftIO $ throwIO $ userError (show err)
+    Left err -> liftIO $ throwIO err
     Right r  -> pure r
 
   -- Check cost budget after this round
-  let iterCost    = estimateCost (agentModel cfg) (llmUsage resp)
-      newCost     = cost + iterCost
-      budgetBreached = case agentCostBudgetUsd cfg of
-        Just budget -> newCost >= budget
-        Nothing     -> False
+  let iterCost       = estimateCost (agentModel cfg) (llmUsage resp)
+      newCost        = cost + iterCost
+      mBudget        = agentCostBudgetUsd cfg
+      budgetBreached = maybe False (newCost >=) mBudget
 
   case llmToolCalls resp of
     -- Tool-call round: execute tools, append messages, recurse.
@@ -258,9 +258,11 @@ runToolLoop env cfg pid rid node llmClient connectorTools tools actionMap messag
     _ -> do
       now     <- liftIO getCurrentTime
       traceId <- liftIO (UUID.toText <$> nextRandom)
-      let outputText = if budgetBreached && T.null (llmContent resp)
-                         then "[cost budget exceeded after " <> T.pack (show iteration) <> " iteration(s)]"
-                         else llmContent resp
+      let outputText = case (budgetBreached, mBudget) of
+            (True, Just b) | T.null (llmContent resp) ->
+              T.pack $ printf "[cost budget exceeded: $%.4f budget, $%.4f spent after %d iteration(s)]"
+                              b newCost (iteration :: Int)
+            _ -> llmContent resp
       -- If the LLM signalled an unrecoverable connector failure, fail the step
       -- so the run is marked failed rather than producing a misleading success.
       if "TASK_FAILED:" `T.isPrefixOf` T.stripStart outputText

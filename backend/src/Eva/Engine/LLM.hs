@@ -30,7 +30,7 @@ module Eva.Engine.LLM
   , classifyStatus
   ) where
 
-import Control.Exception (SomeException, try)
+import Control.Exception (Exception, SomeException, displayException, try)
 import Control.Monad (unless)
 import System.IO (hPutStrLn, stderr)
 import Data.Aeson (Value (..), decode, encode, object, (.:), (.:?), (.=))
@@ -70,6 +70,13 @@ data LLMError
   | LLMTimeoutError
   | LLMParseError Text
   deriving (Eq, Show)
+
+instance Exception LLMError where
+  displayException (LLMAuthError msg)       = "LLM authentication failed: " <> T.unpack msg
+  displayException (LLMRateLimitError msg)  = "LLM rate limit exceeded: "   <> T.unpack msg
+  displayException (LLMApiError status msg) = "LLM API error (HTTP " <> show status <> "): " <> T.unpack msg
+  displayException LLMTimeoutError          = "LLM request timed out"
+  displayException (LLMParseError msg)      = "LLM response parse error: "  <> T.unpack msg
 
 -- ---------------------------------------------------------------------------
 -- Tool-calling types
@@ -168,7 +175,7 @@ openAICall :: Text -> Manager -> LLMRequest -> IO (Either LLMError LLMResponse)
 openAICall apiKey mgr req = do
   result <- try (doCall apiKey mgr req)
   case result of
-    Left (e :: SomeException) -> pure (Left (LLMApiError 0 (T.pack (show e))))
+    Left (e :: SomeException) -> pure (Left (LLMApiError 0 (T.pack (displayException e))))
     Right v                   -> pure v
 
 doCall :: Text -> Manager -> LLMRequest -> IO (Either LLMError LLMResponse)
@@ -194,7 +201,7 @@ openAIStream
 openAIStream apiKey mgr req onToken = do
   result <- try (doStream apiKey mgr req onToken)
   case result of
-    Left (e :: SomeException) -> pure (Left (LLMApiError 0 (T.pack (show e))))
+    Left (e :: SomeException) -> pure (Left (LLMApiError 0 (T.pack (displayException e))))
     Right v                   -> pure v
 
 doStream
@@ -536,7 +543,7 @@ anthropicCall :: Text -> Manager -> LLMRequest -> IO (Either LLMError LLMRespons
 anthropicCall apiKey mgr req = do
   result <- try (doAnthropicCall apiKey mgr req)
   case result of
-    Left (e :: SomeException) -> pure (Left (LLMApiError 0 (T.pack (show e))))
+    Left (e :: SomeException) -> pure (Left (LLMApiError 0 (T.pack (displayException e))))
     Right v                   -> pure v
 
 doAnthropicCall :: Text -> Manager -> LLMRequest -> IO (Either LLMError LLMResponse)
@@ -562,7 +569,7 @@ anthropicStream
 anthropicStream apiKey mgr req onToken = do
   result <- try (doAnthropicStream apiKey mgr req onToken)
   case result of
-    Left (e :: SomeException) -> pure (Left (LLMApiError 0 (T.pack (show e))))
+    Left (e :: SomeException) -> pure (Left (LLMApiError 0 (T.pack (displayException e))))
     Right v                   -> pure v
 
 doAnthropicStream
