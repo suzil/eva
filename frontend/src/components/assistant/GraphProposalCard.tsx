@@ -5,6 +5,15 @@ import { useUiStore } from '../../store/uiStore'
 import type { Graph, Node } from '../../types'
 import { NODE_TYPE_COLORS, NODE_TYPE_LABELS } from '../../constants/nodeConstants'
 
+const MINI_GRAPH_COLORS = {
+  edgeResource: '#4F5070',  // terminal-400
+  edgeData:     '#3A3B54',  // terminal-500
+  arrowFill:    '#4F5070',  // terminal-400
+  nodeFallback: '#4F5070',  // terminal-400
+  nodeFill:     '#191A28',  // terminal-750
+  nodeLabel:    '#9596AF',  // terminal-200
+} as const
+
 interface GraphProposalCardProps {
   graph: Graph
   summary: string
@@ -84,7 +93,7 @@ function MiniGraphDiagram({ graph }: { graph: Graph }) {
         const src = nodePos[e.sourceNode]
         const tgt = nodePos[e.targetNode]
         if (!src || !tgt) return null
-        const color = e.category === 'resource' ? '#4F5070' : '#363755'
+        const color = e.category === 'resource' ? MINI_GRAPH_COLORS.edgeResource : MINI_GRAPH_COLORS.edgeData
         return (
           <line
             key={e.id}
@@ -103,7 +112,7 @@ function MiniGraphDiagram({ graph }: { graph: Graph }) {
       {/* Arrow marker */}
       <defs>
         <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-          <path d="M0,0 L0,6 L6,3 z" fill="#4F5070" />
+          <path d="M0,0 L0,6 L6,3 z" fill={MINI_GRAPH_COLORS.arrowFill} />
         </marker>
       </defs>
 
@@ -111,7 +120,7 @@ function MiniGraphDiagram({ graph }: { graph: Graph }) {
       {nodes.map((n) => {
         const x = toSvgX(n.posX)
         const y = toSvgY(n.posY)
-        const color = NODE_TYPE_COLORS[n.type.type] ?? '#4F5070'
+        const color = NODE_TYPE_COLORS[n.type.type] ?? MINI_GRAPH_COLORS.nodeFallback
         const label = n.label.length > 10 ? n.label.slice(0, 9) + '…' : n.label
         const typeLabel = NODE_TYPE_LABELS[n.type.type] ?? n.type.type
         return (
@@ -122,7 +131,7 @@ function MiniGraphDiagram({ graph }: { graph: Graph }) {
               width={NODE_W}
               height={NODE_H}
               rx={3}
-              fill="#1A1B2E"
+              fill={MINI_GRAPH_COLORS.nodeFill}
               stroke={color}
               strokeWidth={1}
               opacity={0.9}
@@ -145,7 +154,7 @@ function MiniGraphDiagram({ graph }: { graph: Graph }) {
               x={x + 7}
               y={y + 15}
               fontSize={6}
-              fill="#A0A0C0"
+              fill={MINI_GRAPH_COLORS.nodeLabel}
               fontFamily="monospace"
               textAnchor="start"
               dominantBaseline="middle"
@@ -167,7 +176,7 @@ function NodeList({ nodes }: { nodes: Node[] }) {
   return (
     <div className="flex flex-wrap gap-1">
       {nodes.map((n) => {
-        const color = NODE_TYPE_COLORS[n.type.type] ?? '#4F5070'
+        const color = NODE_TYPE_COLORS[n.type.type] ?? MINI_GRAPH_COLORS.nodeFallback
         const typeLabel = NODE_TYPE_LABELS[n.type.type] ?? n.type.type
         return (
           <span

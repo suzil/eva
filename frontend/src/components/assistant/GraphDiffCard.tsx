@@ -4,6 +4,13 @@ import { useCanvasStore } from '../../store/canvasStore'
 import type { GraphDiff } from '../../types'
 import { NODE_TYPE_COLORS, NODE_TYPE_LABELS } from '../../constants/nodeConstants'
 
+const DIFF_COLORS = {
+  added:        '#33FF5C',  // eva-green-400
+  modified:     '#FFCC33',  // warn-amber-400
+  removed:      '#FF7A7A',  // nerv-red-300
+  nodeFallback: '#4F5070',  // terminal-400
+} as const
+
 interface GraphDiffCardProps {
   diff: GraphDiff
   summary: string
@@ -143,9 +150,9 @@ export function GraphDiffCard({ diff, summary }: GraphDiffCardProps) {
         <GitMerge className="h-3.5 w-3.5" />
         Graph Diff
         <div className="ml-auto flex items-center gap-1">
-          <CountBadge count={diff.addedNodes.length + diff.addedEdges.length} color="#4ade80" />
-          <CountBadge count={diff.modifiedNodes.length} color="#f59e0b" />
-          <CountBadge count={diff.removedNodeIds.length + diff.removedEdgeIds.length} color="#f87171" />
+          <CountBadge count={diff.addedNodes.length + diff.addedEdges.length} color={DIFF_COLORS.added} />
+          <CountBadge count={diff.modifiedNodes.length} color={DIFF_COLORS.modified} />
+          <CountBadge count={diff.removedNodeIds.length + diff.removedEdgeIds.length} color={DIFF_COLORS.removed} />
         </div>
       </div>
 
@@ -159,7 +166,7 @@ export function GraphDiffCard({ diff, summary }: GraphDiffCardProps) {
         <div className="mx-3 mb-2 mt-1 space-y-0.5 rounded border border-terminal-700 bg-terminal-950 px-2.5 py-2">
           {diff.addedNodes.map((n) => {
             const nodeTypeName = NODE_TYPE_LABELS[n.type.type] ?? n.type.type
-            const color = NODE_TYPE_COLORS[n.type.type] ?? '#4F5070'
+            const color = NODE_TYPE_COLORS[n.type.type] ?? DIFF_COLORS.nodeFallback
             return (
               <div key={n.id} className="flex items-baseline gap-1.5 font-mono text-[11px]">
                 <span className="text-eva-green-500 select-none">+</span>

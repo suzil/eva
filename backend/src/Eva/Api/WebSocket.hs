@@ -55,7 +55,7 @@ module Eva.Api.WebSocket
 
 import Control.Concurrent.Async (withAsync)
 import Control.Concurrent.STM
-import Control.Exception (handle)
+import Control.Exception (SomeException, handle, try)
 import Control.Monad (forever)
 import Data.Aeson (FromJSON (..), Value, decode, encode, object, withObject, (.:), (.=))
 import qualified Data.Aeson as Aeson
@@ -69,7 +69,7 @@ import qualified Network.WebSockets as WS
 import Eva.App (AppEnv (..), runAppM)
 import Eva.Assistant
   ( AssistantContext
-  , AssistantMessage
+  , AssistantMessage (..)
   , ConversationId (..)
   , handleAssistantMessage
   )
@@ -263,10 +263,13 @@ subscribeAssistant env conn cid@(ConversationId cidText) = do
           let onToken tok = do
                 ts <- getCurrentTime
                 atomically $ writeTChan ch (assistantTokenEvent cid tok ts)
-          result <- runAppM env $
+          eResult <- try $ runAppM env $
             handleAssistantMessage cid (acmContent msg) (acmContext msg) onToken
           ts <- getCurrentTime
-          atomically $ writeTChan ch (assistantReplyEvent cid result ts)
+          let reply = case (eResult :: Either SomeException AssistantMessage) of
+                Left  err -> AsstText ("MAGI error: " <> T.pack (show err))
+                Right r   -> r
+          atomically $ writeTChan ch (assistantReplyEvent cid reply ts)
 
 -- | Forward events from a conversation channel to the WebSocket client
 -- indefinitely. Exits cleanly on disconnect.

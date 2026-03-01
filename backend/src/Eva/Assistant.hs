@@ -438,6 +438,10 @@ magiSystemPrompt =
   \  Always call propose_graph or propose_diff rather than describing graph structure in text.\n\
   \  Always call execute_operation for lifecycle actions; never assume the user has acted.\n\
   \  Call get_graph before proposing any modification to an existing graph.\n\
+  \  When a 'Program ID' appears in the context section, use it directly — never ask the user\n\
+  \    for a program ID or program name. The context is always authoritative.\n\
+  \  For any request about 'this program' or 'the current program', call get_graph immediately\n\
+  \    using the Program ID from context, then answer based on the result.\n\
   \\n\
   \Response format:\n\
   \  Tool invocations produce structured result cards shown to the user automatically.\n\
@@ -747,6 +751,7 @@ buildContextSection :: AssistantContext -> Text
 buildContextSection ctx =
   T.intercalate "\n" $ filter (not . T.null)
     [ "## Current Context"
+    , maybe "" (\(ProgramId pid) -> "Program ID: " <> pid) (ctxProgramId ctx)
     , maybe "" (\n -> "Program: " <> n)         (ctxProgramName  ctx)
     , maybe "" (\s -> "State: "   <> showState s) (ctxProgramState ctx)
     , maybe "" fmtGraph                           (ctxGraphSummary ctx)

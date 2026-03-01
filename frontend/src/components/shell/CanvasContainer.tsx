@@ -19,6 +19,7 @@ import '@xyflow/react/dist/style.css'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { nodeTypes } from '../nodes'
 import { NODE_TYPE_META } from '../nodes/constants'
+import { NODE_TYPE_COLORS } from '../../constants/nodeConstants'
 import { edgeTypes } from '../edges'
 import type { EvaNodeData, NodeType } from '../../types'
 import { useCanvasStore } from '../../store/canvasStore'
@@ -31,6 +32,7 @@ import { GraphPreviewOverlay } from '../canvas/GraphPreviewOverlay'
 // ---------------------------------------------------------------------------
 
 const STALE_MS = 24 * 60 * 60 * 1000
+const MINIMAP_FALLBACK_COLOR = '#4F5070'  // terminal-400
 
 function KnowledgeStalenessBar({ programId }: { programId: string }) {
   const { data: entries } = useKnowledgeEntries(programId)
@@ -283,17 +285,7 @@ function CanvasInner() {
         >
           <Controls />
           <MiniMap
-            nodeColor={(node) => {
-              const typeKey = node.type ?? 'agent'
-              const colors: Record<string, string> = {
-                agent:     '#7B4AE2',
-                knowledge: '#00BBFF',
-                connector: '#FF8800',
-                action:    '#00DD44',
-                trigger:   '#FF3B3B',
-              }
-              return colors[typeKey] ?? '#4F5070'
-            }}
+            nodeColor={(node) => NODE_TYPE_COLORS[node.type ?? 'agent'] ?? MINIMAP_FALLBACK_COLOR}
             maskColor="rgba(10,11,18,0.7)"
           />
         </ReactFlow>
@@ -301,7 +293,7 @@ function CanvasInner() {
         {/* Empty canvas hint */}
         {nodes.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <p className="rounded-md border border-dashed border-gray-700 px-4 py-2 text-xs text-gray-500">
+            <p className="rounded-md border border-dashed border-terminal-700 px-4 py-2 text-xs text-terminal-400">
               Drag a Trigger from the palette to start
             </p>
           </div>

@@ -201,7 +201,7 @@ function ConnectedView({ codebase, programId }: ConnectedViewProps) {
           <button
             onClick={handleDisconnect}
             disabled={disconnect.isPending}
-            className="flex items-center gap-1 rounded border border-terminal-600 px-2 py-1 text-[10px] text-terminal-300 hover:border-red-500/60 hover:text-red-400 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1 rounded border border-terminal-600 px-2 py-1 text-[10px] text-terminal-300 hover:border-nerv-red-500/60 hover:text-nerv-red-400 disabled:opacity-50 transition-colors"
           >
             <Unplug className="h-3 w-3" />
             Disconnect
@@ -277,7 +277,7 @@ function EmptyView({ programId }: EmptyViewProps) {
           Connect
         </button>
         {connect.isError && (
-          <p className="text-[10px] text-red-400">
+          <p className="text-[10px] text-nerv-red-400">
             {(connect.error as Error).message ?? 'Failed to connect codebase.'}
           </p>
         )}
