@@ -60,6 +60,28 @@ export function NodePalette() {
           </div>
         )
       })}
+      {/* Port type legend */}
+      <div className="mt-2 border-t border-terminal-500/40 pt-2 px-1">
+        <p className="mb-1.5 text-[10px] uppercase tracking-widest text-terminal-400">
+          Port types
+        </p>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2 text-[10px] text-terminal-300">
+            <div className="h-3 w-3 flex-shrink-0 rounded-full border-2 border-terminal-400 bg-terminal-500" />
+            <span>
+              <span className="text-terminal-100">Data</span>
+              {' — '}text or JSON values
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-terminal-300">
+            <div className="h-3 w-3 flex-shrink-0 rotate-45 border-2 border-terminal-400 bg-terminal-500" />
+            <span>
+              <span className="text-terminal-100">Resource</span>
+              {' — '}tools or context
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

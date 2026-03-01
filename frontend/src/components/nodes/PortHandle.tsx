@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Handle, useNodeConnections, Position } from '@xyflow/react'
 import type { HandleType } from '@xyflow/react'
 import type { PortDef } from './constants'
@@ -11,6 +12,7 @@ interface PortHandleProps {
 }
 
 export function PortHandle({ port, handleType, topPercent, accentColor }: PortHandleProps) {
+  const [hovered, setHovered] = useState(false)
   const connections = useNodeConnections({ handleType, handleId: port.name })
   const isConnected = connections.length > 0
 
@@ -21,42 +23,66 @@ export function PortHandle({ port, handleType, topPercent, accentColor }: PortHa
 
   const shapeStyle =
     port.category === 'data'
-      ? // circle
-        'rounded-full w-3 h-3'
-      : // diamond: rotate a square
-        'rounded-none rotate-45 w-2.5 h-2.5'
+      ? // circle — 16px for ≥16px hit area
+        'rounded-full w-4 h-4'
+      : // diamond: rotate a square — 12×12 gives ~17px diagonal hit area
+        'rounded-none rotate-45 w-3 h-3'
 
   const { border, bg } = PORT_TYPE_COLORS[port.category]
   const colorStyle = isConnected ? 'border-transparent' : `${border} ${bg}`
 
+  // Tooltip positioned just outside the node card edge
+  const tooltipStyle: React.CSSProperties = {
+    top: `${topPercent}%`,
+    ...(handleType === 'target'
+      ? { left: 0, transform: 'translateX(calc(-100% - 8px)) translateY(-50%)' }
+      : { right: 0, transform: 'translateX(calc(100% + 8px)) translateY(-50%)' }),
+  }
+
   return (
-    <Handle
-      type={handleType}
-      position={handleType === 'target' ? Position.Left : Position.Right}
-      id={port.name}
-      style={{
-        top: `${topPercent}%`,
-        background: isConnected ? accentColor : undefined,
-        borderColor: isConnected ? accentColor : undefined,
-        // Override react-flow defaults
-        width: port.category === 'data' ? 12 : 10,
-        height: port.category === 'data' ? 12 : 10,
-        borderRadius: port.category === 'data' ? '50%' : 0,
-        transform: `translateY(-50%) ${port.category === 'resource' ? 'rotate(45deg)' : ''}`,
-        left: handleType === 'target' ? -6 : undefined,
-        right: handleType === 'source' ? -6 : undefined,
-      }}
-      className={[
-        'transition-all duration-150 hover:scale-110 hover:brightness-125',
-        optionalStyle,
-        baseStyle,
-        shapeStyle,
-        colorStyle,
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      isConnectable
-    />
+    <>
+      <Handle
+        type={handleType}
+        position={handleType === 'target' ? Position.Left : Position.Right}
+        id={port.name}
+        style={{
+          top: `${topPercent}%`,
+          background: isConnected ? accentColor : undefined,
+          borderColor: isConnected ? accentColor : undefined,
+          // Override react-flow defaults
+          width: port.category === 'data' ? 16 : 12,
+          height: port.category === 'data' ? 16 : 12,
+          borderRadius: port.category === 'data' ? '50%' : 0,
+          transform: `translateY(-50%) ${port.category === 'resource' ? 'rotate(45deg)' : ''}`,
+          left: handleType === 'target' ? -8 : undefined,
+          right: handleType === 'source' ? -8 : undefined,
+        }}
+        className={[
+          'transition-all duration-150 hover:scale-110 hover:brightness-125',
+          optionalStyle,
+          baseStyle,
+          shapeStyle,
+          colorStyle,
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        isConnectable
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      />
+      {hovered && (
+        <div
+          className="pointer-events-none absolute z-[100] flex items-center gap-1 rounded border border-terminal-500 bg-terminal-700 px-1.5 py-0.5 text-[10px] whitespace-nowrap shadow-md"
+          style={tooltipStyle}
+        >
+          <span className="text-terminal-400">
+            {port.category === 'data' ? '○' : '◇'}
+          </span>
+          <span className="text-terminal-100">{port.label}</span>
+          <span className="text-terminal-400">{port.category}</span>
+        </div>
+      )}
+    </>
   )
 }
 
