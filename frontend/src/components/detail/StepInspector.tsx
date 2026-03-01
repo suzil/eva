@@ -78,14 +78,25 @@ function formatDuration(startedAt?: string, finishedAt?: string): string | null 
 // Payload renderer
 // ---------------------------------------------------------------------------
 
-function extractAgentOutputText(payload: unknown): string | null {
-  if (typeof payload !== 'object' || payload === null) return null
-  const p = payload as Record<string, unknown>
-  // Message shape: { type, payload: { text }, meta }
-  if (typeof p.payload === 'object' && p.payload !== null) {
-    const inner = p.payload as Record<string, unknown>
-    if (typeof inner.text === 'string') return inner.text
-  }
+function extractAgentOutputText(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null) return null
+  const v = value as Record<string, unknown>
+  // step.output is Message: { type, payload: string, meta }
+  if (typeof v.payload === 'string') return v.payload
+  return null
+}
+
+function extractAgentInputText(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null) return null
+  const v = value as Record<string, unknown>
+  // step.input is { [portName]: Message }; prefer "instruction" port
+  const keys = Object.keys(v)
+  const key = keys.includes('instruction') ? 'instruction' : keys[0]
+  if (!key) return null
+  const msg = v[key]
+  if (typeof msg !== 'object' || msg === null) return null
+  const m = msg as Record<string, unknown>
+  if (typeof m.payload === 'string') return m.payload
   return null
 }
 
@@ -130,7 +141,7 @@ function PayloadSection({
 
   // For Agent input, extract the instruction text
   if (!isOutput && nodeTypeKey === 'agent') {
-    const text = extractAgentOutputText(value)
+    const text = extractAgentInputText(value)
     if (text) {
       return (
         <div>
