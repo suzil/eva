@@ -5,6 +5,7 @@ import type { PromptTemplate, TemplateCategory } from '../../types'
 import { TemplateRow } from './TemplateRow'
 import { TemplatePreview } from './TemplatePreview'
 import { TemplateEditor } from './TemplateEditor'
+import { useFocusTrap } from '../../hooks/useFocusTrap'
 
 const ALL_CATEGORIES: TemplateCategory[] = [
   'summarizer',
@@ -55,12 +56,27 @@ function TemplatePickerInner({ onClose, onInsert }: InnerProps) {
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | undefined>(undefined)
 
   const searchRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const prevFocusRef = useRef<Element | null>(null)
   const { data: templates = [], isLoading } = useTemplates()
 
-  // Focus search on mount
+  // Save focus before mount; restore it when the picker is closed/unmounted
+  useEffect(() => {
+    prevFocusRef.current = document.activeElement
+    return () => {
+      if (prevFocusRef.current instanceof HTMLElement) {
+        prevFocusRef.current.focus()
+      }
+    }
+  }, [])
+
+  // Focus search on mount (manages its own initial focus; useFocusTrap skips auto-focus)
   useEffect(() => {
     setTimeout(() => searchRef.current?.focus(), 50)
   }, [])
+
+  // Trap Tab inside dialog (skip initial auto-focus; we manage it above)
+  useFocusTrap(dialogRef, true, { skipInitialFocus: true })
 
   // Close on Escape
   useEffect(() => {
@@ -95,10 +111,19 @@ function TemplatePickerInner({ onClose, onInsert }: InnerProps) {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="flex h-[600px] w-[760px] flex-col overflow-hidden rounded-lg border border-terminal-600 bg-terminal-900 shadow-2xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="template-picker-title"
+        className="flex h-[600px] w-[760px] flex-col overflow-hidden rounded-lg border border-terminal-600 bg-terminal-900 shadow-2xl"
+      >
         {/* Header */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-terminal-700 px-4 py-3">
-          <p className="font-display text-[11px] uppercase tracking-widest text-terminal-300">
+          <p
+            id="template-picker-title"
+            className="font-display text-[11px] uppercase tracking-widest text-terminal-300"
+          >
             Template Library
           </p>
           <button
@@ -106,7 +131,7 @@ function TemplatePickerInner({ onClose, onInsert }: InnerProps) {
             className="rounded p-1 text-terminal-400 transition-colors hover:text-terminal-100"
             aria-label="Close"
           >
-            <X size={14} />
+            <X size={14} aria-hidden="true" />
           </button>
         </div>
 
@@ -127,9 +152,15 @@ function TemplatePickerInner({ onClose, onInsert }: InnerProps) {
                 <Search
                   size={11}
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 text-terminal-400"
+                  aria-hidden="true"
                 />
+                {/* Visually hidden label associates the search input for screen readers */}
+                <label htmlFor="template-picker-search" className="sr-only">
+                  Search templates
+                </label>
                 <input
                   ref={searchRef}
+                  id="template-picker-search"
                   type="text"
                   placeholder="Search templates…"
                   value={search}
@@ -139,11 +170,12 @@ function TemplatePickerInner({ onClose, onInsert }: InnerProps) {
               </div>
 
               {/* Category tabs */}
-              <div className="flex gap-1 overflow-x-auto pb-0.5">
+              <div className="flex gap-1 overflow-x-auto pb-0.5" role="group" aria-label="Filter by category">
                 {(['all', ...ALL_CATEGORIES] as const).map((cat) => (
                   <button
                     key={cat}
                     onClick={() => setCategoryFilter(cat)}
+                    aria-pressed={categoryFilter === cat}
                     className={[
                       'flex-shrink-0 rounded px-2 py-0.5 font-display text-[9px] uppercase tracking-widest transition-colors duration-[150ms]',
                       categoryFilter === cat
@@ -161,7 +193,11 @@ function TemplatePickerInner({ onClose, onInsert }: InnerProps) {
             <div className="flex flex-1 overflow-hidden">
               {/* Left: template list */}
               <div className="flex w-2/5 flex-col overflow-hidden border-r border-terminal-700">
-                <div className="flex-1 overflow-y-auto">
+                <div
+                  className="flex-1 overflow-y-auto"
+                  role="listbox"
+                  aria-label="Templates"
+                >
                   {isLoading && (
                     <p className="px-3 py-4 text-center text-[11px] text-terminal-500">
                       Loading…

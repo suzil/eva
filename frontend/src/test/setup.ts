@@ -1,4 +1,14 @@
 import '@testing-library/jest-dom'
+import { toHaveNoViolations } from 'jest-axe'
+
+expect.extend(toHaveNoViolations)
+
+// Extend vitest's expect with the jest-axe custom matcher
+declare module 'vitest' {
+  interface Matchers<R = void> {
+    toHaveNoViolations(): R
+  }
+}
 
 // react-flow (and other layout-dependent libs) use ResizeObserver which jsdom lacks.
 class ResizeObserverMock {

@@ -43,7 +43,7 @@ export function AssistantPanel() {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <section aria-label="MAGI Assistant" className="flex flex-1 flex-col overflow-hidden">
       {/* Context chip — shows selected node when one is active */}
       {selectedNode && (
         <div className="flex shrink-0 items-center gap-2 border-b border-terminal-600 px-3 py-2">
@@ -63,10 +63,11 @@ export function AssistantPanel() {
           <button
             type="button"
             onClick={handleClear}
+            aria-label="Clear conversation"
             title="Clear conversation"
             className="flex items-center gap-1 text-xs text-terminal-500 hover:text-nerv-red-400"
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="h-3 w-3" aria-hidden="true" />
             Clear
           </button>
         </div>
@@ -81,7 +82,9 @@ export function AssistantPanel() {
           </p>
         </div>
       ) : (
-        <MessageList messages={messages} isStreaming={isStreaming} streamingText={streamingText} programId={selectedProgramId ?? undefined} />
+        <div aria-live="polite" aria-atomic="false" className="flex flex-1 flex-col overflow-hidden">
+          <MessageList messages={messages} isStreaming={isStreaming} streamingText={streamingText} programId={selectedProgramId ?? undefined} />
+        </div>
       )}
 
       {/* Input */}
@@ -93,6 +96,6 @@ export function AssistantPanel() {
           onInitialValueConsumed={() => setPrefillAssistantMessage(null)}
         />
       </div>
-    </div>
+    </section>
   )
 }

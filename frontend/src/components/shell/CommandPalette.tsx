@@ -9,6 +9,7 @@ import {
   useResumeProgram,
   useCreateRun,
 } from '../../api/hooks'
+import { useFocusTrap } from '../../hooks/useFocusTrap'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -66,6 +67,8 @@ export function CommandBar() {
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const prevFocusRef = useRef<Element | null>(null)
 
   const { data: programs = [] } = usePrograms()
   const { data: currentProgram } = useProgram(selectedProgramId ?? '')
@@ -74,6 +77,18 @@ export function CommandBar() {
   const pauseMutation = usePauseProgram(selectedProgramId ?? '')
   const resumeMutation = useResumeProgram(selectedProgramId ?? '')
   const createRunMutation = useCreateRun(selectedProgramId ?? '')
+
+  // Save focus when opening; restore it when closing
+  useEffect(() => {
+    if (commandBarOpen) {
+      prevFocusRef.current = document.activeElement
+    } else if (prevFocusRef.current instanceof HTMLElement) {
+      prevFocusRef.current.focus()
+    }
+  }, [commandBarOpen])
+
+  // Trap Tab focus inside the dialog (input is first/only Tab-stop; options use tabIndex={-1})
+  useFocusTrap(dialogRef, commandBarOpen)
 
   // Global Cmd+K shortcut
   useEffect(() => {
@@ -87,12 +102,11 @@ export function CommandBar() {
     return () => window.removeEventListener('keydown', handler)
   }, [toggleCommandBar])
 
-  // Reset state when opening
+  // Reset query/selection on open (focus is handled by useFocusTrap)
   useEffect(() => {
     if (commandBarOpen) {
       setQuery('')
       setSelectedIndex(0)
-      setTimeout(() => inputRef.current?.focus(), 0)
     }
   }, [commandBarOpen])
 
@@ -173,6 +187,7 @@ export function CommandBar() {
   const allItems: Item[] = [...filteredCommands, ...filteredPrograms, ...filteredQuestions]
 
   const clampedIndex = Math.min(selectedIndex, Math.max(0, allItems.length - 1))
+  const activeItemId = allItems.length > 0 ? `cmdbar-item-${clampedIndex}` : undefined
 
   function close() {
     setCommandBarOpen(false)
@@ -225,8 +240,11 @@ export function CommandBar() {
   ): React.ReactNode {
     if (items.length === 0) return null
     return (
-      <div key={label}>
-        <div className="px-3 pb-1 pt-2 font-display text-[10px] uppercase tracking-widest text-terminal-500">
+      <div key={label} role="group" aria-label={label}>
+        <div
+          aria-hidden="true"
+          className="px-3 pb-1 pt-2 font-display text-[10px] uppercase tracking-widest text-terminal-500"
+        >
           {label}
         </div>
         {items.map((item, i) => {
@@ -237,8 +255,13 @@ export function CommandBar() {
           return (
             <button
               key={item.id}
+              id={`cmdbar-item-${idx}`}
+              role="option"
+              aria-selected={isSelected}
+              aria-disabled={isDisabled}
               type="button"
               disabled={isDisabled}
+              tabIndex={-1}
               onMouseEnter={() => setSelectedIndex(idx)}
               onClick={() => execute(item)}
               className={[
@@ -249,13 +272,13 @@ export function CommandBar() {
                 isDisabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer',
               ].join(' ')}
             >
-              <Command className="h-3.5 w-3.5 shrink-0 text-terminal-500" />
+              <Command className="h-3.5 w-3.5 shrink-0 text-terminal-500" aria-hidden="true" />
               <span className="flex-1 truncate text-sm">{item.label}</span>
               {'description' in item && item.description && (
                 <span className="truncate text-xs text-terminal-500">{item.description}</span>
               )}
               {isSelected && !isDisabled && (
-                <ChevronRight className="h-3 w-3 shrink-0 text-at-field-400" />
+                <ChevronRight className="h-3 w-3 shrink-0 text-at-field-400" aria-hidden="true" />
               )}
             </button>
           )
@@ -276,17 +299,27 @@ export function CommandBar() {
       className="fixed inset-0 z-50 flex items-start justify-center bg-terminal-950/80 pt-[15vh]"
       onClick={close}
     >
-      {/* Modal */}
+      {/* Dialog */}
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
         className="w-[480px] overflow-hidden rounded border border-terminal-500 bg-terminal-800 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Input row */}
+        {/* Input row — combobox pattern: input stays focused, arrow keys move aria-activedescendant */}
         <div className="flex items-center gap-2 border-b border-terminal-600 px-3 py-2">
-          <Command className="h-4 w-4 shrink-0 text-terminal-400" />
+          <Command className="h-4 w-4 shrink-0 text-terminal-400" aria-hidden="true" />
           <input
             ref={inputRef}
             type="text"
+            role="combobox"
+            aria-expanded={true}
+            aria-haspopup="listbox"
+            aria-controls="cmdbar-listbox"
+            aria-activedescendant={activeItemId}
+            aria-label="Search commands, programs, or ask MAGI"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value)
@@ -301,8 +334,13 @@ export function CommandBar() {
           </kbd>
         </div>
 
-        {/* Results */}
-        <div className="max-h-[360px] overflow-y-auto">
+        {/* Results — listbox owns the options */}
+        <div
+          id="cmdbar-listbox"
+          role="listbox"
+          aria-label="Search results"
+          className="max-h-[360px] overflow-y-auto"
+        >
           {allItems.length === 0 ? (
             <p className="px-3 py-6 text-center text-xs text-terminal-500">No results</p>
           ) : (
@@ -315,7 +353,7 @@ export function CommandBar() {
         </div>
 
         {/* Footer hint */}
-        <div className="flex items-center gap-3 border-t border-terminal-600 px-3 py-1.5">
+        <div className="flex items-center gap-3 border-t border-terminal-600 px-3 py-1.5" aria-hidden="true">
           <span className="text-[10px] text-terminal-600">
             <kbd className="rounded bg-terminal-700 px-1 py-0.5 font-mono text-terminal-500">↑↓</kbd>
             {' '}navigate

@@ -148,25 +148,29 @@ export function PromptHints({
   }
 
   return (
-    <div className="rounded border border-warn-amber-700 bg-warn-amber-950/40">
+    // role="status" makes this a polite live region: screen readers announce the banner
+    // when it first appears after the 1s debounce without interrupting other speech.
+    <div role="status" className="rounded border border-warn-amber-700 bg-warn-amber-950/40">
       {/* Collapsed header row */}
       <div className="flex items-center gap-1.5 px-2.5 py-1.5">
-        <AlertTriangle size={10} className="shrink-0 text-warn-amber-500" />
+        <AlertTriangle size={10} className="shrink-0 text-warn-amber-500" aria-hidden="true" />
         <span className="flex-1 text-[10px] text-warn-amber-400">
           {hints.length} prompt suggestion{hints.length > 1 ? 's' : ''}
         </span>
         <button
           type="button"
+          aria-expanded={expanded}
+          aria-controls="prompt-hints-list"
           onClick={() => setExpanded((v) => !v)}
           className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-warn-amber-400 transition-colors hover:bg-warn-amber-900/40 hover:text-warn-amber-200"
         >
           {expanded ? (
             <>
-              Hide <ChevronUp size={10} />
+              Hide <ChevronUp size={10} aria-hidden="true" />
             </>
           ) : (
             <>
-              View <ChevronDown size={10} />
+              View <ChevronDown size={10} aria-hidden="true" />
             </>
           )}
         </button>
@@ -176,17 +180,24 @@ export function PromptHints({
           aria-label="Dismiss hints"
           className="rounded p-0.5 text-warn-amber-500 transition-colors hover:bg-warn-amber-900/40 hover:text-warn-amber-200"
         >
-          <X size={10} />
+          <X size={10} aria-hidden="true" />
         </button>
       </div>
 
-      {/* Expanded list */}
+      {/* Expanded list — aria-live so hint updates after the 1s debounce are announced */}
       {expanded && (
         <div className="border-t border-warn-amber-800/60 px-2.5 pb-2 pt-1.5">
-          <ol className="space-y-1.5">
+          <ol
+            id="prompt-hints-list"
+            aria-live="polite"
+            aria-atomic="false"
+            className="space-y-1.5"
+          >
             {hints.map((hint, i) => (
               <li key={i} className="flex gap-1.5 text-[10px] text-warn-amber-300">
-                <span className="shrink-0 font-mono text-warn-amber-500">{i + 1}.</span>
+                <span className="shrink-0 font-mono text-warn-amber-500" aria-hidden="true">
+                  {i + 1}.
+                </span>
                 <span>{hint}</span>
               </li>
             ))}
@@ -196,7 +207,7 @@ export function PromptHints({
             onClick={handleMagiCta}
             className="mt-2.5 text-[10px] text-at-field-400 underline-offset-2 transition-colors hover:text-at-field-300 hover:underline"
           >
-            Get detailed suggestions from MAGI →
+            Get detailed suggestions from MAGI
           </button>
         </div>
       )}
