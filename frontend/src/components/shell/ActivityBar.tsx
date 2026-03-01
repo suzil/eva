@@ -58,7 +58,7 @@ export function ActivityBar() {
       </div>
       <div className="flex flex-col items-center gap-1 pb-1">
         <button
-          title="MAGI"
+          title="MAGI Assistant"
           onClick={() => setDetailPanelTab('magi')}
           className={[
             'group relative flex h-12 w-12 items-center justify-center rounded-md transition-colors',
@@ -66,7 +66,7 @@ export function ActivityBar() {
               ? 'text-terminal-50'
               : 'text-terminal-400 hover:bg-terminal-600 hover:text-terminal-100',
           ].join(' ')}
-          aria-label="MAGI"
+          aria-label="MAGI Assistant"
           aria-pressed={magiActive}
         >
           <Brain className="h-5 w-5" />

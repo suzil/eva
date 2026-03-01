@@ -536,7 +536,6 @@ export function Toolbar() {
             label="⌘K"
             onClick={toggleCommandBar}
             variant="ghost"
-            hideLabel
           />
         </div>
       </header>
