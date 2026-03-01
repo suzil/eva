@@ -36,6 +36,11 @@ export function useRunStream(runId: RunId | null, programId: string): void {
     const toolCallNames = new Map<string, string>()
     // Switch to Logs tab on the first tool call so the user sees connector activity.
     let switchedToLogs = false
+    // Token batching: accumulate llm_token payloads and flush via RAF to cap
+    // Zustand dispatch rate at ~60fps instead of one dispatch per token.
+    let llmTokenBuf = ''
+    let llmRafScheduled = false
+    let llmRafId: number | null = null
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ action: 'subscribe', topic: `run:${runId}` }))
@@ -55,7 +60,16 @@ export function useRunStream(runId: RunId | null, programId: string): void {
           break
 
         case 'llm_token':
-          appendLlmToken(event.token)
+          llmTokenBuf += event.token
+          if (!llmRafScheduled) {
+            llmRafScheduled = true
+            llmRafId = requestAnimationFrame(() => {
+              appendLlmToken(llmTokenBuf)
+              llmTokenBuf = ''
+              llmRafScheduled = false
+              llmRafId = null
+            })
+          }
           break
 
         case 'log_entry':
@@ -171,6 +185,11 @@ export function useRunStream(runId: RunId | null, programId: string): void {
     return () => {
       closed = true
       ws.close()
+      if (llmRafScheduled && llmRafId !== null) {
+        cancelAnimationFrame(llmRafId)
+        llmRafId = null
+        llmRafScheduled = false
+      }
     }
   }, [runId, programId, queryClient, setNodeStepState, setNodeStepErrors, setActiveRunId, setInspectedRunId, appendLlmToken, appendLogEntry, clearRunOutput, setRunError, setActiveBottomTab])
 }

@@ -19,9 +19,7 @@ module Eva.Knowledge.Query
 
 import Data.Aeson (ToJSON, encode)
 import qualified Data.ByteString.Lazy as BL
-import Data.List (sortBy)
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
-import Data.Ord (Down (..), comparing)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -37,7 +35,7 @@ import Database.Persist.Sql
 
 import Eva.App (AppM)
 import Eva.Core.Types (NodeId, ProgramId (..))
-import Eva.Knowledge.Store (entryFromRow, listEntries)
+import Eva.Knowledge.Store (entryFromRow)
 import Eva.Knowledge.Types
 import Eva.Persistence.Queries (runDb)
 import Eva.Persistence.Schema
@@ -86,13 +84,20 @@ searchByPath pattern mPid = do
 -- Selects the top-3 knowledge entries for the program ranked by confidence,
 -- formats them with titles and separators, and truncates to 2000 characters.
 -- Returns "" when no entries exist for the program.
+--
+-- Uses ORDER BY confidence DESC LIMIT 3 in SQL to avoid a full table scan.
 assembleAgentContext :: ProgramId -> Maybe NodeId -> AppM Text
-assembleAgentContext pid _mNodeId = do
-  entries <- listEntries pid
-  let top3 = take 3 $ sortBy (comparing (Down . knowledgeEntryConfidence)) entries
+assembleAgentContext (ProgramId pidText) _mNodeId = do
+  entities <- runDb $ rawSql
+    "SELECT ?? FROM knowledge_entries \
+    \WHERE program_id = ? \
+    \ORDER BY confidence DESC \
+    \LIMIT 3"
+    [PersistText pidText]
+  let top3 = mapMaybe toResult entities
   if null top3
     then pure ""
-    else pure . truncateContext . formatContext $ top3
+    else pure . truncateContext . formatContext $ map searchResultEntry top3
 
 -- ---------------------------------------------------------------------------
 -- FTS5 search (keyword + combined)

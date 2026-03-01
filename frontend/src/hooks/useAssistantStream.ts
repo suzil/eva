@@ -33,6 +33,12 @@ export function useAssistantStream(
   const [streamingText, setStreamingText] = useState('')
   // Accumulate tokens without causing re-renders on every token
   const streamBufRef = useRef('')
+  // Whether a RAF flush is currently pending (separate from the ID so that a
+  // synchronous RAF mock in tests doesn't corrupt the pending state via the
+  // assignment-after-callback ordering of the `id = requestAnimationFrame(cb)` pattern).
+  const rafScheduledRef = useRef(false)
+  // RAF ID kept only for cancelAnimationFrame on unmount.
+  const rafIdRef = useRef<number | null>(null)
   // Stable ref to the live WS connection so sendMessage can access it
   const wsRef = useRef<WebSocket | null>(null)
 
@@ -68,7 +74,16 @@ export function useAssistantStream(
 
       if (event.type === 'assistant_token') {
         streamBufRef.current += event.token
-        setStreamingText(streamBufRef.current)
+        // Batch React state updates to at most one re-render per animation
+        // frame (~16ms) instead of one per token.
+        if (!rafScheduledRef.current) {
+          rafScheduledRef.current = true
+          rafIdRef.current = requestAnimationFrame(() => {
+            setStreamingText(streamBufRef.current)
+            rafScheduledRef.current = false
+            rafIdRef.current = null
+          })
+        }
         return
       }
 
@@ -99,6 +114,11 @@ export function useAssistantStream(
       closed = true
       ws.close()
       wsRef.current = null
+      if (rafScheduledRef.current && rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+        rafScheduledRef.current = false
+      }
       streamBufRef.current = ''
       setStreamingText('')
     }

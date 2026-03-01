@@ -195,16 +195,30 @@ subscribeAndForward env conn rid = do
 -- Closes cleanly when:
 --   * A terminal run_state event is received.
 --   * The client disconnects (WS.ConnectionException is caught).
+--
+-- Token events (llm_token) are batched within a 50ms window: instead of one
+-- WS frame per token, all tokens arriving within the window are concatenated
+-- into a single event. Non-token events flush the buffer immediately.
 forwardRunEvents :: WS.Connection -> TChan Value -> IO ()
 forwardRunEvents conn ch =
-  handle (\(_ :: WS.ConnectionException) -> pure ()) loop
+  handle (\(_ :: WS.ConnectionException) -> pure ()) (go [])
   where
-    loop = do
-      event <- atomically (readTChan ch)
-      WS.sendTextData conn (encode event)
-      if isTerminalRunState event
-        then pure ()
-        else loop
+    go buf = do
+      timer <- registerDelay 50000          -- 50ms batching window
+      mEv   <- atomically $
+        (Just <$> readTChan ch)
+          `orElse`
+          (readTVar timer >>= \t -> if t then pure Nothing else retry)
+      case mEv of
+        Nothing ->                          -- timer fired: flush token buffer
+          flushBuf buf >> go []
+        Just ev
+          | isTokenEvent ev       -> go (ev : buf)
+          | isTerminalRunState ev -> flushBuf buf >> send ev
+          | otherwise             -> flushBuf buf >> send ev >> go []
+    flushBuf []  = pure ()
+    flushBuf buf = send (batchTokenEvents (reverse buf))
+    send ev      = WS.sendTextData conn (encode ev)
 
 -- | Check whether a broadcast event indicates the run has reached a terminal
 -- state (completed, failed, or canceled). Used to close the WS connection.
@@ -256,12 +270,56 @@ subscribeAssistant env conn cid@(ConversationId cidText) = do
 
 -- | Forward events from a conversation channel to the WebSocket client
 -- indefinitely. Exits cleanly on disconnect.
+--
+-- Token events (assistant_token) are batched within a 50ms window to reduce
+-- WS frame count during LLM streaming. Non-token events flush immediately.
 forwardAssistantEvents :: WS.Connection -> TChan Value -> IO ()
 forwardAssistantEvents conn ch =
-  handle (\(_ :: WS.ConnectionException) -> pure ()) $
-    forever $ do
-      event <- atomically (readTChan ch)
-      WS.sendTextData conn (encode event)
+  handle (\(_ :: WS.ConnectionException) -> pure ()) (go [])
+  where
+    go buf = do
+      timer <- registerDelay 50000
+      mEv   <- atomically $
+        (Just <$> readTChan ch)
+          `orElse`
+          (readTVar timer >>= \t -> if t then pure Nothing else retry)
+      case mEv of
+        Nothing -> flushBuf buf >> go []
+        Just ev
+          | isTokenEvent ev -> go (ev : buf)
+          | otherwise        -> flushBuf buf >> send ev >> go []
+    flushBuf []  = pure ()
+    flushBuf buf = send (batchTokenEvents (reverse buf))
+    send ev      = WS.sendTextData conn (encode ev)
+
+-- ---------------------------------------------------------------------------
+-- Token batching helpers
+-- ---------------------------------------------------------------------------
+
+-- | True for llm_token and assistant_token events.
+isTokenEvent :: Value -> Bool
+isTokenEvent (Aeson.Object o) = case KM.lookup "type" o of
+  Just (Aeson.String t) -> t `elem` ["llm_token", "assistant_token"]
+  _                     -> False
+isTokenEvent _ = False
+
+-- | Merge a chronological list of token events into one event, concatenating
+-- all \"token\" field values. The first event's metadata (type, runId /
+-- conversationId, nodeId, timestamp) is preserved unchanged.
+batchTokenEvents :: [Value] -> Value
+batchTokenEvents []           = Aeson.Null
+batchTokenEvents evs@(first : _) =
+  let tokens = [ tok
+               | Aeson.Object o <- evs
+               , Just (Aeson.String tok) <- [KM.lookup "token" o]
+               ]
+  in case first of
+       Aeson.Object o -> Aeson.Object (KM.insert "token" (Aeson.String (mconcat tokens)) o)
+       _              -> first
+
+-- ---------------------------------------------------------------------------
+-- Utilities
+-- ---------------------------------------------------------------------------
 
 -- | Send a JSON error message to the client.
 sendError :: WS.Connection -> Text -> IO ()
