@@ -163,6 +163,8 @@ function buildContentSource(src: ContentSource): Record<string, unknown> {
       return { type: '_url_ref', value: src.value }
     case '_upstream_port':
       return { type: '_upstream_port' }
+    case '_library_ref':
+      return { type: '_library_ref', value: src.value }
   }
 }
 

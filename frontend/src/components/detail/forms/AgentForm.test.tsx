@@ -39,7 +39,7 @@ const BASE_CONFIG: AgentConfig = {
 }
 
 function renderForm(config: AgentConfig = BASE_CONFIG, onChange = vi.fn()) {
-  return { onChange, ...render(<AgentForm config={config} onChange={onChange} />) }
+  return { onChange, ...render(<AgentForm nodeId="node-test" config={config} onChange={onChange} />) }
 }
 
 // ---------------------------------------------------------------------------

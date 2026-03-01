@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, render, screen, fireEvent } from '@testing-library/react'
-import React from 'react'
 import { useAssistantStream } from '../../../hooks/useAssistantStream'
 import { useUiStore } from '../../../store/uiStore'
 import { useCanvasStore } from '../../../store/canvasStore'
@@ -40,7 +39,7 @@ vi.stubGlobal('WebSocket', MockWebSocket)
 const PROGRAM_ID = 'prog-test'
 
 const MOCK_PROGRAMS: Program[] = [
-  { id: PROGRAM_ID, name: 'Test Program', state: 'draft', createdAt: '', updatedAt: '' },
+  { id: PROGRAM_ID, name: 'Test Program', state: 'draft', graph: { nodes: {}, edges: [] }, createdAt: '', updatedAt: '' },
 ]
 
 /** Minimal valid graph — single Trigger node satisfies validateProposedGraph. */
@@ -48,11 +47,10 @@ const MOCK_GRAPH: Graph = {
   nodes: {
     'n-trigger': {
       id: 'n-trigger',
-      programId: PROGRAM_ID,
       label: 'Start',
       type: {
         type: 'trigger',
-        config: { triggerType: 'manual' },
+        config: { type: 'manual' },
       },
       posX: 0,
       posY: 0,
