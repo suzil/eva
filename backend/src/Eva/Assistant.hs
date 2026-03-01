@@ -32,6 +32,7 @@ module Eva.Assistant
   ) where
 
 import Control.Monad.IO.Class (liftIO)
+import System.IO (hPutStrLn, stderr)
 import Control.Monad.Reader (ask)
 import Data.Aeson
 import Data.Aeson.Key (fromText)
@@ -440,8 +441,9 @@ magiSystemPrompt =
   \  Call get_graph before proposing any modification to an existing graph.\n\
   \  When a 'Program ID' appears in the context section, use it directly — never ask the user\n\
   \    for a program ID or program name. The context is always authoritative.\n\
-  \  For any request about 'this program' or 'the current program', call get_graph immediately\n\
-  \    using the Program ID from context, then answer based on the result.\n\
+  \  When the user says 'this program', 'the program', 'explain it', or any variant that refers\n\
+  \    to the current program: call get_graph immediately with the Program ID from context.\n\
+  \    Do not ask for clarification. Do not list options. Act.\n\
   \\n\
   \Response format:\n\
   \  Tool invocations produce structured result cards shown to the user automatically.\n\
@@ -544,11 +546,17 @@ runConversationLoop env ctx onToken messages iteration =
       case result of
         Left err ->
           pure $ AsstText ("MAGI error: " <> T.pack (show err))
-        Right resp ->
+        Right resp -> do
+          liftIO $ hPutStrLn stderr $
+            "[MAGI] iteration=" <> show iteration
+            <> " contentLen=" <> show (T.length (llmContent resp))
+            <> " hasCalls=" <> show (maybe False (not . null) (llmToolCalls resp))
           case llmToolCalls resp of
             Nothing ->
               pure $ AsstText (llmContent resp)
             Just calls -> do
+              liftIO $ hPutStrLn stderr $
+                "[MAGI] tool calls: " <> show (map toolCallName calls)
               toolResults <- mapM (executeAssistantTool ctx) calls
               case [msg | ToolResultTerminal msg <- toolResults] of
                 (terminal : _) -> pure terminal

@@ -32,6 +32,7 @@ module Eva.Engine.LLM
 
 import Control.Exception (SomeException, try)
 import Control.Monad (unless)
+import System.IO (hPutStrLn, stderr)
 import Data.Aeson (Value (..), decode, encode, object, (.:), (.:?), (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
@@ -239,6 +240,9 @@ doStream apiKey mgr req onToken = do
         mUsage      <- readIORef usageRef
         tcMap       <- readIORef toolCallsRef
         mFinish     <- readIORef finishRef
+        hPutStrLn stderr $ "[MAGI/LLM] stream done: finish=" <> show mFinish
+          <> " tokens=" <> show (length tokens)
+          <> " tcMapSize=" <> show (Map.size tcMap)
         let content = T.concat (reverse tokens)
             usage   = case mUsage of
               Just u  -> u
@@ -274,7 +278,8 @@ processLine tokensRef usageRef toolCallsRef finishRef onToken raw =
     Nothing  -> pure ()
     Just val ->
       case parseMaybe parseStreamChunk val of
-        Nothing                                 -> pure ()
+        Nothing -> hPutStrLn stderr $ "[MAGI/LLM] chunk parse FAILED: "
+                     <> take 200 (show val)
         Just (mTok, mUsage, mFinish, tcDeltas) -> do
           case mTok of
             Just t  -> do modifyIORef' tokensRef (t :); onToken t
@@ -578,10 +583,12 @@ doAnthropicStream apiKey mgr req onToken = do
           Left err -> pure (Left err)
           Right () -> pure (Left (LLMApiError status "unexpected non-200 response"))
       else do
-        tokensRef    <- newIORef ([] :: [Text])
-        inputTokRef  <- newIORef (0 :: Int)
-        outputTokRef <- newIORef (0 :: Int)
-        leftoverRef  <- newIORef BS.empty
+        tokensRef     <- newIORef ([] :: [Text])
+        inputTokRef   <- newIORef (0 :: Int)
+        outputTokRef  <- newIORef (0 :: Int)
+        leftoverRef   <- newIORef BS.empty
+        toolCallsRef  <- newIORef (Map.empty :: Map.Map Int (Text, Text, [Text]))
+        stopReasonRef <- newIORef (Nothing :: Maybe Text)
         let loop = do
               chunk <- bodyReader
               unless (BS.null chunk) $ do
@@ -589,33 +596,68 @@ doAnthropicStream apiKey mgr req onToken = do
                 let combined         = prev <> chunk
                     (ls, remainder) = splitOnNewlines combined
                 writeIORef leftoverRef remainder
-                mapM_ (processAnthropicLine tokensRef inputTokRef outputTokRef onToken) ls
+                mapM_ (processAnthropicLine tokensRef inputTokRef outputTokRef
+                         toolCallsRef stopReasonRef onToken) ls
                 loop
         loop
         remaining <- readIORef leftoverRef
         unless (BS.null remaining) $
-          processAnthropicLine tokensRef inputTokRef outputTokRef onToken remaining
-        tokens    <- readIORef tokensRef
-        inputTok  <- readIORef inputTokRef
-        outputTok <- readIORef outputTokRef
+          processAnthropicLine tokensRef inputTokRef outputTokRef
+            toolCallsRef stopReasonRef onToken remaining
+        tokens     <- readIORef tokensRef
+        inputTok   <- readIORef inputTokRef
+        outputTok  <- readIORef outputTokRef
+        tcMap      <- readIORef toolCallsRef
+        stopReason <- readIORef stopReasonRef
+        hPutStrLn stderr $ "[MAGI/Anthropic] stream done: stop=" <> show stopReason
+          <> " tokens=" <> show (length tokens)
+          <> " tcMapSize=" <> show (Map.size tcMap)
         let content = T.concat (reverse tokens)
             usage   = TokenUsage inputTok outputTok (inputTok + outputTok)
-        pure (Right (LLMResponse content Nothing usage))
+            mToolCalls
+              | stopReason == Just "tool_use" && not (Map.null tcMap) =
+                  Just
+                    [ ToolCall
+                        { toolCallId   = tcId
+                        , toolCallName = tcName
+                        , toolCallArgs =
+                            let argsText = T.concat (reverse tcArgFrags)
+                            in  case decode (BL.fromStrict (TE.encodeUtf8 argsText)) of
+                                  Just v  -> v
+                                  Nothing -> Aeson.String argsText
+                        }
+                    | (_, (tcId, tcName, tcArgFrags)) <- Map.toAscList tcMap
+                    ]
+              | otherwise = Nothing
+        pure (Right (LLMResponse content mToolCalls usage))
+
+-- Anthropic SSE parsed event:
+-- (text_tok, input_tok, output_tok, stop_reason, tool_start (idx,id,name), tool_delta (idx,partial))
+type AnthropicChunkResult =
+  ( Maybe Text
+  , Maybe Int
+  , Maybe Int
+  , Maybe Text
+  , Maybe (Int, Text, Text)
+  , Maybe (Int, Text)
+  )
 
 processAnthropicLine
   :: IORef [Text]
   -> IORef Int
   -> IORef Int
+  -> IORef (Map.Map Int (Text, Text, [Text]))
+  -> IORef (Maybe Text)
   -> (Text -> IO ())
   -> ByteString
   -> IO ()
-processAnthropicLine tokensRef inputTokRef outputTokRef onToken raw =
+processAnthropicLine tokensRef inputTokRef outputTokRef toolCallsRef stopReasonRef onToken raw =
   case parseSseLine (TE.decodeUtf8Lenient raw) of
     Nothing  -> pure ()
     Just val ->
       case parseMaybe parseAnthropicStreamChunk val of
-        Nothing                            -> pure ()
-        Just (mTok, mInputTok, mOutputTok) -> do
+        Nothing -> pure ()
+        Just (mTok, mInputTok, mOutputTok, mStop, mToolStart, mToolDelta) -> do
           case mTok of
             Just t  -> do modifyIORef' tokensRef (t :); onToken t
             Nothing -> pure ()
@@ -625,30 +667,64 @@ processAnthropicLine tokensRef inputTokRef outputTokRef onToken raw =
           case mOutputTok of
             Just n  -> writeIORef outputTokRef n
             Nothing -> pure ()
+          case mStop of
+            Just r  -> writeIORef stopReasonRef (Just r)
+            Nothing -> pure ()
+          case mToolStart of
+            Just (idx, tcId, tcName) ->
+              modifyIORef' toolCallsRef $ Map.insert idx (tcId, tcName, [])
+            Nothing -> pure ()
+          case mToolDelta of
+            Just (idx, partial) ->
+              modifyIORef' toolCallsRef $ \m ->
+                let (tcId, tcName, frags) = Map.findWithDefault ("", "", []) idx m
+                in  Map.insert idx (tcId, tcName, partial : frags) m
+            Nothing -> pure ()
 
 -- | Parse an Anthropic SSE data chunk.
--- Returns (optional text delta, optional input_tokens, optional output_tokens).
-parseAnthropicStreamChunk :: Value -> Parser (Maybe Text, Maybe Int, Maybe Int)
+-- Returns (text_delta, input_tokens, output_tokens, stop_reason,
+--          tool_start(idx,id,name), tool_delta(idx,partial_json)).
+parseAnthropicStreamChunk :: Value -> Parser AnthropicChunkResult
 parseAnthropicStreamChunk = Aeson.withObject "AnthropicChunk" $ \o -> do
   eventType <- o .: "type" :: Parser Text
+  let none = pure (Nothing, Nothing, Nothing, Nothing, Nothing, Nothing)
   case eventType of
+    "content_block_start" -> do
+      idx   <- o .: "index"
+      block <- o .: "content_block"
+      btype <- block .: "type" :: Parser Text
+      if btype == "tool_use"
+        then do
+          tcId   <- block .: "id"
+          tcName <- block .: "name"
+          pure (Nothing, Nothing, Nothing, Nothing, Just (idx, tcId, tcName), Nothing)
+        else none
     "content_block_delta" -> do
+      idx       <- o .: "index"
       delta     <- o .: "delta"
       deltaType <- delta .: "type" :: Parser Text
-      mTok <- if deltaType == "text_delta"
-                then Just <$> (delta .: "text")
-                else pure Nothing
-      pure (mTok, Nothing, Nothing)
+      case deltaType of
+        "text_delta" -> do
+          tok <- delta .: "text"
+          pure (Just tok, Nothing, Nothing, Nothing, Nothing, Nothing)
+        "input_json_delta" -> do
+          partial <- delta .: "partial_json"
+          pure (Nothing, Nothing, Nothing, Nothing, Nothing, Just (idx, partial))
+        _ -> none
     "message_start" -> do
-      msg   <- o .: "message"
-      usage <- msg .: "usage"
+      msg      <- o .: "message"
+      usage    <- msg .: "usage"
       inputTok <- usage .: "input_tokens"
-      pure (Nothing, Just inputTok, Nothing)
+      pure (Nothing, Just inputTok, Nothing, Nothing, Nothing, Nothing)
     "message_delta" -> do
-      usage     <- o .: "usage"
-      outputTok <- usage .: "output_tokens"
-      pure (Nothing, Nothing, Just outputTok)
-    _ -> pure (Nothing, Nothing, Nothing)
+      delta     <- o .: "delta"
+      mStop     <- delta .:? "stop_reason" :: Parser (Maybe Text)
+      mUsage    <- o .:? "usage"
+      mOut      <- case mUsage of
+                     Just u  -> Just <$> (u .: "output_tokens")
+                     Nothing -> pure Nothing
+      pure (Nothing, Nothing, mOut, mStop, Nothing, Nothing)
+    _ -> none
 
 -- ---------------------------------------------------------------------------
 -- Anthropic — request building

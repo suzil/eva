@@ -1,4 +1,5 @@
 import { CheckCircle, XCircle } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import type { AssistantMessage } from '../../types'
 import { useCanvasStore } from '../../store/canvasStore'
 import { NodeReferenceChip } from './NodeReferenceChip'
@@ -58,8 +59,8 @@ function UserBubble({ text }: { text: string }) {
 function TextBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-start px-3">
-      <div className="max-w-[85%] rounded-lg bg-terminal-900 px-3 py-2 text-sm text-terminal-100 whitespace-pre-wrap">
-        {text}
+      <div className="magi-prose max-w-[85%] rounded-lg bg-terminal-900 px-3 py-2 text-sm text-terminal-100">
+        <ReactMarkdown>{text}</ReactMarkdown>
       </div>
     </div>
   )

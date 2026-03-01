@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
 import type { AssistantMessage } from '../../types'
 import { MessageBubble } from './MessageBubble'
 
@@ -25,8 +26,8 @@ export function MessageList({ messages, isStreaming, streamingText, programId }:
 
       {isStreaming && streamingText && (
         <div className="flex justify-start px-3">
-          <div className="max-w-[85%] rounded-lg bg-terminal-900 px-3 py-2 text-sm text-terminal-100 whitespace-pre-wrap">
-            {streamingText}
+          <div className="magi-prose max-w-[85%] rounded-lg bg-terminal-900 px-3 py-2 text-sm text-terminal-100">
+            <ReactMarkdown>{streamingText}</ReactMarkdown>
             <span className="ml-0.5 inline-block h-3 w-0.5 animate-pulse bg-magi-blue-400" />
           </div>
         </div>

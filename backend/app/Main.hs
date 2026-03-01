@@ -11,7 +11,7 @@ import Eva.Config (LogLevel (..), configPort, loadConfig)
 import Eva.Engine.Dispatch (execute)
 import Eva.Engine.Scheduler (shutdownScheduler, startScheduler)
 import Eva.Prompt.Store (seedBuiltinTemplates)
-import Network.Wai.Handler.Warp (run)
+import Network.Wai.Handler.Warp (defaultSettings, runSettings, setPort, setTimeout)
 
 main :: IO ()
 main = do
@@ -34,4 +34,5 @@ main = do
         ) Nothing
 
   let port = configPort cfg
-  run port (makeApp env)
+      warpSettings = setTimeout 300 $ setPort port defaultSettings
+  runSettings warpSettings (makeApp env)

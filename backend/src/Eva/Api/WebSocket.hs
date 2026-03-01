@@ -55,8 +55,9 @@ module Eva.Api.WebSocket
 
 import Control.Concurrent.Async (withAsync)
 import Control.Concurrent.STM
-import Control.Exception (SomeException, handle, try)
+import Control.Exception (Handler (..), IOException, SomeException, catches, handle, try)
 import Control.Monad (forever)
+import System.IO (hPutStrLn, stderr)
 import Data.Aeson (FromJSON (..), Value, decode, encode, object, withObject, (.:), (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
@@ -145,17 +146,18 @@ wsServerApp env pendingConn = do
     handleClient env conn
 
 handleClient :: AppEnv -> WS.Connection -> IO ()
-handleClient env conn = do
-  rawMsg <- WS.receiveData conn
-  case decode rawMsg of
-    Nothing -> sendError conn "invalid subscribe message"
-    Just (SubscribeMsg action topic)
-      | action /= "subscribe" -> sendError conn "expected action: subscribe"
-      | otherwise ->
-          case parseTopic topic of
-            Nothing                    -> sendError conn "invalid topic format; expected run:<id> or assistant:<id>"
-            Just (RunTopic rid)        -> subscribeAndForward env conn rid
-            Just (AssistantTopic cid)  -> subscribeAssistant  env conn cid
+handleClient env conn =
+  handle (\(_ :: WS.ConnectionException) -> pure ()) $ do
+    rawMsg <- WS.receiveData conn
+    case decode rawMsg of
+      Nothing -> sendError conn "invalid subscribe message"
+      Just (SubscribeMsg action topic)
+        | action /= "subscribe" -> sendError conn "expected action: subscribe"
+        | otherwise ->
+            case parseTopic topic of
+              Nothing                    -> sendError conn "invalid topic format; expected run:<id> or assistant:<id>"
+              Just (RunTopic rid)        -> subscribeAndForward env conn rid
+              Just (AssistantTopic cid)  -> subscribeAssistant  env conn cid
 
 -- ---------------------------------------------------------------------------
 -- Run topic: subscribe and forward
@@ -201,7 +203,10 @@ subscribeAndForward env conn rid = do
 -- into a single event. Non-token events flush the buffer immediately.
 forwardRunEvents :: WS.Connection -> TChan Value -> IO ()
 forwardRunEvents conn ch =
-  handle (\(_ :: WS.ConnectionException) -> pure ()) (go [])
+  catches (go [])
+    [ Handler (\(_ :: WS.ConnectionException) -> pure ())
+    , Handler (\(_ :: IOException)            -> pure ())
+    ]
   where
     go buf = do
       timer <- registerDelay 50000          -- 50ms batching window
@@ -248,18 +253,25 @@ isTerminalRunState _ = False
 -- the conversation is removed from the registry.
 subscribeAssistant :: AppEnv -> WS.Connection -> ConversationId -> IO ()
 subscribeAssistant env conn cid@(ConversationId cidText) = do
+  hPutStrLn stderr ("[MAGI] subscribeAssistant: " <> T.unpack cidText)
   ch <- newTChanIO
   atomically $ modifyTVar (envAssistantBroadcasts env) (Map.insert cidText ch)
   dupCh <- atomically $ dupTChan ch
-  withAsync (forwardAssistantEvents conn dupCh) $ \_fwd ->
-    handle (\(_ :: WS.ConnectionException) -> pure ()) (clientLoop ch)
+  handle (\(e :: SomeException) -> hPutStrLn stderr ("[MAGI] outer exception: " <> show e)) $
+    withAsync (forwardAssistantEvents conn dupCh) $ \_fwd ->
+      handle (\(_ :: WS.ConnectionException) -> pure ()) (clientLoop ch)
+  hPutStrLn stderr ("[MAGI] subscribeAssistant done: " <> T.unpack cidText)
   atomically $ modifyTVar (envAssistantBroadcasts env) (Map.delete cidText)
   where
     clientLoop ch = forever $ do
       rawMsg <- WS.receiveData conn
+      hPutStrLn stderr "[MAGI] received message"
       case decode rawMsg of
-        Nothing  -> sendError conn "invalid message format"
+        Nothing  -> do
+          hPutStrLn stderr "[MAGI] decode failed"
+          sendError conn "invalid message format"
         Just msg -> do
+          hPutStrLn stderr ("[MAGI] handling: " <> T.unpack (acmContent msg))
           let onToken tok = do
                 ts <- getCurrentTime
                 atomically $ writeTChan ch (assistantTokenEvent cid tok ts)
@@ -269,6 +281,9 @@ subscribeAssistant env conn cid@(ConversationId cidText) = do
           let reply = case (eResult :: Either SomeException AssistantMessage) of
                 Left  err -> AsstText ("MAGI error: " <> T.pack (show err))
                 Right r   -> r
+          case (eResult :: Either SomeException AssistantMessage) of
+            Left err -> hPutStrLn stderr ("[MAGI] exception: " <> show err)
+            Right _  -> hPutStrLn stderr "[MAGI] reply ready"
           atomically $ writeTChan ch (assistantReplyEvent cid reply ts)
 
 -- | Forward events from a conversation channel to the WebSocket client
@@ -278,7 +293,10 @@ subscribeAssistant env conn cid@(ConversationId cidText) = do
 -- WS frame count during LLM streaming. Non-token events flush immediately.
 forwardAssistantEvents :: WS.Connection -> TChan Value -> IO ()
 forwardAssistantEvents conn ch =
-  handle (\(_ :: WS.ConnectionException) -> pure ()) (go [])
+  catches (go [])
+    [ Handler (\(_ :: WS.ConnectionException) -> pure ())
+    , Handler (\(_ :: IOException)            -> pure ())
+    ]
   where
     go buf = do
       timer <- registerDelay 50000
