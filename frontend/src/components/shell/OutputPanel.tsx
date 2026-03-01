@@ -71,9 +71,9 @@ export function OutputPanel() {
             )}
           </div>
         ) : runError ? (
-          <div className="rounded border border-red-900/60 bg-red-950/40 p-3">
+          <div className="rounded border border-nerv-red-900/60 bg-nerv-red-950/40 p-3">
             <p className="mb-1 text-xs font-semibold text-nerv-red-400">Run failed</p>
-            <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-red-300">
+            <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-nerv-red-300">
               {runError}
             </pre>
           </div>
