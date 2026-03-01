@@ -83,6 +83,7 @@ export function Toolbar() {
   const { data: runsData } = useRuns(mode === 'operate' ? selectedProgramId : null)
   const { data: inspectedRunDetail } = useRunDetail(inspectedRunId)
 
+  const wsConnected = useUiStore((s) => s.wsConnected)
   const setSelectedProgramId = useUiStore((s) => s.setSelectedProgramId)
   const setBottomPanelOpen = useUiStore((s) => s.setBottomPanelOpen)
   const setActiveBottomTab = useUiStore((s) => s.setActiveBottomTab)
@@ -507,6 +508,9 @@ export function Toolbar() {
             />
           )}
 
+          {/* WebSocket connection status */}
+          {wsConnected !== null && <WsStatusDot connected={wsConnected} />}
+
           {/* Command bar */}
           <ToolbarButton
             icon={<Command className="h-3.5 w-3.5" />}
@@ -677,6 +681,18 @@ interface ToolbarButtonProps {
   disabled?: boolean
   variant?: 'default' | 'primary' | 'deploy' | 'danger' | 'ghost'
   hideLabel?: boolean
+}
+
+function WsStatusDot({ connected }: { connected: boolean }) {
+  return (
+    <div
+      title={connected ? 'Backend connected' : 'Backend disconnected — reconnecting…'}
+      aria-label={connected ? 'Backend connected' : 'Backend disconnected'}
+      className={`h-2 w-2 shrink-0 rounded-full transition-colors ${
+        connected ? 'bg-eva-green-400' : 'bg-nerv-red-400 animate-pulse'
+      }`}
+    />
+  )
 }
 
 function ToolbarButton({ icon, label, onClick, disabled, variant = 'default', hideLabel }: ToolbarButtonProps) {
