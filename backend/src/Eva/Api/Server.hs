@@ -9,7 +9,7 @@ module Eva.Api.Server
   , makeApp
   ) where
 
-import Control.Concurrent.STM (readTVarIO)
+import Control.Concurrent.STM (atomically, readTVarIO, writeTVar)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (encode)
@@ -60,7 +60,7 @@ import Eva.Knowledge.Api
   )
 import Eva.Prompt.Api (TemplatesAPI, templatesHandlers)
 import Eva.Declarative (ParseError (..), graphToYaml, yamlToGraph)
-import Eva.App (AppEnv (..), AppM, runAppM)
+import Eva.App (AppEnv (..), AppM, lookupCancelToken, runAppM)
 import Eva.Config (configStaticDir)
 import Eva.Core.Types
 import Eva.Core.Validation (validateGraph)
@@ -406,15 +406,23 @@ runsHandlers env rawId = getRunDetailH :<|> cancelRunH
       pure (RunDetail r steps)
 
     -- POST /api/runs/:id/cancel
+    -- Signals the graph walker to abort by setting the cancel token. The walker
+    -- handles all DB updates and WS events; we return an optimistic response.
     cancelRunH :: Handler Run
     cancelRunH = do
       r   <- requireRun
       now <- liftIO getCurrentTime
       case runState r of
         s | s `elem` [RunRunning, RunWaiting] -> do
-              let r' = r { runState = RunCanceled, runFinishedAt = Just now }
-              run (updateRun rid RunCanceled (runStartedAt r) (Just now))
-              pure r'
+              mToken <- run (lookupCancelToken rid)
+              case mToken of
+                Just tv -> liftIO $ atomically $ writeTVar tv True
+                Nothing ->
+                  -- Run finished between DB read and here — no-op;
+                  -- DB state is already terminal.
+                  pure ()
+              -- Return optimistic response; WS run_state event confirms final state.
+              pure r { runState = RunCanceled, runFinishedAt = Just now }
         _ ->
           throwError err409
             { errBody = encode (ApiError ("Cannot cancel a " <> T.toLower (T.pack (show (runState r))) <> " run")) }

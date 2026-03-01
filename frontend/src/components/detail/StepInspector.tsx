@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Clock, Loader2, Pause, SkipForward } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Clock, Loader2, Pause, SkipForward, XCircle } from 'lucide-react'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useUiStore } from '../../store/uiStore'
 import { useRunDetail } from '../../api/hooks'
@@ -42,6 +42,11 @@ const STATE_CONFIG: Record<
     label: 'Skipped',
     icon: <SkipForward size={12} />,
     className: 'bg-terminal-800 text-terminal-500 border-terminal-600',
+  },
+  cancelled: {
+    label: 'Cancelled',
+    icon: <XCircle size={12} />,
+    className: 'bg-nerv-red-900/40 text-nerv-red-400/70 border-nerv-red-800/50',
   },
 }
 

@@ -8,6 +8,7 @@ import {
   Loader2,
   Pause,
   AlertCircle,
+  XCircle,
   type LucideIcon,
 } from 'lucide-react'
 import type { PortCategory, StepState } from '../types'
@@ -147,6 +148,7 @@ export const STEP_STATE_RING: Record<StepState, string> = {
   failed: 'ring-2 ring-nerv-red-500',
   pending: 'opacity-50',
   skipped: 'opacity-25',
+  cancelled: 'ring-2 ring-nerv-red-500 opacity-60',
 }
 
 export const STEP_STATE_BADGE: Partial<
@@ -156,4 +158,5 @@ export const STEP_STATE_BADGE: Partial<
   running: { icon: Loader2, className: 'bg-magi-blue-500 text-terminal-950 animate-spin' },
   waiting: { icon: Pause, className: 'bg-warn-amber-500 text-terminal-950' },
   failed: { icon: AlertCircle, className: 'bg-nerv-red-500 text-terminal-50' },
+  cancelled: { icon: XCircle, className: 'bg-nerv-red-500 opacity-60 text-terminal-50' },
 }

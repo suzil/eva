@@ -30,6 +30,7 @@ withTestEnv action = do
   pool             <- runNoLoggingT $ createSqlitePool ":memory:" 1
   runMigrations pool
   broadcasts       <- newTVarIO Map.empty
+  cancelTokens <- newTVarIO Map.empty
   assistBroadcasts <- newTVarIO Map.empty
   let cfg = AppConfig
         { configDbPath          = ":memory:"
@@ -50,6 +51,7 @@ withTestEnv action = do
         , envBroadcasts          = broadcasts
         , envAssistantBroadcasts = assistBroadcasts
         , envCredentialKey       = Crypto.deriveKey "test-key"
+        , envCancelTokens    = cancelTokens
         }
   action env
 

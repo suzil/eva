@@ -89,6 +89,11 @@ const STEP_STATE_CONFIG: Record<
     icon: <SkipForward size={10} />,
     className: 'bg-terminal-800 text-terminal-500 border-terminal-600',
   },
+  cancelled: {
+    label: 'Cancelled',
+    icon: <XCircle size={10} />,
+    className: 'bg-nerv-red-900/40 text-nerv-red-400/70 border-nerv-red-800/50',
+  },
 }
 
 // ---------------------------------------------------------------------------

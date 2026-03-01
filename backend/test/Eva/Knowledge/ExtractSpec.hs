@@ -59,6 +59,7 @@ withTestEnv llm action = do
   pool       <- runNoLoggingT $ createSqlitePool ":memory:" 1
   runMigrations pool
   broadcasts <- newTVarIO Map.empty
+  cancelTokens <- newTVarIO Map.empty
   let cfg = AppConfig
         { configDbPath          = ":memory:"
         , configPort            = 8080
@@ -77,6 +78,7 @@ withTestEnv llm action = do
         , envAnthropicClient = dummyLLMClient
         , envBroadcasts      = broadcasts
         , envCredentialKey   = Crypto.deriveKey "test-key-for-extract-spec"
+        , envCancelTokens    = cancelTokens
         }
   action env
 

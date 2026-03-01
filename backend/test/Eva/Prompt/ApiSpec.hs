@@ -57,6 +57,7 @@ makeTestApp = do
   runMigrations pool
   seedBuiltinTemplates pool
   broadcasts <- newTVarIO Map.empty
+  cancelTokens <- newTVarIO Map.empty
   let env = AppEnv
         { envConfig = AppConfig
             { configDbPath          = ":memory:"
@@ -74,6 +75,7 @@ makeTestApp = do
         , envAnthropicClient = dummyLLMClient
         , envBroadcasts      = broadcasts
         , envCredentialKey   = Crypto.deriveKey "test-key"
+        , envCancelTokens    = cancelTokens
         }
   pure (makeApp env)
 
