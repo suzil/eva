@@ -111,6 +111,8 @@ describe('Toolbar', () => {
   })
 
   it('Run button is visible for a draft program and calls validateMutation on click', () => {
+    // isDirty: false skips the save-before-run guard so validate fires directly
+    useCanvasStore.setState({ isDirty: false })
     renderToolbar()
     const runBtn = screen.getByRole('button', { name: 'Run' })
     expect(runBtn).not.toBeDisabled()
@@ -127,6 +129,8 @@ describe('Toolbar', () => {
   })
 
   it('shows run error banner when validation onError is called', () => {
+    // isDirty: false skips the save-before-run guard so validate fires directly
+    useCanvasStore.setState({ isDirty: false })
     vi.mocked(apiHooks.useValidateProgram).mockReturnValue({
       mutate: (_: unknown, opts: { onError?: (e: Error) => void }) => {
         opts?.onError?.(new Error('Missing required connection'))

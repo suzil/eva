@@ -6,6 +6,14 @@ import { useCanvasStore } from '../../../store/canvasStore'
 import { GraphProposalCard } from '../GraphProposalCard'
 import type { Graph, Program } from '../../../types'
 
+// GraphProposalCard calls useSaveGraph/usePatchProgram/useProgram on mount,
+// all of which call useQueryClient(). Mock them to avoid requiring a provider.
+vi.mock('../../../api/hooks', () => ({
+  useSaveGraph: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  usePatchProgram: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useProgram: vi.fn(() => ({ data: undefined })),
+}))
+
 // ---------------------------------------------------------------------------
 // Mock WebSocket
 // ---------------------------------------------------------------------------
@@ -85,6 +93,7 @@ beforeEach(() => {
     future: [],
     triggerFitView: false,
     previewOverlayGraph: null,
+    acceptedPreviewGraph: null,
     hoveredNodeId: null,
   })
 })
@@ -194,12 +203,14 @@ describe('GraphProposalCard', () => {
     expect(useCanvasStore.getState().previewOverlayGraph).toEqual(MOCK_GRAPH)
   })
 
-  it('Accept button loads the graph into canvasStore and marks dirty', () => {
+  it('Accept button loads the graph into canvasStore and triggers auto-save', () => {
     render(<GraphProposalCard graph={MOCK_GRAPH} summary="A trigger node." />)
     fireEvent.click(screen.getByRole('button', { name: /accept/i }))
 
     const state = useCanvasStore.getState()
-    expect(state.isDirty).toBe(true)
+    // loadGraph clears isDirty (canvas matches the accepted state) and
+    // handleAccept fires saveMutation.mutate immediately — isDirty stays false.
+    expect(state.isDirty).toBe(false)
     expect(state.nodes).toHaveLength(1)
     expect(state.nodes[0].id).toBe('n-trigger')
   })
@@ -207,6 +218,8 @@ describe('GraphProposalCard', () => {
   it('Accept button shows accepted state after load', () => {
     render(<GraphProposalCard graph={MOCK_GRAPH} summary="A trigger node." />)
     fireEvent.click(screen.getByRole('button', { name: /accept/i }))
-    expect(screen.getByText(/graph accepted/i)).toBeInTheDocument()
+    // After accepting, the header reads "Program accepted" and action buttons disappear
+    expect(screen.getByText(/program accepted/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /accept/i })).not.toBeInTheDocument()
   })
 })
