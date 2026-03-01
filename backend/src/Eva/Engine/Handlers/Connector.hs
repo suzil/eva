@@ -14,7 +14,7 @@ module Eva.Engine.Handlers.Connector
   ( resolveConnectorRunner
   ) where
 
-import Control.Exception (IOException, catch, try)
+import Control.Exception (IOException, catch, displayException, try)
 import Control.Monad.Reader (ask)
 import Data.Aeson (Value (..), object, toJSON, (.=))
 import qualified Data.Aeson.Key as AesonKey
@@ -248,7 +248,7 @@ runReadFile root args = do
           case readResult of
             Left err ->
               pure $ Left $ ConnectorApiError
-                ("file read error: " <> T.pack (show err))
+                ("file read error: " <> T.pack (displayException err))
             Right bs -> do
               let content = TE.decodeUtf8Lenient (BL.toStrict bs)
                   lang    = detectLanguage (T.unpack relPath)
@@ -266,7 +266,7 @@ runGitDiff root = do
   result <- try runGit :: IO (Either IOException (ExitCode, BL.ByteString))
   case result of
     Left err ->
-      pure $ Left $ ConnectorApiError ("git error: " <> T.pack (show err))
+      pure $ Left $ ConnectorApiError ("git error: " <> T.pack (displayException err))
     Right (_, out) ->
       let ls    = filter (not . T.null) $
                     T.lines (TE.decodeUtf8Lenient (BL.toStrict out))
