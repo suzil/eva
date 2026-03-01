@@ -135,7 +135,7 @@ export function CommandBar() {
       label: 'Run',
       description: 'Start a new run',
       enabled: !!selectedProgramId && programState === 'active',
-      action: () => createRunMutation.mutate(selectedProgramId!),
+      action: () => createRunMutation.mutate(undefined),
     },
     {
       kind: 'command',
