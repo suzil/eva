@@ -75,9 +75,10 @@ testPid = "query-prog-1"
 
 testProg :: Program
 testProg = Program
-  { programId        = testPid
-  , programName      = "Query Test Program"
-  , programState     = Draft
+  { programId          = testPid
+  , programName        = "Query Test Program"
+  , programDescription = Nothing
+  , programState       = Draft
   , programGraph     = Graph { graphNodes = Map.empty, graphEdges = [] }
   , programCreatedAt = t0
   , programUpdatedAt = t0

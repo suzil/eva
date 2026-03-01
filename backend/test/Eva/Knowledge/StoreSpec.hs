@@ -96,9 +96,10 @@ sampleEntry2 = sampleEntry
 
 progA :: Program
 progA = Program
-  { programId        = "prog-a"
-  , programName      = "Program A"
-  , programState     = Draft
+  { programId          = "prog-a"
+  , programName        = "Program A"
+  , programDescription = Nothing
+  , programState       = Draft
   , programGraph     = Graph { graphNodes = Map.empty, graphEdges = [] }
   , programCreatedAt = t0
   , programUpdatedAt = t0

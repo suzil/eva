@@ -194,12 +194,13 @@ insertTestProgram :: AppEnv -> ProgramId -> IO ()
 insertTestProgram env pid = do
   now <- getCurrentTime
   let prog = Program
-        { programId        = pid
-        , programName      = "Connector test program"
-        , programState     = Draft
-        , programGraph     = Graph { graphNodes = mempty, graphEdges = [] }
-        , programCreatedAt = now
-        , programUpdatedAt = now
+        { programId          = pid
+        , programName        = "Connector test program"
+        , programDescription = Nothing
+        , programState       = Draft
+        , programGraph       = Graph { graphNodes = mempty, graphEdges = [] }
+        , programCreatedAt   = now
+        , programUpdatedAt   = now
         }
   runAppM env $ insertProgram prog
 

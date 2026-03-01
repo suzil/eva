@@ -52,9 +52,10 @@ makeTriggerNode nid ttype mSchedule = Node
 
 makeProgram :: ProgramId -> ProgramState -> [Node] -> Program
 makeProgram pid st nodes = Program
-  { programId        = pid
-  , programName      = "Test Program"
-  , programState     = st
+  { programId          = pid
+  , programName        = "Test Program"
+  , programDescription = Nothing
+  , programState       = st
   , programGraph     = Graph
       { graphNodes = Map.fromList [(nodeId n, n) | n <- nodes]
       , graphEdges = []

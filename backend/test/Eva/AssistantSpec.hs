@@ -189,9 +189,10 @@ spec = do
       withTestEnv stateClient $ \env -> do
         let epoch = posixSecondsToUTCTime 0
         runAppM env $ insertProgram Program
-          { programId        = ProgramId testPid
-          , programName      = "Graph Retrieval Test"
-          , programState     = Draft
+          { programId          = ProgramId testPid
+          , programName        = "Graph Retrieval Test"
+          , programDescription = Nothing
+          , programState       = Draft
           , programGraph     = validMinimalGraph
           , programCreatedAt = epoch
           , programUpdatedAt = epoch

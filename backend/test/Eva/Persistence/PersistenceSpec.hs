@@ -72,9 +72,10 @@ t1 = posixSecondsToUTCTime 1_740_001_000
 sampleProgram :: Program
 sampleProgram =
   Program
-    { programId        = "prog-test-1"
-    , programName      = "Test Program"
-    , programState     = Draft
+    { programId          = "prog-test-1"
+    , programName        = "Test Program"
+    , programDescription = Nothing
+    , programState       = Draft
     , programGraph     = Graph
         { graphNodes = Map.fromList
             [ ( "n-agent"
@@ -131,9 +132,10 @@ sampleProgram =
 allNodeTypesProgram :: Program
 allNodeTypesProgram =
   Program
-    { programId    = "prog-all-types"
-    , programName  = "All Node Types"
-    , programState = Draft
+    { programId          = "prog-all-types"
+    , programName        = "All Node Types"
+    , programDescription = Nothing
+    , programState       = Draft
     , programGraph = Graph
         { graphNodes = Map.fromList
             [ mk "n-agent"

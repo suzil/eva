@@ -57,6 +57,7 @@ makeTestApp = do
   runMigrations pool
   seedBuiltinTemplates pool
   broadcasts <- newTVarIO Map.empty
+  assistantBroadcasts <- newTVarIO Map.empty
   cancelTokens <- newTVarIO Map.empty
   let env = AppEnv
         { envConfig = AppConfig
@@ -68,14 +69,15 @@ makeTestApp = do
             , configCredentialKey   = "test-key"
             , configStaticDir       = Nothing
             }
-        , envDbPool          = pool
-        , envLogger          = \_ -> pure ()
-        , envDispatch        = execute
-        , envLLMClient       = dummyLLMClient
-        , envAnthropicClient = dummyLLMClient
-        , envBroadcasts      = broadcasts
-        , envCredentialKey   = Crypto.deriveKey "test-key"
-        , envCancelTokens    = cancelTokens
+        , envDbPool                = pool
+        , envLogger                = \_ -> pure ()
+        , envDispatch              = execute
+        , envLLMClient             = dummyLLMClient
+        , envAnthropicClient       = dummyLLMClient
+        , envBroadcasts            = broadcasts
+        , envAssistantBroadcasts   = assistantBroadcasts
+        , envCredentialKey         = Crypto.deriveKey "test-key"
+        , envCancelTokens          = cancelTokens
         }
   pure (makeApp env)
 
