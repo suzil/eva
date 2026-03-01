@@ -20,6 +20,7 @@ module Eva.Engine.StateMachine
   , newRunContext
   , waitForRun
   , markUnhandledError
+  , cancelRunContext
 
     -- * Effectful transitions
   , transitionRun
@@ -75,11 +76,13 @@ allowedRunTransitions = Set.fromList
 allowedStepTransitions :: Set (StepState, StepState)
 allowedStepTransitions = Set.fromList
   [ (StepPending,  StepRunning)
-  , (StepPending,  StepSkipped)   -- for skipDescendants: unreachable nodes
+  , (StepPending,  StepSkipped)    -- for skipDescendants: unreachable nodes
+  , (StepPending,  StepCancelled)  -- run cancelled before node was dispatched
   , (StepRunning,  StepCompleted)
   , (StepRunning,  StepFailed)
   , (StepRunning,  StepSkipped)
   , (StepRunning,  StepWaiting)
+  , (StepRunning,  StepCancelled)  -- run cancelled while node was executing
   , (StepWaiting,  StepRunning)
   ]
 
@@ -126,6 +129,10 @@ data RunContext = RunContext
   , rcHasUnhandledError :: TVar Bool
     -- ^ Set to True when a step fails with no wired error port. Causes the
     -- Run to transition to Failed rather than Completed in 'finishRun'.
+  , rcCancelled         :: TVar Bool
+    -- ^ Set to True by cancelRunH when a cancel request is received.
+    -- The graph walker checks this flag to abort the run and transition
+    -- all in-progress steps to StepCancelled.
   , rcBroadcast         :: TChan Value
     -- ^ Broadcast channel for WebSocket events (consumed by EVA-26).
   , rcKnowledgeCache    :: TVar (Map NodeId Value)
@@ -145,6 +152,7 @@ newRunContext run dataPorts = do
   dispatched     <- newTVarIO Set.empty
   allDone        <- newTVarIO False
   unhandledErr   <- newTVarIO False
+  cancelled      <- newTVarIO False
   broadcast      <- newBroadcastTChanIO
   knowledgeCache <- newTVarIO Map.empty
   pure RunContext
@@ -155,6 +163,7 @@ newRunContext run dataPorts = do
     , rcDispatched        = dispatched
     , rcAllDone           = allDone
     , rcHasUnhandledError = unhandledErr
+    , rcCancelled         = cancelled
     , rcBroadcast         = broadcast
     , rcKnowledgeCache    = knowledgeCache
     }
@@ -163,6 +172,11 @@ newRunContext run dataPorts = do
 -- The Run will transition to Failed rather than Completed when done.
 markUnhandledError :: RunContext -> IO ()
 markUnhandledError ctx = atomically $ writeTVar (rcHasUnhandledError ctx) True
+
+-- | Signal the graph walker to cancel this run.
+-- Sets 'rcCancelled' so the walker's race-based wait unblocks immediately.
+cancelRunContext :: RunContext -> IO ()
+cancelRunContext ctx = atomically $ writeTVar (rcCancelled ctx) True
 
 -- | Block until the Run has reached a terminal state (Completed, Failed, or Canceled).
 -- This is safe to call from any thread and guarantees the Run record is fully

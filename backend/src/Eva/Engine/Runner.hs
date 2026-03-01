@@ -32,7 +32,7 @@ module Eva.Engine.Runner
   ) where
 
 import Control.Concurrent (threadDelay)
-import Control.Concurrent.Async (async, waitCatch)
+import Control.Concurrent.Async (async, cancel, race, waitCatch)
 import Control.Concurrent.STM
 import Control.Exception (Exception, SomeException, displayException, toException, try)
 import Control.Monad (forM, forM_, when)
@@ -58,7 +58,15 @@ import Eva.Api.WebSocket
   , runStateEvent
   , stepStateEvent
   )
-import Eva.App (AppEnv, AppM, broadcastAndUnregisterRun, broadcastEvent, registerRun, runAppM)
+import Eva.App
+  ( AppEnv
+  , AppM
+  , broadcastAndUnregisterRun
+  , broadcastEvent
+  , registerCancelToken
+  , registerRun
+  , runAppM
+  )
 import qualified Eva.App as App
 import Eva.Core.Graph
   ( dataEdgesOf
@@ -136,6 +144,8 @@ startRun program triggerPayload = do
   -- Register the broadcast channel before the run starts so WS clients
   -- can subscribe as soon as the run is created.
   registerRun rid (rcBroadcast ctx)
+  -- Register the cancellation token so cancelRunH can signal this run.
+  registerCancelToken rid (rcCancelled ctx)
 
   insertRun run
   _ <- transitionRun (rcRun ctx) RunRunning now
@@ -183,8 +193,9 @@ graphWalkerLoop ctx graph = do
   where
     go env dEdges terminals executableNodes = do
       readyInputs <- liftIO $ atomically $ do
-        done <- readTVar (rcAllDone ctx)
-        if done
+        done      <- readTVar (rcAllDone ctx)
+        cancelled <- readTVar (rcCancelled ctx)
+        if done || cancelled
           then pure []
           else do
             dispatched <- readTVar (rcDispatched ctx)
@@ -194,7 +205,11 @@ graphWalkerLoop ctx graph = do
             pure pairs
 
       if null readyInputs
-        then finishRun
+        then do
+          isCancelled <- liftIO $ readTVarIO (rcCancelled ctx)
+          if isCancelled
+            then cancelRunInProgress
+            else finishRun
         else do
           asyncsWithIds <- forM readyInputs $ \(nid, inputs) ->
             (nid,) <$> liftIO (async $ runAppM env $
@@ -216,35 +231,76 @@ graphWalkerLoop ctx graph = do
                       -- the STM retry in the next iteration doesn't block forever.
                       liftIO $ checkAndSignalDone ctx terminals)
 
-          -- Wait for all node threads; unexpected panics are the only failure
-          -- mode here since NodeStepFailure is handled via ExceptT above.
-          results <- liftIO $ mapM (\(nid, a) -> (nid,) <$> waitCatch a) asyncsWithIds
+          -- Wait for all node threads to finish, OR for a cancellation signal —
+          -- whichever comes first.
+          let waitAll =
+                mapM (\(nid, a) -> (nid,) <$> waitCatch a) asyncsWithIds
+              waitCancel =
+                atomically $
+                  readTVar (rcCancelled ctx) >>= \c -> if c then pure () else retry
 
-          forM_ results $ \(walkerNid, outcome) ->
-            case outcome of
-              Right () -> pure ()
-              Left _unexpectedErr -> do
-                -- An exception escaped executeNodeStep — treat as unhandled.
-                skipDescendants ctx graph executableNodes walkerNid
-                liftIO $ markUnhandledError ctx
-                liftIO $ checkAndSignalDone ctx terminals
+          outcome <- liftIO $ race waitCancel waitAll
 
-          go env dEdges terminals executableNodes
+          case outcome of
+            Left () -> do
+              -- Cancellation won: kill all in-flight step asyncs and clean up.
+              liftIO $ mapM_ (cancel . snd) asyncsWithIds
+              -- Drain them so no resource leaks before we update state.
+              liftIO $ mapM_ (waitCatch . snd) asyncsWithIds
+              cancelRunInProgress
+
+            Right results -> do
+              forM_ results $ \(walkerNid, result) ->
+                case result of
+                  Right () -> pure ()
+                  Left _unexpectedErr -> do
+                    -- An exception escaped executeNodeStep — treat as unhandled.
+                    skipDescendants ctx graph executableNodes walkerNid
+                    liftIO $ markUnhandledError ctx
+                    liftIO $ checkAndSignalDone ctx terminals
+
+              go env dEdges terminals executableNodes
 
     finishRun = do
       run <- liftIO $ readTVarIO (rcRun ctx)
       case runState run of
         RunRunning -> do
-          hasErr <- liftIO $ readTVarIO (rcHasUnhandledError ctx)
-          now    <- liftIO getCurrentTime
-          let finalState = if hasErr then RunFailed else RunCompleted
-          _      <- transitionRun (rcRun ctx) finalState now
+          isCancelled <- liftIO $ readTVarIO (rcCancelled ctx)
+          hasErr      <- liftIO $ readTVarIO (rcHasUnhandledError ctx)
+          now         <- liftIO getCurrentTime
+          let finalState
+                | isCancelled = RunCanceled
+                | hasErr      = RunFailed
+                | otherwise   = RunCompleted
+          _  <- transitionRun (rcRun ctx) finalState now
           -- Atomically broadcast the terminal event AND remove the run from
           -- the registry. This prevents a race where a WebSocket subscriber
           -- could dupTChan after the write but before the map deletion,
           -- causing forwardEvents to block forever waiting for a
           -- write that will never come.
           broadcastAndUnregisterRun (rcRunId ctx) (runStateEvent (rcRunId ctx) finalState now)
+        _ -> pure ()
+
+    -- | Cancel an in-progress run: transition all active/pending steps to
+    -- StepCancelled, then transition the Run itself to RunCanceled.
+    -- Called when rcCancelled is True (either from the race path or the
+    -- STM path when no asyncs were in flight).
+    cancelRunInProgress = do
+      now   <- liftIO getCurrentTime
+      steps <- liftIO $ readTVarIO (rcSteps ctx)
+      forM_ (Map.elems steps) $ \stepTVar -> do
+        step <- liftIO $ readTVarIO stepTVar
+        case stepState step of
+          s | s `elem` [StepRunning, StepPending] -> do
+                cancelled <- transitionStep stepTVar StepCancelled now
+                broadcastEvent (rcRunId ctx)
+                  (stepStateEvent (rcRunId ctx) (stepNodeId step) (stepId cancelled) StepCancelled now)
+          _ -> pure ()
+      run <- liftIO $ readTVarIO (rcRun ctx)
+      case runState run of
+        RunRunning -> do
+          _ <- transitionRun (rcRun ctx) RunCanceled now
+          broadcastAndUnregisterRun (rcRunId ctx) (runStateEvent (rcRunId ctx) RunCanceled now)
         _ -> pure ()
 
 -- ---------------------------------------------------------------------------
@@ -581,7 +637,7 @@ checkAndSignalDone ctx terminals = atomically $ do
         Nothing -> pure False
         Just tv -> do
           s <- readTVar tv
-          pure (stepState s `elem` [StepCompleted, StepFailed, StepSkipped])
+          pure (stepState s `elem` [StepCompleted, StepFailed, StepSkipped, StepCancelled])
   when allDone $ writeTVar (rcAllDone ctx) True
 
 -- ---------------------------------------------------------------------------

@@ -19,6 +19,10 @@ module Eva.App
   , registerRun
   , unregisterRun
 
+    -- * Cancel token registry
+  , registerCancelToken
+  , lookupCancelToken
+
     -- * Broadcast helpers (assistant conversations)
   , broadcastAssistantEvent
 
@@ -107,6 +111,10 @@ data AppEnv = AppEnv
     -- Conversation handler writes events; WebSocket clients dupTChan and read.
   , envCredentialKey         :: ByteString
     -- ^ 32-byte AES-256 key derived from EVA_CREDENTIAL_KEY at startup.
+  , envCancelTokens          :: TVar (Map RunId (TVar Bool))
+    -- ^ Per-run cancellation flags. The engine registers the 'rcCancelled' TVar
+    -- here so that 'cancelRunH' can signal cancellation without a circular
+    -- dependency on 'Eva.Engine.StateMachine'.
   }
 
 -- ---------------------------------------------------------------------------
@@ -140,6 +148,7 @@ makeAppEnv cfg dispatch = do
     Nothing  -> pure dummyLLMClient
   broadcasts            <- newTVarIO Map.empty
   assistantBroadcasts   <- newTVarIO Map.empty
+  cancelTokens          <- newTVarIO Map.empty
   let minLevel = configLogLevel cfg
       credKey    = Crypto.deriveKey (TE.encodeUtf8 (configCredentialKey cfg))
       logger entry
@@ -155,6 +164,7 @@ makeAppEnv cfg dispatch = do
     , envBroadcasts          = broadcasts
     , envAssistantBroadcasts = assistantBroadcasts
     , envCredentialKey       = credKey
+    , envCancelTokens        = cancelTokens
     }
 
 -- ---------------------------------------------------------------------------
@@ -174,6 +184,20 @@ unregisterRun :: RunId -> AppM ()
 unregisterRun rid = do
   broadcasts <- asks envBroadcasts
   liftIO $ atomically $ modifyTVar broadcasts (Map.delete rid)
+
+-- | Register the cancellation TVar for a run so 'cancelRunH' can signal it.
+-- Called by 'startRun' immediately after the RunContext is created.
+registerCancelToken :: RunId -> TVar Bool -> AppM ()
+registerCancelToken rid tv = do
+  tokens <- asks envCancelTokens
+  liftIO $ atomically $ modifyTVar tokens (Map.insert rid tv)
+
+-- | Look up the cancellation TVar for an active run.
+-- Returns Nothing if the run is no longer active (already finished).
+lookupCancelToken :: RunId -> AppM (Maybe (TVar Bool))
+lookupCancelToken rid = do
+  tokens <- asks envCancelTokens
+  liftIO $ Map.lookup rid <$> readTVarIO tokens
 
 -- | Write an event to the broadcast channel for the given run.
 -- No-op if the run is not in the registry (already finished or not started).
@@ -196,7 +220,7 @@ broadcastAssistantEvent cid event = do
     Just ch -> liftIO $ atomically $ writeTChan ch event
 
 -- | Atomically write a terminal event to the run's broadcast channel AND
--- remove the run from the registry in a single STM transaction.
+-- remove the run from both registries in a single STM transaction.
 -- This eliminates the race window where a WebSocket subscriber could
 -- dupTChan AFTER the terminal event is written but BEFORE the run is
 -- removed — which would cause the subscriber to start after the terminal
@@ -204,12 +228,14 @@ broadcastAssistantEvent cid event = do
 broadcastAndUnregisterRun :: RunId -> Value -> AppM ()
 broadcastAndUnregisterRun rid event = do
   broadcasts <- asks envBroadcasts
+  tokens     <- asks envCancelTokens
   liftIO $ atomically $ do
     bMap <- readTVar broadcasts
     case Map.lookup rid bMap of
       Just ch -> writeTChan ch event
       Nothing -> pure ()
     modifyTVar broadcasts (Map.delete rid)
+    modifyTVar tokens     (Map.delete rid)
 
 -- ---------------------------------------------------------------------------
 -- Logging helpers

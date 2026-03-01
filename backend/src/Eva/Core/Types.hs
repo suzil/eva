@@ -182,6 +182,7 @@ data StepState
   | StepFailed
   | StepSkipped
   | StepWaiting
+  | StepCancelled
   deriving stock (Eq, Ord, Show, Generic, Enum, Bounded)
 
 stepStateOptions :: Options

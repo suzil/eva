@@ -19,7 +19,7 @@ export type ProgramState = 'draft' | 'active' | 'paused' | 'archived'
 export type RunState = 'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'canceled'
 
 // StepState constructors strip "Step" prefix then lowercase: StepPending -> "pending"
-export type StepState = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'waiting'
+export type StepState = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'waiting' | 'cancelled'
 
 // ---------------------------------------------------------------------------
 // Port system

@@ -43,6 +43,7 @@ withTestEnv action = do
         , configStaticDir       = Nothing
         }
   broadcasts <- newTVarIO Map.empty
+  cancelTokens <- newTVarIO Map.empty
   let env = AppEnv
         { envConfig          = cfg
         , envDbPool          = pool
@@ -52,6 +53,7 @@ withTestEnv action = do
         , envAnthropicClient = dummyLLMClient
         , envBroadcasts      = broadcasts
         , envCredentialKey   = Crypto.deriveKey "test-key"
+        , envCancelTokens    = cancelTokens
         }
   action env
 
