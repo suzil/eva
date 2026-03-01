@@ -293,9 +293,14 @@ function CanvasInner() {
         {/* Empty canvas hint */}
         {nodes.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <p className="rounded-md border border-dashed border-terminal-700 px-4 py-2 text-xs text-terminal-400">
-              Drag a Trigger from the palette to start
-            </p>
+            <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-terminal-700 px-4 py-3">
+              <p className="text-xs text-terminal-400">Drag a Trigger from the palette to start</p>
+              <p className="text-xs text-terminal-600">
+                or press{' '}
+                <kbd className="rounded bg-terminal-700 px-1 py-0.5 font-mono text-terminal-300">⌘K</kbd>{' '}
+                to ask MAGI
+              </p>
+            </div>
           </div>
         )}
       </div>

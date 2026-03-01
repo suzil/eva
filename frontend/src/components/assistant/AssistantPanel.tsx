@@ -80,6 +80,9 @@ export function AssistantPanel() {
           <p className="text-xs text-terminal-400">
             Open a program and press <kbd className="rounded bg-terminal-700 px-1 py-0.5 font-mono text-terminal-200">⌘K</kbd> to talk to MAGI
           </p>
+          <p className="text-xs text-terminal-600">
+            Type <kbd className="rounded bg-terminal-700 px-1 py-0.5 font-mono text-terminal-300">/</kbd> in the input for slash commands
+          </p>
         </div>
       ) : (
         <div aria-live="polite" aria-atomic="false" className="flex flex-1 flex-col overflow-hidden">

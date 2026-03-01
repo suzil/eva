@@ -136,8 +136,8 @@ export function AssistantInput({ onSend, disabled = false, isStreaming = false, 
           type="button"
           onClick={() => setTemplatePickerOpen(true)}
           disabled={disabled}
-          aria-label="Insert template"
-          title="Insert template"
+          aria-label="Browse prompt templates"
+          title="Browse prompt templates"
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-terminal-500 transition-colors hover:text-terminal-300 disabled:opacity-40"
         >
           <Paperclip className="h-3.5 w-3.5" />
