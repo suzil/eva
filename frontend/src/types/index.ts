@@ -269,6 +269,7 @@ export interface Step {
 export interface Program {
   id: ProgramId
   name: string
+  description?: string
   state: ProgramState
   graph: Graph
   createdAt: string
@@ -318,6 +319,7 @@ export interface CreateProgramReq {
 
 export interface PatchProgramReq {
   name?: string
+  description?: string
 }
 
 export interface ValidationError {
@@ -497,7 +499,7 @@ export interface FileTab {
 export type AssistantMessage =
   | { type: 'user';           text: string; timestamp: number }
   | { type: 'text';           text: string; timestamp: number }
-  | { type: 'graph_proposal'; graph: Graph; summary: string; timestamp: number }
+  | { type: 'graph_proposal'; graph: Graph; name: string; summary: string; timestamp: number }
   | { type: 'graph_diff';     diff: GraphDiff; summary: string; timestamp: number }
   | { type: 'node_reference'; nodeId: string; label: string; timestamp: number }
   | { type: 'run_data';       runId: string; summary: string; detail?: RunDetail; timestamp: number }

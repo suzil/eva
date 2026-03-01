@@ -33,6 +33,7 @@ module Eva.Assistant
 
 import Control.Monad (join)
 import Control.Monad.IO.Class (liftIO)
+import Data.Maybe (fromMaybe)
 import System.IO (hPutStrLn, stderr)
 import Control.Monad.Reader (ask)
 import Data.Aeson
@@ -242,8 +243,9 @@ data AssistantMessage
     -- ^ Message sent by the user. @{ "type": "user", "text": "..." }@
   | AsstText          Text
     -- ^ Plain markdown text response from MAGI.
-  | AsstGraphProposal Graph  Text
-    -- ^ A new graph MAGI proposes to create. Frontend shows a preview overlay.
+  | AsstGraphProposal Graph  Text Text
+    -- ^ A new graph MAGI proposes to create. Fields: graph, name, summary.
+    --   Frontend shows a preview overlay with the proposed name and summary.
   | AsstGraphDiff     GraphDiff Text
     -- ^ Proposed modifications to the current graph.
   | AsstNodeRef       NodeId Text
@@ -259,10 +261,11 @@ instance ToJSON AssistantMessage where
     object ["type" .= ("user" :: Text), "text" .= txt]
   toJSON (AsstText txt) =
     object ["type" .= ("text" :: Text), "text" .= txt]
-  toJSON (AsstGraphProposal graph summary) =
+  toJSON (AsstGraphProposal graph name summary) =
     object
       [ "type"    .= ("graph_proposal" :: Text)
       , "graph"   .= graph
+      , "name"    .= name
       , "summary" .= summary
       ]
   toJSON (AsstGraphDiff diff summary) =
@@ -296,7 +299,7 @@ instance FromJSON AssistantMessage where
     case msgType of
       "user"           -> AsstUser          <$> o .: "text"
       "text"           -> AsstText          <$> o .: "text"
-      "graph_proposal" -> AsstGraphProposal <$> o .: "graph"   <*> o .: "summary"
+      "graph_proposal" -> AsstGraphProposal <$> o .: "graph" <*> o .: "name" <*> o .: "summary"
       "graph_diff"     -> AsstGraphDiff     <$> o .: "diff"    <*> o .: "summary"
       "node_ref"       -> AsstNodeRef       <$> o .: "nodeId"  <*> o .: "label"
       "run_data"       -> AsstRunData       <$> o .: "runId"   <*> o .: "summary"
@@ -366,9 +369,10 @@ assistantTools =
           <> "Prefer simple trigger+agent graphs for demos."
       , toolParameters  = objSchema
           [ ("graph",   object ["type" .= ("object" :: Text), "description" .= ("Complete Eva Graph JSON. Follow the schema in the tool description exactly." :: Text)])
+          , ("name",    strProp "Short program title (2-4 words, Title Case, e.g. \"Weather Alert Bot\").")
           , ("summary", strProp "One-sentence description of the proposed program.")
           ]
-          ["graph", "summary"]
+          ["graph", "name", "summary"]
       }
   , ToolSpec
       { toolName        = "propose_diff"
@@ -712,9 +716,11 @@ toolSearchPrograms args =
 toolProposeGraph :: Value -> AppM ToolResult
 toolProposeGraph args = do
   let mGraph   = parseMaybe (withObject "args" (.: "graph"))   args :: Maybe Value
+      mName    = parseMaybe (withObject "args" (.: "name"))    args :: Maybe Text
       mSummary = parseMaybe (withObject "args" (.: "summary")) args :: Maybe Text
   liftIO $ hPutStrLn stderr $
     "[MAGI] propose_graph: hasGraph=" <> show (maybe False (const True) mGraph)
+    <> " hasName=" <> show (maybe False (const True) mName)
     <> " hasSummary=" <> show (maybe False (const True) mSummary)
   case (mGraph, mSummary) of
     (Nothing, _) -> pure $ ToolResultText
@@ -730,8 +736,9 @@ toolProposeGraph args = do
                      ("propose_graph: invalid Graph JSON: " <> T.pack e)
         Success g ->
           let errs = validateGraph g
+              name = fromMaybe summary mName
           in  if null errs
-                then pure $ ToolResultTerminal (AsstGraphProposal g summary)
+                then pure $ ToolResultTerminal (AsstGraphProposal g name summary)
                 else pure $ ToolResultText
                        ( "propose_graph: validation failed — fix these issues "
                        <> "and call propose_graph again:\n"

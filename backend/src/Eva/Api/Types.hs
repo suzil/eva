@@ -52,15 +52,18 @@ instance FromJSON CreateProgramReq where
   parseJSON = withObject "CreateProgramReq" $ \o ->
     CreateProgramReq <$> o .: "name"
 
--- | Only 'name' is patchable at M1. State changes go through transition
+-- | Patchable program fields. State changes go through transition
 -- endpoints (deploy/pause/resume). Graph changes go through PUT .../graph.
-newtype PatchProgramReq = PatchProgramReq
-  { pprName :: Maybe Text
+data PatchProgramReq = PatchProgramReq
+  { pprName        :: Maybe Text
+  , pprDescription :: Maybe Text
   }
 
 instance FromJSON PatchProgramReq where
   parseJSON = withObject "PatchProgramReq" $ \o ->
-    PatchProgramReq <$> o .:? "name"
+    PatchProgramReq
+      <$> o .:? "name"
+      <*> o .:? "description"
 
 -- ---------------------------------------------------------------------------
 -- Response bodies

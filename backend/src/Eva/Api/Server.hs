@@ -232,12 +232,13 @@ programsHandlers env =
       pid <- liftIO (ProgramId . UUID.toText <$> nextRandom)
       now <- liftIO getCurrentTime
       let prog = Program
-            { programId        = pid
-            , programName      = cprName req
-            , programState     = Draft
-            , programGraph     = Graph { graphNodes = Map.empty, graphEdges = [] }
-            , programCreatedAt = now
-            , programUpdatedAt = now
+            { programId          = pid
+            , programName        = cprName req
+            , programDescription = Nothing
+            , programState       = Draft
+            , programGraph       = Graph { graphNodes = Map.empty, graphEdges = [] }
+            , programCreatedAt   = now
+            , programUpdatedAt   = now
             }
       run (insertProgram prog)
       pure prog
@@ -270,14 +271,15 @@ programsHandlers env =
         getProgramH :: Handler Program
         getProgramH = requireProgram
 
-        -- PATCH /api/programs/:id — only name is patchable at M1
+        -- PATCH /api/programs/:id
         patchProgramH :: PatchProgramReq -> Handler Program
         patchProgramH req = do
           p   <- requireProgram
           now <- liftIO getCurrentTime
           let p' = p
-                { programName      = maybe (programName p) id (pprName req)
-                , programUpdatedAt = now
+                { programName        = maybe (programName p) id (pprName req)
+                , programDescription = maybe (programDescription p) Just (pprDescription req)
+                , programUpdatedAt   = now
                 }
           run (updateProgram p')
           pure p'

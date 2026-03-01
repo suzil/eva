@@ -233,10 +233,11 @@ edgeFromRow rowId row = do
 programToRow :: Program -> ProgramRow
 programToRow p =
   ProgramRow
-    { programRowName      = programName p
-    , programRowState     = encodeState (programState p)
-    , programRowCreatedAt = programCreatedAt p
-    , programRowUpdatedAt = programUpdatedAt p
+    { programRowName        = programName p
+    , programRowDescription = programDescription p
+    , programRowState       = encodeState (programState p)
+    , programRowCreatedAt   = programCreatedAt p
+    , programRowUpdatedAt   = programUpdatedAt p
     }
 
 programFromRows
@@ -249,10 +250,11 @@ programFromRows (Entity pKey pRow) nodeEntities edgeEntities = do
   edges <- traverse (\(Entity k v) -> edgeFromRow k v) edgeEntities
   st    <- decodeState (programRowState pRow)
   pure Program
-    { programId        = fromProgramRowId pKey
-    , programName      = programRowName pRow
-    , programState     = st
-    , programGraph     = Graph
+    { programId          = fromProgramRowId pKey
+    , programName        = programRowName pRow
+    , programDescription = programRowDescription pRow
+    , programState       = st
+    , programGraph       = Graph
         { graphNodes = Map.fromList [(nodeId n, n) | n <- nodes]
         , graphEdges = edges
         }

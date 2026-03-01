@@ -28,6 +28,7 @@ share
 ProgramRow sql=programs
   Id Text sqltype=text
   name Text
+  description Text Maybe sql=description
   state Text
   createdAt UTCTime sql=created_at
   updatedAt UTCTime sql=updated_at

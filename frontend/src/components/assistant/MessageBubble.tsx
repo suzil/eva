@@ -24,7 +24,7 @@ export function MessageBubble({ message, programId }: MessageBubbleProps) {
     case 'action_result':
       return <ActionResultBubble success={message.success} message={message.message} />
     case 'graph_proposal':
-      return <GraphProposalCard graph={message.graph} summary={message.summary} />
+      return <GraphProposalCard graph={message.graph} name={message.name} summary={message.summary} />
     case 'graph_diff':
       return <GraphDiffCard diff={message.diff} summary={message.summary} />
     case 'run_data':

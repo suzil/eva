@@ -47,6 +47,10 @@ interface CanvasState {
 
   /** Proposed graph from the assistant — rendered by GraphPreviewOverlay. Null when not in preview mode. */
   previewOverlayGraph: Graph | null
+  /** One-sentence summary paired with previewOverlayGraph, used for auto-naming on accept. */
+  previewOverlaySummary: string | null
+  /** Short title proposed by MAGI alongside previewOverlayGraph. */
+  previewOverlayName: string | null
 
   /**
    * The graph object most recently accepted via the canvas PreviewBanner.
@@ -91,7 +95,7 @@ interface CanvasState {
   /** Convert current store state to API Graph shape for PUT /programs/:id/graph */
   buildGraph: () => Graph
 
-  setPreviewOverlayGraph: (graph: Graph | null) => void
+  setPreviewOverlayGraph: (graph: Graph | null, summary?: string, name?: string) => void
   setAcceptedPreviewGraph: (graph: Graph | null) => void
   /** Mark the canvas as having unsaved changes (called after accepting a proposal via loadGraph). */
   markDirty: () => void
@@ -113,6 +117,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   future: [],
   triggerFitView: false,
   previewOverlayGraph: null,
+  previewOverlaySummary: null,
+  previewOverlayName: null,
   acceptedPreviewGraph: null,
   hoveredNodeId: null,
 
@@ -323,7 +329,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     return { nodes: graphNodes, edges: graphEdges }
   },
 
-  setPreviewOverlayGraph: (graph) => set({ previewOverlayGraph: graph }),
+  setPreviewOverlayGraph: (graph, summary, name) => set({
+    previewOverlayGraph: graph,
+    previewOverlaySummary: summary ?? null,
+    previewOverlayName: name ?? null,
+  }),
   setAcceptedPreviewGraph: (graph) => set({ acceptedPreviewGraph: graph }),
   markDirty: () => set({ isDirty: true }),
   setHoveredNodeId: (id) => set({ hoveredNodeId: id }),

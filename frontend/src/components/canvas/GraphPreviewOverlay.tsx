@@ -4,6 +4,8 @@ import {
   ReactFlowProvider,
   BaseEdge,
   getBezierPath,
+  Handle,
+  Position,
   type NodeProps,
   type EdgeProps,
   type Node,
@@ -15,7 +17,7 @@ import {
 import { Check, X, MessageSquare, ChevronRight } from 'lucide-react'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useUiStore } from '../../store/uiStore'
-import { useSaveGraph } from '../../api/hooks'
+import { useSaveGraph, usePatchProgram, useProgram } from '../../api/hooks'
 import type { EvaNodeData, Graph, NodeType } from '../../types'
 import { NODE_TYPE_COLORS, NODE_TYPE_LABELS } from '../../constants/nodeConstants'
 
@@ -26,6 +28,8 @@ import { NODE_TYPE_COLORS, NODE_TYPE_LABELS } from '../../constants/nodeConstant
 function PreviewNode({ data, selected }: NodeProps<Node<EvaNodeData>>) {
   const color = NODE_TYPE_COLORS[data.nodeType.type] ?? '#00B4FF'
   const typeLabel = NODE_TYPE_LABELS[data.nodeType.type] ?? data.nodeType.type
+
+  const handleStyle = { opacity: 0, pointerEvents: 'none' as const, width: 6, height: 6 }
 
   return (
     <div
@@ -41,6 +45,10 @@ function PreviewNode({ data, selected }: NodeProps<Node<EvaNodeData>>) {
         animation: selected ? undefined : 'glow-pulse 2s ease-in-out infinite',
       }}
     >
+      {/* Invisible handles so ReactFlow can route edges to/from this node */}
+      <Handle type="target" position={Position.Left}  id="input"  style={handleStyle} />
+      <Handle type="source" position={Position.Right} id="output" style={handleStyle} />
+
       <div className="flex items-center gap-2 px-3 py-2">
         <div className="h-full w-1 shrink-0 self-stretch rounded-full" style={{ backgroundColor: color }} />
         <div className="min-w-0">
@@ -111,7 +119,9 @@ function graphToFlowElements(graph: Graph): { nodes: Node<EvaNodeData>[]; edges:
   const edges: Edge[] = graph.edges.map((e) => ({
     id: e.id,
     source: e.sourceNode,
+    sourceHandle: 'output',
     target: e.targetNode,
+    targetHandle: 'input',
     type: e.category,
     data: { category: e.category },
     selectable: false,
@@ -228,6 +238,8 @@ function NodeDetailPanel({ nodeType, label, onClose }: NodeDetailPanelProps) {
 
 function PreviewBanner() {
   const graph = useCanvasStore((s) => s.previewOverlayGraph)!
+  const summary = useCanvasStore((s) => s.previewOverlaySummary)
+  const proposedName = useCanvasStore((s) => s.previewOverlayName)
   const loadGraph = useCanvasStore((s) => s.loadGraph)
   const setPreviewOverlayGraph = useCanvasStore((s) => s.setPreviewOverlayGraph)
   const setAcceptedPreviewGraph = useCanvasStore((s) => s.setAcceptedPreviewGraph)
@@ -237,6 +249,8 @@ function PreviewBanner() {
   const setPrefillAssistantMessage = useUiStore((s) => s.setPrefillAssistantMessage)
 
   const saveMutation = useSaveGraph(currentProgramId ?? '')
+  const patchMutation = usePatchProgram(currentProgramId ?? '')
+  const { data: currentProgram } = useProgram(currentProgramId ?? '')
 
   function handleAccept() {
     if (!currentProgramId) return
@@ -245,6 +259,10 @@ function PreviewBanner() {
     setAcceptedPreviewGraph(graph)
     setDetailPanelTab('inspector')
     saveMutation.mutate(graph)
+    const currentName = currentProgram?.name ?? ''
+    if (proposedName && (/^untitled$/i.test(currentName.trim()) || currentName.trim() === '')) {
+      patchMutation.mutate({ name: proposedName, description: summary ?? undefined })
+    }
   }
 
   function handleEditInChat() {

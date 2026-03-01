@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, LayoutList, Loader2 } from 'lucide-react'
+import { Plus, LayoutList, Loader2, Pencil } from 'lucide-react'
 import { usePrograms, useCreateProgram, usePatchProgram } from '../../api/hooks'
 import { useUiStore } from '../../store/uiStore'
 import { useCanvasStore } from '../../store/canvasStore'
@@ -105,15 +105,28 @@ function ProgramItem({
           className="min-w-0 flex-1 rounded bg-terminal-700 px-1.5 py-0.5 text-xs text-terminal-100 outline-none ring-1 ring-at-field-500"
         />
       ) : (
-        <span
-          className="min-w-0 flex-1 truncate text-xs"
-          onDoubleClick={(e) => {
-            e.stopPropagation()
-            onRenameStart()
-          }}
-        >
-          {name}
-        </span>
+        <>
+          <span
+            className="min-w-0 flex-1 truncate text-xs"
+            onDoubleClick={(e) => {
+              e.stopPropagation()
+              onRenameStart()
+            }}
+          >
+            {name}
+          </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRenameStart()
+            }}
+            title="Rename program"
+            className="ml-1 hidden flex-shrink-0 rounded p-0.5 text-terminal-500 transition-colors hover:text-terminal-200 group-hover:flex"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        </>
       )}
 
       <StateBadge state={state} />

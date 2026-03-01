@@ -762,6 +762,7 @@ instance FromJSON ValidationError where
 data Program = Program
   { programId :: ProgramId
   , programName :: Text
+  , programDescription :: Maybe Text
   , programState :: ProgramState
   , programGraph :: Graph
   , programCreatedAt :: UTCTime

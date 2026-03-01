@@ -201,6 +201,8 @@ buildContentSource (UrlRef t) =
   Y.mapping ["type" .= ("_url_ref" :: Text), "value" .= t]
 buildContentSource UpstreamPort =
   Y.mapping ["type" .= ("_upstream_port" :: Text)]
+buildContentSource (LibraryRef t) =
+  Y.mapping ["type" .= ("_library_ref" :: Text), "value" .= t]
 
 buildRefreshPolicy :: RefreshPolicy -> Y.Node ()
 buildRefreshPolicy RefreshStatic =

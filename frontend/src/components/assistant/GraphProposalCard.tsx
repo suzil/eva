@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { GitBranch, Eye, Check, RotateCcw } from 'lucide-react'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useUiStore } from '../../store/uiStore'
-import { useSaveGraph } from '../../api/hooks'
+import { useSaveGraph, usePatchProgram, useProgram } from '../../api/hooks'
 import type { Graph, Node } from '../../types'
 import { NODE_TYPE_COLORS, NODE_TYPE_LABELS } from '../../constants/nodeConstants'
 
@@ -17,6 +17,7 @@ const MINI_GRAPH_COLORS = {
 
 interface GraphProposalCardProps {
   graph: Graph
+  name: string
   summary: string
 }
 
@@ -197,7 +198,7 @@ function NodeList({ nodes }: { nodes: Node[] }) {
 // Main card
 // ---------------------------------------------------------------------------
 
-export function GraphProposalCard({ graph, summary }: GraphProposalCardProps) {
+export function GraphProposalCard({ graph, name, summary }: GraphProposalCardProps) {
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [acceptedLocally, setAcceptedLocally] = useState(false)
 
@@ -215,12 +216,14 @@ export function GraphProposalCard({ graph, summary }: GraphProposalCardProps) {
   const setPrefillAssistantMessage = useUiStore((s) => s.setPrefillAssistantMessage)
 
   const saveMutation = useSaveGraph(currentProgramId ?? '')
+  const patchMutation = usePatchProgram(currentProgramId ?? '')
+  const { data: currentProgram } = useProgram(currentProgramId ?? '')
 
   const nodes = Object.values(graph.nodes)
 
   function handlePreview() {
     setValidationErrors([])
-    setPreviewOverlayGraph(graph)
+    setPreviewOverlayGraph(graph, summary, name)
     // Switch to inspector so the canvas is fully visible
     setDetailPanelTab('inspector')
   }
@@ -240,8 +243,12 @@ export function GraphProposalCard({ graph, summary }: GraphProposalCardProps) {
     setPreviewOverlayGraph(null)
     setAcceptedLocally(true)
     setDetailPanelTab('inspector')
-    // Persist to backend so the program is immediately runnable
     saveMutation.mutate(graph)
+    // Auto-rename if the program still has a generic placeholder name
+    const currentName = currentProgram?.name ?? ''
+    if (/^untitled$/i.test(currentName.trim()) || currentName.trim() === '') {
+      patchMutation.mutate({ name, description: summary })
+    }
   }
 
   function handleRevise() {
