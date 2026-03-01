@@ -41,6 +41,7 @@ import Data.Aeson.Key (fromText)
 import Data.Aeson.Types (Parser, parseMaybe)
 import Data.Char (toLower)
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -617,7 +618,7 @@ executeAssistantTool ctx tc =
     "get_run_detail"    -> toolGetRunDetail (toolCallArgs tc)
     "search_programs"   -> toolSearchPrograms (toolCallArgs tc)
     "propose_graph"     -> toolProposeGraph (toolCallArgs tc)
-    "propose_diff"      -> toolProposeDiff (toolCallArgs tc)
+    "propose_diff"      -> toolProposeDiff ctx (toolCallArgs tc)
     "execute_operation" -> toolExecuteOperation (toolCallArgs tc)
     unknown             -> pure $ ToolResultText ("unknown tool: " <> unknown)
 
@@ -749,8 +750,37 @@ toolProposeGraph args = do
 -- Tool: propose_diff
 -- ---------------------------------------------------------------------------
 
-toolProposeDiff :: Value -> AppM ToolResult
-toolProposeDiff args = do
+-- | Apply a 'GraphDiff' to an existing 'Graph' to produce the result graph.
+-- Used for pre-flight validation before sending the diff to the frontend.
+-- Steps: add new nodes, remove nodes, apply modifications, add/remove edges,
+-- then strip any dangling edges that reference removed nodes.
+applyGraphDiff :: Graph -> GraphDiff -> Graph
+applyGraphDiff g diff =
+  let nodes0  = graphNodes g
+      nodes1  = foldr (\n m -> Map.insert (nodeId n) n m) nodes0 (gdAddedNodes diff)
+      nodes2  = foldr Map.delete nodes1 (gdRemovedNodeIds diff)
+      nodes3  = foldr applyMod nodes2 (gdModifiedNodes diff)
+      edges0  = graphEdges g
+      edges1  = edges0 ++ gdAddedEdges diff
+      removed = Set.fromList (gdRemovedEdgeIds diff)
+      edges2  = filter (\e -> edgeId e `Set.notMember` removed) edges1
+      live    = Map.keysSet nodes3
+      edges3  = filter (\e ->  edgeSourceNode e `Set.member` live
+                             && edgeTargetNode e `Set.member` live) edges2
+  in  g { graphNodes = nodes3, graphEdges = edges3 }
+  where
+    applyMod nm m = case Map.lookup (nmNodeId nm) m of
+      Nothing -> m
+      Just n  -> case (toJSON n, nmAfter nm) of
+        (Object nodeObj, Object afterObj) ->
+          -- afterObj wins for overlapping keys (left-biased KeyMap (<>))
+          case fromJSON (Object (afterObj <> nodeObj)) of
+            Success updated -> Map.insert (nmNodeId nm) updated m
+            Error _         -> m
+        _ -> m
+
+toolProposeDiff :: AssistantContext -> Value -> AppM ToolResult
+toolProposeDiff ctx args = do
   let mDiff    = parseMaybe (withObject "args" (.: "diff"))    args :: Maybe Value
       mSummary = parseMaybe (withObject "args" (.: "summary")) args :: Maybe Text
   case (mDiff, mSummary) of
@@ -762,7 +792,47 @@ toolProposeDiff args = do
       case fromJSON dVal of
         Error e -> pure $ ToolResultText
                      ("propose_diff: invalid GraphDiff JSON: " <> T.pack e)
-        Success d -> pure $ ToolResultTerminal (AsstGraphDiff d summary)
+        Success d ->
+          case ctxProgramId ctx of
+            Nothing -> pure $ ToolResultText
+                         "propose_diff: no program in context; select a program before proposing a diff"
+            Just pid -> do
+              mProg <- getProgram pid
+              case mProg of
+                Nothing -> pure $ ToolResultText
+                             ( "propose_diff: program not found: "
+                             <> let ProgramId p = pid in p
+                             )
+                Just prog -> do
+                  let g       = programGraph prog
+                      nodeIds = Map.keysSet (graphNodes g)
+                      badRemoves  =
+                        filter (`Set.notMember` nodeIds) (gdRemovedNodeIds d)
+                      badModifies =
+                        filter (\nm -> nmNodeId nm `Set.notMember` nodeIds)
+                               (gdModifiedNodes d)
+                      refErrors =
+                        map (\(NodeId nid) -> "- removed node not found: " <> nid)
+                            badRemoves
+                        ++ map (\nm -> let NodeId nid = nmNodeId nm
+                                       in "- modified node not found: " <> nid)
+                               badModifies
+                  if not (null refErrors)
+                    then pure $ ToolResultText
+                           ( "propose_diff: invalid node references — fix these "
+                           <> "and call propose_diff again:\n"
+                           <> T.intercalate "\n" refErrors
+                           )
+                    else do
+                      let resultGraph = applyGraphDiff g d
+                          errs        = validateGraph resultGraph
+                      if null errs
+                        then pure $ ToolResultTerminal (AsstGraphDiff d summary)
+                        else pure $ ToolResultText
+                               ( "propose_diff: validation failed on result graph — "
+                               <> "fix these issues and call propose_diff again:\n"
+                               <> T.intercalate "\n" (map (("- " <>) . veMessage) errs)
+                               )
 
 -- ---------------------------------------------------------------------------
 -- Tool: execute_operation
