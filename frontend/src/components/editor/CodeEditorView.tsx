@@ -16,7 +16,7 @@ export function CodeEditorView() {
   const [isDirty, setIsDirty] = useState(false)
   const [localContent, setLocalContent] = useState('')
 
-  const { data: fileEntry, isLoading, isError } = useFile(activeCodebaseId, activeFilePath)
+  const { data: fileEntry, isLoading, isError, error } = useFile(activeCodebaseId, activeFilePath)
   const writeFile = useWriteFile(activeCodebaseId ?? '')
 
   // When the loaded file changes, reset local editing state.
@@ -82,10 +82,15 @@ export function CodeEditorView() {
         )}
 
         {isError && (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex h-full flex-col items-center justify-center gap-1">
             <p className="font-display text-xs uppercase tracking-widest text-nerv-red-400">
               Failed to load file
             </p>
+            {error instanceof Error && (
+              <p className="max-w-sm text-center text-[11px] text-terminal-500">
+                {error.message}
+              </p>
+            )}
           </div>
         )}
 

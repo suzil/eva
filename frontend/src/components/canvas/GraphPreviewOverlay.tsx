@@ -241,6 +241,7 @@ function PreviewBanner() {
   const summary = useCanvasStore((s) => s.previewOverlaySummary)
   const proposedName = useCanvasStore((s) => s.previewOverlayName)
   const loadGraph = useCanvasStore((s) => s.loadGraph)
+  const markDirty = useCanvasStore((s) => s.markDirty)
   const setPreviewOverlayGraph = useCanvasStore((s) => s.setPreviewOverlayGraph)
   const setAcceptedPreviewGraph = useCanvasStore((s) => s.setAcceptedPreviewGraph)
   const currentProgramId = useCanvasStore((s) => s.currentProgramId)
@@ -258,7 +259,7 @@ function PreviewBanner() {
     setPreviewOverlayGraph(null)
     setAcceptedPreviewGraph(graph)
     setDetailPanelTab('inspector')
-    saveMutation.mutate(graph)
+    saveMutation.mutate(graph, { onError: () => markDirty() })
     const currentName = currentProgram?.name ?? ''
     if (proposedName && (/^untitled$/i.test(currentName.trim()) || currentName.trim() === '')) {
       patchMutation.mutate({ name: proposedName, description: summary ?? undefined })

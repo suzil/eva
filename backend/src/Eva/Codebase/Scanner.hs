@@ -49,7 +49,8 @@ import System.Directory
   , listDirectory
   )
 import System.FilePath
-  ( splitDirectories
+  ( makeRelative
+  , splitDirectories
   , takeExtension
   , takeFileName
   , (</>)
@@ -190,7 +191,7 @@ scanDirectory rawRoot = do
 
 doScan :: FilePath -> IO ScanResult
 doScan canonRoot = do
-  (tree, langStats) <- buildTree canonRoot (takeFileName canonRoot) 0
+  (tree, langStats) <- buildTree canonRoot canonRoot (takeFileName canonRoot) 0
   keyFiles <- findKeyFiles canonRoot
   GitMeta branch dirty <- readGitMeta canonRoot
   now <- getCurrentTime
@@ -206,13 +207,17 @@ doScan canonRoot = do
 
 -- | Recursively build a 'FileNode' tree and accumulate language stats.
 -- Returns the root node and the accumulated stats.
+-- 'fileNodePath' is stored as a path relative to 'root' so that the frontend
+-- can pass it directly to the file-read endpoint (which requires a relative path).
 buildTree
-  :: FilePath     -- ^ Absolute path of this node
+  :: FilePath     -- ^ Canonical codebase root (used to compute relative paths)
+  -> FilePath     -- ^ Absolute path of this node
   -> String       -- ^ Display name
   -> Int          -- ^ Current depth
   -> IO (FileNode, LangStats)
-buildTree absPath displayName depth = do
+buildTree root absPath displayName depth = do
   isDir <- doesDirectoryExist absPath
+  let relPath = makeRelative root absPath
   if isDir
     then do
       (children, stats) <-
@@ -221,13 +226,13 @@ buildTree absPath displayName depth = do
           else do
             entries <- listDirectory absPath `catchIO` \_ -> pure []
             let filtered = filter (not . (`elem` ignoredDirs)) (sort entries)
-            pairs <- mapM (\e -> buildTree (absPath </> e) e (depth + 1)) filtered
+            pairs <- mapM (\e -> buildTree root (absPath </> e) e (depth + 1)) filtered
             let childNodes = map fst pairs
                 mergedStats = Map.unionsWith (+) (map snd pairs)
             pure (childNodes, mergedStats)
       let node = FileNode
             { fileNodeName     = T.pack displayName
-            , fileNodePath     = T.pack absPath
+            , fileNodePath     = T.pack relPath
             , fileNodeIsDir    = True
             , fileNodeChildren = children
             , fileNodeSize     = Nothing
@@ -242,7 +247,7 @@ buildTree absPath displayName depth = do
                     else Map.empty
           node = FileNode
             { fileNodeName     = T.pack displayName
-            , fileNodePath     = T.pack absPath
+            , fileNodePath     = T.pack relPath
             , fileNodeIsDir    = False
             , fileNodeChildren = []
             , fileNodeSize     = Just (fromIntegral sz)

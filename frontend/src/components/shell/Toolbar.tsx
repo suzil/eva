@@ -239,33 +239,52 @@ export function Toolbar() {
 
   const handleRun = () => {
     if (!selectedProgramId) return
-    setRunPhase('validating')
 
-    validateMutation.mutate(undefined, {
-      onSuccess: (result) => {
-        if (!result.valid) {
-          const msgs = result.errors.map((e) => e.message).join('; ')
-          showRunError(msgs || 'Graph has validation errors')
-          return
-        }
-        setRunPhase('creating')
-        createRunMutation.mutate(undefined, {
-          onSuccess: (run) => {
-            clearRunState()
-            clearRunOutput()
-            setActiveRunId(run.id)
-            setBottomPanelOpen(true)
-            setActiveBottomTab('output')
-          },
-          onError: (err) => {
-            showRunError((err as Error).message || 'Failed to start run')
-          },
-        })
-      },
-      onError: (err) => {
-        showRunError((err as Error).message || 'Validation failed')
-      },
-    })
+    const validateAndRun = () => {
+      setRunPhase('validating')
+      validateMutation.mutate(undefined, {
+        onSuccess: (result) => {
+          if (!result.valid) {
+            const msgs = result.errors.map((e) => e.message).join('; ')
+            showRunError(msgs || 'Graph has validation errors')
+            return
+          }
+          setRunPhase('creating')
+          createRunMutation.mutate(undefined, {
+            onSuccess: (run) => {
+              clearRunState()
+              clearRunOutput()
+              setActiveRunId(run.id)
+              setBottomPanelOpen(true)
+              setActiveBottomTab('output')
+            },
+            onError: (err) => {
+              showRunError((err as Error).message || 'Failed to start run')
+            },
+          })
+        },
+        onError: (err) => {
+          showRunError((err as Error).message || 'Validation failed')
+        },
+      })
+    }
+
+    // Always save the current canvas state before running to ensure the DB
+    // matches what the user sees (covers forgotten saves and silent save failures).
+    if (isDirty) {
+      saveMutation.mutate(buildGraph(), {
+        onSuccess: () => {
+          markClean()
+          setSpecSyncState('graph_source')
+          validateAndRun()
+        },
+        onError: (err) => {
+          showRunError('Could not save before run: ' + ((err as Error).message || 'unknown error'))
+        },
+      })
+    } else {
+      validateAndRun()
+    }
   }
 
   const handleCancel = () => {

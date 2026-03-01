@@ -1,5 +1,6 @@
 import { type EditorTab, useUiStore } from '../../store/uiStore'
 import { ContentArea } from './ContentArea'
+import { SidePanel } from './SidePanel'
 import { CodeEditorView } from '../editor/CodeEditorView'
 import { SpecEditorView } from '../editor/SpecEditorView'
 
@@ -16,6 +17,8 @@ export function EditorTabs() {
   const specSyncState = useUiStore((s) => s.specSyncState)
   const setSpecSyncState = useUiStore((s) => s.setSpecSyncState)
 
+  const setActiveActivity = useUiStore((s) => s.setActiveActivity)
+
   const handleTabChange = (newTab: EditorTab) => {
     // T2: leaving SPEC with dirty YAML — note conflict so modal appears when user returns
     if (activeTab === 'spec' && newTab !== 'spec' && specDirty) {
@@ -24,6 +27,10 @@ export function EditorTabs() {
     // T1: entering SPEC fresh (not returning to an already-flagged conflict) — mark YAML as source
     if (newTab === 'spec' && specSyncState !== 'conflict') {
       setSpecSyncState('yaml_source')
+    }
+    // Auto-switch sidebar to Codebase panel when entering Code tab
+    if (newTab === 'code') {
+      setActiveActivity('codebase')
     }
     setActiveTab(newTab)
   }
@@ -58,7 +65,12 @@ export function EditorTabs() {
       {/* Content */}
       <div className="flex flex-1 overflow-hidden">
         {activeTab === 'graph' && <ContentArea />}
-        {activeTab === 'code' && <CodeEditorView />}
+        {activeTab === 'code' && (
+          <>
+            <SidePanel />
+            <CodeEditorView />
+          </>
+        )}
         {activeTab === 'spec' && <SpecEditorView />}
       </div>
     </div>

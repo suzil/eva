@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { GitBranch, Eye, Check, RotateCcw } from 'lucide-react'
+import { GitBranch, Eye, Check, RotateCcw, Loader2 } from 'lucide-react'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useUiStore } from '../../store/uiStore'
 import { useSaveGraph, usePatchProgram, useProgram } from '../../api/hooks'
@@ -203,12 +203,15 @@ export function GraphProposalCard({ graph, name, summary }: GraphProposalCardPro
   const [acceptedLocally, setAcceptedLocally] = useState(false)
 
   const setPreviewOverlayGraph = useCanvasStore((s) => s.setPreviewOverlayGraph)
+  const setAcceptedPreviewGraph = useCanvasStore((s) => s.setAcceptedPreviewGraph)
   const loadGraph = useCanvasStore((s) => s.loadGraph)
+  const markDirty = useCanvasStore((s) => s.markDirty)
   const currentProgramId = useCanvasStore((s) => s.currentProgramId)
   const previewOverlayGraph = useCanvasStore((s) => s.previewOverlayGraph)
   const acceptedPreviewGraph = useCanvasStore((s) => s.acceptedPreviewGraph)
 
-  // Accepted if the user clicked Accept here OR accepted this same graph from the canvas preview
+  // Accepted if the user clicked Accept here OR accepted this same graph from the canvas preview.
+  // acceptedPreviewGraph lives in the store so it survives tab-switch unmounts.
   const accepted = acceptedLocally || acceptedPreviewGraph === graph
   const isPreviewActive = previewOverlayGraph !== null
 
@@ -241,9 +244,9 @@ export function GraphProposalCard({ graph, name, summary }: GraphProposalCardPro
     }
     loadGraph(graph, currentProgramId)
     setPreviewOverlayGraph(null)
+    setAcceptedPreviewGraph(graph)  // persists across tab-switch unmounts
     setAcceptedLocally(true)
-    setDetailPanelTab('inspector')
-    saveMutation.mutate(graph)
+    saveMutation.mutate(graph, { onError: () => markDirty() })
     // Auto-rename if the program still has a generic placeholder name
     const currentName = currentProgram?.name ?? ''
     if (/^untitled$/i.test(currentName.trim()) || currentName.trim() === '') {
@@ -256,23 +259,26 @@ export function GraphProposalCard({ graph, name, summary }: GraphProposalCardPro
     setDetailPanelTab('magi')
   }
 
-  if (accepted) {
-    return (
-      <div className="mx-3 rounded border border-eva-green-500/30 bg-eva-green-500/5 px-3 py-2">
-        <div className="flex items-center gap-1.5 text-xs text-eva-green-500">
-          <Check className="h-3.5 w-3.5" />
-          <span className="font-display uppercase tracking-widest">Program accepted — canvas updated</span>
-        </div>
-      </div>
-    )
-  }
+  const isSaving = saveMutation.isPending || patchMutation.isPending
 
   return (
-    <div className="mx-3 rounded border border-terminal-600 bg-terminal-900">
+    <div
+      className={[
+        'mx-3 rounded border bg-terminal-900 transition-colors',
+        accepted ? 'border-eva-green-500/40' : 'border-terminal-600',
+      ].join(' ')}
+    >
       {/* Header */}
-      <div className="flex items-center gap-1.5 border-b border-terminal-700 px-3 py-2 text-xs font-display uppercase tracking-widest text-magi-blue-400">
-        <GitBranch className="h-3.5 w-3.5" />
-        Program Proposal
+      <div
+        className={[
+          'flex items-center gap-1.5 border-b px-3 py-2 text-xs font-display uppercase tracking-widest transition-colors',
+          accepted
+            ? 'border-eva-green-500/30 text-eva-green-400'
+            : 'border-terminal-700 text-magi-blue-400',
+        ].join(' ')}
+      >
+        {accepted ? <Check className="h-3.5 w-3.5" /> : <GitBranch className="h-3.5 w-3.5" />}
+        {accepted ? 'Program accepted' : 'Program Proposal'}
       </div>
 
       {/* Summary */}
@@ -305,37 +311,52 @@ export function GraphProposalCard({ graph, name, summary }: GraphProposalCardPro
         </div>
       )}
 
-      {/* Action bar */}
+      {/* Action bar — replaced by accepted strip once applied */}
       <div className="flex items-center gap-2 border-t border-terminal-700 px-3 py-2">
-        <button
-          type="button"
-          onClick={handlePreview}
-          className={[
-            'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
-            isPreviewActive
-              ? 'bg-magi-blue-500/20 text-magi-blue-300 border border-magi-blue-500/40'
-              : 'border border-terminal-600 text-terminal-300 hover:border-magi-blue-500/60 hover:text-magi-blue-300',
-          ].join(' ')}
-        >
-          <Eye className="h-3 w-3" />
-          Preview on Canvas
-        </button>
-        <button
-          type="button"
-          onClick={handleAccept}
-          className="flex items-center gap-1 rounded border border-eva-green-500/40 bg-eva-green-500/10 px-2 py-1 text-xs text-eva-green-400 transition-colors hover:bg-eva-green-500/20"
-        >
-          <Check className="h-3 w-3" />
-          Accept
-        </button>
-        <button
-          type="button"
-          onClick={handleRevise}
-          className="flex items-center gap-1 rounded border border-terminal-600 px-2 py-1 text-xs text-terminal-400 transition-colors hover:border-terminal-500 hover:text-terminal-200"
-        >
-          <RotateCcw className="h-3 w-3" />
-          Revise
-        </button>
+        {accepted ? (
+          <div className="flex w-full items-center gap-1.5 text-xs text-eva-green-500">
+            {isSaving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            <span className="font-display uppercase tracking-widest">
+              {isSaving ? 'Saving…' : 'Applied to canvas'}
+            </span>
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={handlePreview}
+              className={[
+                'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
+                isPreviewActive
+                  ? 'bg-magi-blue-500/20 text-magi-blue-300 border border-magi-blue-500/40'
+                  : 'border border-terminal-600 text-terminal-300 hover:border-magi-blue-500/60 hover:text-magi-blue-300',
+              ].join(' ')}
+            >
+              <Eye className="h-3 w-3" />
+              Preview on Canvas
+            </button>
+            <button
+              type="button"
+              onClick={handleAccept}
+              className="flex items-center gap-1 rounded border border-eva-green-500/40 bg-eva-green-500/10 px-2 py-1 text-xs text-eva-green-400 transition-colors hover:bg-eva-green-500/20"
+            >
+              <Check className="h-3 w-3" />
+              Accept
+            </button>
+            <button
+              type="button"
+              onClick={handleRevise}
+              className="flex items-center gap-1 rounded border border-terminal-600 px-2 py-1 text-xs text-terminal-400 transition-colors hover:border-terminal-500 hover:text-terminal-200"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Revise
+            </button>
+          </>
+        )}
       </div>
     </div>
   )

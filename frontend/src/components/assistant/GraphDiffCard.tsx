@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { GitMerge, Check, X } from 'lucide-react'
+import { GitMerge, Check, X, Loader2 } from 'lucide-react'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useSaveGraph } from '../../api/hooks'
 import type { GraphDiff } from '../../types'
@@ -139,30 +139,33 @@ export function GraphDiffCard({ diff, summary }: GraphDiffCardProps) {
     setRejected(true)
   }
 
-  if (accepted) {
-    return (
-      <div className="mx-3 rounded border border-eva-green-500/30 bg-eva-green-500/5 px-3 py-2">
-        <div className="flex items-center gap-1.5 text-xs text-eva-green-500">
-          <Check className="h-3.5 w-3.5" />
-          <span className="font-display uppercase tracking-widest">
-            Program diff applied — {totalChanges} change{totalChanges !== 1 ? 's' : ''} — canvas updated
-          </span>
-        </div>
-      </div>
-    )
-  }
+  const isSaving = saveMutation.isPending
 
   return (
-    <div className="mx-3 rounded border border-terminal-600 bg-terminal-900">
+    <div
+      className={[
+        'mx-3 rounded border bg-terminal-900 transition-colors',
+        accepted ? 'border-eva-green-500/40' : 'border-terminal-600',
+      ].join(' ')}
+    >
       {/* Header */}
-      <div className="flex items-center gap-1.5 border-b border-terminal-700 px-3 py-2 text-xs font-display uppercase tracking-widest text-magi-blue-400">
-        <GitMerge className="h-3.5 w-3.5" />
-        Program Diff
-        <div className="ml-auto flex items-center gap-1">
-          <CountBadge count={diff.addedNodes.length + diff.addedEdges.length} color={DIFF_COLORS.added} />
-          <CountBadge count={diff.modifiedNodes.length} color={DIFF_COLORS.modified} />
-          <CountBadge count={diff.removedNodeIds.length + diff.removedEdgeIds.length} color={DIFF_COLORS.removed} />
-        </div>
+      <div
+        className={[
+          'flex items-center gap-1.5 border-b px-3 py-2 text-xs font-display uppercase tracking-widest transition-colors',
+          accepted
+            ? 'border-eva-green-500/30 text-eva-green-400'
+            : 'border-terminal-700 text-magi-blue-400',
+        ].join(' ')}
+      >
+        {accepted ? <Check className="h-3.5 w-3.5" /> : <GitMerge className="h-3.5 w-3.5" />}
+        {accepted ? `Applied — ${totalChanges} change${totalChanges !== 1 ? 's' : ''}` : 'Program Diff'}
+        {!accepted && (
+          <div className="ml-auto flex items-center gap-1">
+            <CountBadge count={diff.addedNodes.length + diff.addedEdges.length} color={DIFF_COLORS.added} />
+            <CountBadge count={diff.modifiedNodes.length} color={DIFF_COLORS.modified} />
+            <CountBadge count={diff.removedNodeIds.length + diff.removedEdgeIds.length} color={DIFF_COLORS.removed} />
+          </div>
+        )}
       </div>
 
       {/* Summary */}
@@ -222,7 +225,18 @@ export function GraphDiffCard({ diff, summary }: GraphDiffCardProps) {
 
       {/* Action bar */}
       <div className="flex items-center gap-2 border-t border-terminal-700 px-3 py-2">
-        {rejected ? (
+        {accepted ? (
+          <div className="flex w-full items-center gap-1.5 text-xs text-eva-green-500">
+            {isSaving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            <span className="font-display uppercase tracking-widest">
+              {isSaving ? 'Saving…' : 'Applied to canvas'}
+            </span>
+          </div>
+        ) : rejected ? (
           <span className="text-xs italic text-terminal-500">Rejected</span>
         ) : (
           <>
