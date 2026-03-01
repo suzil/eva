@@ -14,10 +14,25 @@ const SYSTEMS: { value: SystemType; label: string }[] = [
   { value: 'codebase', label: 'Codebase' },
 ]
 
+const SYSTEM_ACTIONS: Partial<Record<SystemType, { value: string; label: string }[]>> = {
+  linear: [
+    { value: 'list_issues', label: 'List Issues' },
+    { value: 'create_issue', label: 'Create Issue' },
+    { value: 'update_issue', label: 'Update Issue' },
+  ],
+  codebase: [
+    { value: 'list_tree', label: 'List Tree' },
+    { value: 'read_file', label: 'Read File' },
+    { value: 'git_diff', label: 'Git Diff' },
+    { value: 'write_file', label: 'Write File' },
+  ],
+}
+
 export function ConnectorForm({ config, onChange }: Props) {
   const update = (patch: Partial<ConnectorConfig>) => onChange({ ...config, ...patch })
   const { data: allCredentials = [] } = useCredentials()
   const systemCredentials = allCredentials.filter((c) => c.system === config.system)
+  const systemActions = SYSTEM_ACTIONS[config.system] ?? []
 
   return (
     <div className="space-y-4">
@@ -29,7 +44,7 @@ export function ConnectorForm({ config, onChange }: Props) {
         <select
           value={config.system}
           onChange={(e) => {
-            update({ system: e.target.value as SystemType, credentialId: undefined })
+            update({ system: e.target.value as SystemType, credentialId: undefined, actionFilter: [] })
           }}
           className={selectClass}
         >
@@ -94,6 +109,37 @@ export function ConnectorForm({ config, onChange }: Props) {
           className={inputClass}
         />
       </div>
+
+      {/* Action filter */}
+      {systemActions.length > 0 && (
+        <>
+          <SectionLabel>Actions</SectionLabel>
+          <div>
+            <FieldLabel>Allowed actions (leave all unchecked to allow all)</FieldLabel>
+            <div className="space-y-1.5">
+              {systemActions.map((action) => {
+                const checked = config.actionFilter.includes(action.value)
+                return (
+                  <label key={action.value} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = checked
+                          ? config.actionFilter.filter((a) => a !== action.value)
+                          : [...config.actionFilter, action.value]
+                        update({ actionFilter: next })
+                      }}
+                      className="h-3.5 w-3.5 rounded accent-at-field-500"
+                    />
+                    <span className="text-sm text-terminal-200">{action.label}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

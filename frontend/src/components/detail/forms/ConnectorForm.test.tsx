@@ -92,4 +92,67 @@ describe('ConnectorForm', () => {
       expect.objectContaining({ endpoint: 'https://api.example.com' }),
     )
   })
+
+  // ---------------------------------------------------------------------------
+  // Action filter
+  // ---------------------------------------------------------------------------
+
+  it('shows Actions section for linear system', () => {
+    renderForm()
+    expect(screen.getByText('Actions')).toBeInTheDocument()
+    expect(screen.getByLabelText('List Issues')).toBeInTheDocument()
+    expect(screen.getByLabelText('Create Issue')).toBeInTheDocument()
+    expect(screen.getByLabelText('Update Issue')).toBeInTheDocument()
+  })
+
+  it('does not show Actions section for github system', () => {
+    renderForm({ ...BASE_CONFIG, system: 'github' })
+    expect(screen.queryByText('Actions')).not.toBeInTheDocument()
+  })
+
+  it('does not show Actions section for http system', () => {
+    renderForm({ ...BASE_CONFIG, system: 'http' })
+    expect(screen.queryByText('Actions')).not.toBeInTheDocument()
+  })
+
+  it('shows Actions section with codebase actions for codebase system', () => {
+    renderForm({ ...BASE_CONFIG, system: 'codebase' })
+    expect(screen.getByLabelText('List Tree')).toBeInTheDocument()
+    expect(screen.getByLabelText('Read File')).toBeInTheDocument()
+    expect(screen.getByLabelText('Git Diff')).toBeInTheDocument()
+    expect(screen.getByLabelText('Write File')).toBeInTheDocument()
+  })
+
+  it('checking an action adds it to actionFilter', () => {
+    const { onChange } = renderForm({ ...BASE_CONFIG, actionFilter: [] })
+    fireEvent.click(screen.getByLabelText('List Issues'))
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ actionFilter: ['list_issues'] }),
+    )
+  })
+
+  it('unchecking an action removes it from actionFilter', () => {
+    const { onChange } = renderForm({ ...BASE_CONFIG, actionFilter: ['list_issues', 'create_issue'] })
+    fireEvent.click(screen.getByLabelText('List Issues'))
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ actionFilter: ['create_issue'] }),
+    )
+  })
+
+  it('changing system resets actionFilter to []', () => {
+    vi.mocked(useCredentials).mockReturnValue({ data: [LINEAR_CREDENTIAL] } as unknown as ReturnType<typeof useCredentials>)
+    const { onChange } = renderForm({ ...BASE_CONFIG, credentialId: 'cred-1', actionFilter: ['list_issues'] })
+    const systemSelect = screen.getByDisplayValue('Linear')
+    fireEvent.change(systemSelect, { target: { value: 'codebase' } })
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ system: 'codebase', credentialId: undefined, actionFilter: [] }),
+    )
+  })
+
+  it('action checkboxes reflect current actionFilter state', () => {
+    renderForm({ ...BASE_CONFIG, actionFilter: ['create_issue'] })
+    expect(screen.getByLabelText('List Issues')).not.toBeChecked()
+    expect(screen.getByLabelText('Create Issue')).toBeChecked()
+    expect(screen.getByLabelText('Update Issue')).not.toBeChecked()
+  })
 })
