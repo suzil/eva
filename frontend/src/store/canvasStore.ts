@@ -48,6 +48,13 @@ interface CanvasState {
   /** Proposed graph from the assistant — rendered by GraphPreviewOverlay. Null when not in preview mode. */
   previewOverlayGraph: Graph | null
 
+  /**
+   * The graph object most recently accepted via the canvas PreviewBanner.
+   * GraphProposalCard uses reference equality against this to sync its "accepted" state
+   * when the user accepts from the canvas rather than from the chat card itself.
+   */
+  acceptedPreviewGraph: Graph | null
+
   /** Node id currently hovered via a NodeReferenceChip in the AssistantPanel. Null when no chip is hovered. */
   hoveredNodeId: string | null
 
@@ -85,6 +92,7 @@ interface CanvasState {
   buildGraph: () => Graph
 
   setPreviewOverlayGraph: (graph: Graph | null) => void
+  setAcceptedPreviewGraph: (graph: Graph | null) => void
   /** Mark the canvas as having unsaved changes (called after accepting a proposal via loadGraph). */
   markDirty: () => void
   setHoveredNodeId: (id: string | null) => void
@@ -105,6 +113,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   future: [],
   triggerFitView: false,
   previewOverlayGraph: null,
+  acceptedPreviewGraph: null,
   hoveredNodeId: null,
 
   loadGraph: (graph, programId) => {
@@ -315,6 +324,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   setPreviewOverlayGraph: (graph) => set({ previewOverlayGraph: graph }),
+  setAcceptedPreviewGraph: (graph) => set({ acceptedPreviewGraph: graph }),
   markDirty: () => set({ isDirty: true }),
   setHoveredNodeId: (id) => set({ hoveredNodeId: id }),
 

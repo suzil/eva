@@ -70,7 +70,7 @@ checkTriggerPresence :: Graph -> [ValidationError]
 checkTriggerPresence g =
   let triggers = filter isTrigger (Map.elems (graphNodes g))
   in if null triggers
-       then [ValidationError { veMessage = "Graph must contain at least one Trigger node", veNodeId = Nothing }]
+       then [ValidationError { veMessage = "Program must contain at least one Trigger node", veNodeId = Nothing }]
        else []
   where
     isTrigger n = case nodeType n of

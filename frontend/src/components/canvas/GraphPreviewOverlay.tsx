@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -10,34 +10,38 @@ import {
   type Edge,
   type NodeTypes,
   type EdgeTypes,
+  type NodeMouseHandler,
 } from '@xyflow/react'
-import { Check, X, MessageSquare } from 'lucide-react'
+import { Check, X, MessageSquare, ChevronRight } from 'lucide-react'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useUiStore } from '../../store/uiStore'
-import type { EvaNodeData, Graph } from '../../types'
+import { useSaveGraph } from '../../api/hooks'
+import type { EvaNodeData, Graph, NodeType } from '../../types'
 import { NODE_TYPE_COLORS, NODE_TYPE_LABELS } from '../../constants/nodeConstants'
 
 // ---------------------------------------------------------------------------
-// PreviewNode — simplified, non-interactive, dashed-border node
+// PreviewNode — dashed-border node, highlights when selected
 // ---------------------------------------------------------------------------
 
-function PreviewNode({ data }: NodeProps<Node<EvaNodeData>>) {
+function PreviewNode({ data, selected }: NodeProps<Node<EvaNodeData>>) {
   const color = NODE_TYPE_COLORS[data.nodeType.type] ?? '#00B4FF'
   const typeLabel = NODE_TYPE_LABELS[data.nodeType.type] ?? data.nodeType.type
 
   return (
     <div
-      className="rounded-lg border border-dashed bg-terminal-800/60"
+      className="rounded-lg border bg-terminal-800/60 cursor-pointer transition-all"
       style={{
+        borderStyle: selected ? 'solid' : 'dashed',
         borderColor: color,
         minWidth: 140,
-        opacity: 0.8,
-        boxShadow: `0 0 10px ${color}33`,
-        animation: 'glow-pulse 2s ease-in-out infinite',
+        opacity: selected ? 1 : 0.85,
+        boxShadow: selected
+          ? `0 0 16px ${color}66, 0 0 4px ${color}44`
+          : `0 0 10px ${color}33`,
+        animation: selected ? undefined : 'glow-pulse 2s ease-in-out infinite',
       }}
     >
       <div className="flex items-center gap-2 px-3 py-2">
-        {/* Left accent strip */}
         <div className="h-full w-1 shrink-0 self-stretch rounded-full" style={{ backgroundColor: color }} />
         <div className="min-w-0">
           <p
@@ -48,6 +52,7 @@ function PreviewNode({ data }: NodeProps<Node<EvaNodeData>>) {
           </p>
           <p className="truncate text-xs text-terminal-200">{data.label}</p>
         </div>
+        {selected && <ChevronRight className="ml-auto h-3 w-3 shrink-0 text-terminal-400" />}
       </div>
     </div>
   )
@@ -89,6 +94,8 @@ const previewEdgeTypes: EdgeTypes = {
 
 // ---------------------------------------------------------------------------
 // Graph-to-ReactFlow conversion
+// Note: sourceHandle/targetHandle are omitted so ReactFlow connects nodes at
+// their centre by default (PreviewNode has no named handles defined).
 // ---------------------------------------------------------------------------
 
 function graphToFlowElements(graph: Graph): { nodes: Node<EvaNodeData>[]; edges: Edge[] } {
@@ -98,16 +105,13 @@ function graphToFlowElements(graph: Graph): { nodes: Node<EvaNodeData>[]; edges:
     position: { x: n.posX, y: n.posY },
     data: { label: n.label, nodeType: n.type },
     draggable: false,
-    selectable: false,
     connectable: false,
   }))
 
   const edges: Edge[] = graph.edges.map((e) => ({
     id: e.id,
     source: e.sourceNode,
-    sourceHandle: e.sourcePort,
     target: e.targetNode,
-    targetHandle: e.targetPort,
     type: e.category,
     data: { category: e.category },
     selectable: false,
@@ -119,25 +123,128 @@ function graphToFlowElements(graph: Graph): { nodes: Node<EvaNodeData>[]; edges:
 }
 
 // ---------------------------------------------------------------------------
+// NodeDetailPanel — shown in bottom-left when a preview node is selected
+// ---------------------------------------------------------------------------
+
+function nodeConfigRows(nodeType: NodeType): { label: string; value: string }[] {
+  switch (nodeType.type) {
+    case 'trigger': {
+      const cfg = nodeType.config
+      const rows: { label: string; value: string }[] = [{ label: 'type', value: cfg.type }]
+      if (cfg.schedule) rows.push({ label: 'schedule', value: cfg.schedule })
+      if (cfg.eventFilter) rows.push({ label: 'event filter', value: cfg.eventFilter })
+      return rows
+    }
+    case 'agent': {
+      const cfg = nodeType.config
+      const rows: { label: string; value: string }[] = [
+        { label: 'model', value: cfg.model },
+        { label: 'format', value: cfg.responseFormat },
+        { label: 'temperature', value: String(cfg.temperature) },
+        { label: 'max iterations', value: String(cfg.maxIterations) },
+      ]
+      if (cfg.systemPrompt) {
+        const prompt = cfg.systemPrompt.length > 120
+          ? cfg.systemPrompt.slice(0, 117) + '…'
+          : cfg.systemPrompt
+        rows.push({ label: 'system prompt', value: prompt })
+      }
+      return rows
+    }
+    case 'knowledge': {
+      const cfg = nodeType.config
+      const srcType = cfg.source.type.replace(/^_/, '')
+      const rows: { label: string; value: string }[] = [
+        { label: 'source', value: srcType },
+        { label: 'format', value: cfg.format },
+        { label: 'refresh', value: cfg.refreshPolicy.type },
+      ]
+      if ('value' in cfg.source && typeof cfg.source.value === 'string' && cfg.source.value) {
+        const val = cfg.source.value.length > 120
+          ? cfg.source.value.slice(0, 117) + '…'
+          : cfg.source.value
+        rows.push({ label: 'content', value: val })
+      }
+      return rows
+    }
+    case 'action':
+      return [{ label: 'operation', value: nodeType.config.operation }]
+    case 'connector':
+      return [{ label: 'system', value: nodeType.config.system }]
+  }
+}
+
+interface NodeDetailPanelProps {
+  nodeType: NodeType
+  label: string
+  onClose: () => void
+}
+
+function NodeDetailPanel({ nodeType, label, onClose }: NodeDetailPanelProps) {
+  const color = NODE_TYPE_COLORS[nodeType.type] ?? '#00B4FF'
+  const typeLabel = NODE_TYPE_LABELS[nodeType.type] ?? nodeType.type
+  const rows = nodeConfigRows(nodeType)
+
+  return (
+    <div className="absolute bottom-14 left-4 z-30 w-64 rounded-lg border border-terminal-600 bg-terminal-900/95 shadow-xl backdrop-blur-sm">
+      {/* Header */}
+      <div
+        className="flex items-center justify-between border-b border-terminal-700 px-3 py-2"
+        style={{ borderLeftColor: color, borderLeftWidth: 3 }}
+      >
+        <div>
+          <p className="text-[9px] font-display font-semibold uppercase tracking-widest" style={{ color }}>
+            {typeLabel}
+          </p>
+          <p className="text-xs text-terminal-100 font-medium">{label}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded p-0.5 text-terminal-500 transition-colors hover:text-terminal-200"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+
+      {/* Config rows */}
+      {rows.length > 0 && (
+        <div className="space-y-1 px-3 py-2">
+          {rows.map((r) => (
+            <div key={r.label} className="flex flex-col gap-0.5">
+              <span className="text-[9px] uppercase tracking-wider text-terminal-500 font-display">{r.label}</span>
+              <span className="break-words text-[11px] text-terminal-200 font-mono leading-relaxed">{r.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Banner — floating top bar with Accept / Edit in Chat / Cancel
 // ---------------------------------------------------------------------------
 
 function PreviewBanner() {
   const graph = useCanvasStore((s) => s.previewOverlayGraph)!
   const loadGraph = useCanvasStore((s) => s.loadGraph)
-  const markDirty = useCanvasStore((s) => s.markDirty)
   const setPreviewOverlayGraph = useCanvasStore((s) => s.setPreviewOverlayGraph)
+  const setAcceptedPreviewGraph = useCanvasStore((s) => s.setAcceptedPreviewGraph)
   const currentProgramId = useCanvasStore((s) => s.currentProgramId)
 
   const setDetailPanelTab = useUiStore((s) => s.setDetailPanelTab)
   const setPrefillAssistantMessage = useUiStore((s) => s.setPrefillAssistantMessage)
 
+  const saveMutation = useSaveGraph(currentProgramId ?? '')
+
   function handleAccept() {
     if (!currentProgramId) return
     loadGraph(graph, currentProgramId)
-    markDirty()
     setPreviewOverlayGraph(null)
+    setAcceptedPreviewGraph(graph)
     setDetailPanelTab('inspector')
+    saveMutation.mutate(graph)
   }
 
   function handleEditInChat() {
@@ -201,13 +308,20 @@ function PreviewBanner() {
 
 function OverlayInner() {
   const previewOverlayGraph = useCanvasStore((s) => s.previewOverlayGraph)
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
 
   const { nodes, edges } = useMemo(
     () => (previewOverlayGraph ? graphToFlowElements(previewOverlayGraph) : { nodes: [], edges: [] }),
     [previewOverlayGraph],
   )
 
+  const onNodeClick: NodeMouseHandler<Node<EvaNodeData>> = (_e, node) => {
+    setSelectedNodeId((prev) => (prev === node.id ? null : node.id))
+  }
+
   if (!previewOverlayGraph) return null
+
+  const selectedDomainNode = selectedNodeId ? previewOverlayGraph.nodes[selectedNodeId] : null
 
   return (
     <div className="absolute inset-0 z-20">
@@ -223,7 +337,7 @@ function OverlayInner() {
         nodesDraggable={false}
         nodesConnectable={false}
         edgesReconnectable={false}
-        elementsSelectable={false}
+        onNodeClick={onNodeClick}
         panOnDrag
         zoomOnScroll
         fitView
@@ -235,6 +349,24 @@ function OverlayInner() {
 
       {/* Floating banner */}
       <PreviewBanner />
+
+      {/* Node detail panel */}
+      {selectedDomainNode && (
+        <NodeDetailPanel
+          nodeType={selectedDomainNode.type}
+          label={selectedDomainNode.label}
+          onClose={() => setSelectedNodeId(null)}
+        />
+      )}
+
+      {/* Click-a-node hint — fades once user has clicked */}
+      {!selectedNodeId && nodes.length > 0 && (
+        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2">
+          <p className="rounded border border-terminal-700/60 bg-terminal-900/80 px-3 py-1 text-[10px] text-terminal-500 backdrop-blur-sm">
+            Click a node to inspect its configuration
+          </p>
+        </div>
+      )}
     </div>
   )
 }

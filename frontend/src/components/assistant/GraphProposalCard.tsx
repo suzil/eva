@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { GitBranch, Eye, Check, RotateCcw } from 'lucide-react'
 import { useCanvasStore } from '../../store/canvasStore'
 import { useUiStore } from '../../store/uiStore'
+import { useSaveGraph } from '../../api/hooks'
 import type { Graph, Node } from '../../types'
 import { NODE_TYPE_COLORS, NODE_TYPE_LABELS } from '../../constants/nodeConstants'
 
@@ -27,11 +28,11 @@ function validateProposedGraph(graph: Graph): string[] {
   const errors: string[] = []
   const nodes = Object.values(graph.nodes)
   if (nodes.length === 0) {
-    errors.push('Proposed graph has no nodes')
+    errors.push('Proposed program has no nodes')
     return errors
   }
   const hasTrigger = nodes.some((n) => n.type.type === 'trigger')
-  if (!hasTrigger) errors.push('Graph requires at least one Trigger node')
+  if (!hasTrigger) errors.push('Program requires at least one Trigger node')
   if (nodes.length > 1 && graph.edges.length === 0)
     errors.push('Nodes are not connected — no edges defined')
   return errors
@@ -198,17 +199,22 @@ function NodeList({ nodes }: { nodes: Node[] }) {
 
 export function GraphProposalCard({ graph, summary }: GraphProposalCardProps) {
   const [validationErrors, setValidationErrors] = useState<string[]>([])
-  const [accepted, setAccepted] = useState(false)
+  const [acceptedLocally, setAcceptedLocally] = useState(false)
 
   const setPreviewOverlayGraph = useCanvasStore((s) => s.setPreviewOverlayGraph)
   const loadGraph = useCanvasStore((s) => s.loadGraph)
-  const markDirty = useCanvasStore((s) => s.markDirty)
   const currentProgramId = useCanvasStore((s) => s.currentProgramId)
   const previewOverlayGraph = useCanvasStore((s) => s.previewOverlayGraph)
+  const acceptedPreviewGraph = useCanvasStore((s) => s.acceptedPreviewGraph)
+
+  // Accepted if the user clicked Accept here OR accepted this same graph from the canvas preview
+  const accepted = acceptedLocally || acceptedPreviewGraph === graph
   const isPreviewActive = previewOverlayGraph !== null
 
   const setDetailPanelTab = useUiStore((s) => s.setDetailPanelTab)
   const setPrefillAssistantMessage = useUiStore((s) => s.setPrefillAssistantMessage)
+
+  const saveMutation = useSaveGraph(currentProgramId ?? '')
 
   const nodes = Object.values(graph.nodes)
 
@@ -231,10 +237,11 @@ export function GraphProposalCard({ graph, summary }: GraphProposalCardProps) {
       return
     }
     loadGraph(graph, currentProgramId)
-    markDirty()
     setPreviewOverlayGraph(null)
-    setAccepted(true)
+    setAcceptedLocally(true)
     setDetailPanelTab('inspector')
+    // Persist to backend so the program is immediately runnable
+    saveMutation.mutate(graph)
   }
 
   function handleRevise() {
@@ -247,7 +254,7 @@ export function GraphProposalCard({ graph, summary }: GraphProposalCardProps) {
       <div className="mx-3 rounded border border-eva-green-500/30 bg-eva-green-500/5 px-3 py-2">
         <div className="flex items-center gap-1.5 text-xs text-eva-green-500">
           <Check className="h-3.5 w-3.5" />
-          <span className="font-display uppercase tracking-widest">Graph accepted — canvas updated</span>
+          <span className="font-display uppercase tracking-widest">Program accepted — canvas updated</span>
         </div>
       </div>
     )
@@ -258,7 +265,7 @@ export function GraphProposalCard({ graph, summary }: GraphProposalCardProps) {
       {/* Header */}
       <div className="flex items-center gap-1.5 border-b border-terminal-700 px-3 py-2 text-xs font-display uppercase tracking-widest text-magi-blue-400">
         <GitBranch className="h-3.5 w-3.5" />
-        Graph Proposal
+        Program Proposal
       </div>
 
       {/* Summary */}

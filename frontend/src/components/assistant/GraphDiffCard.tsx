@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { GitMerge, Check, X } from 'lucide-react'
 import { useCanvasStore } from '../../store/canvasStore'
+import { useSaveGraph } from '../../api/hooks'
 import type { GraphDiff } from '../../types'
 import { NODE_TYPE_COLORS, NODE_TYPE_LABELS } from '../../constants/nodeConstants'
 
@@ -91,8 +92,12 @@ export function GraphDiffCard({ diff, summary }: GraphDiffCardProps) {
   const [rejected, setRejected] = useState(false)
 
   const applyGraphDiff = useCanvasStore((s) => s.applyGraphDiff)
+  const buildGraph = useCanvasStore((s) => s.buildGraph)
+  const currentProgramId = useCanvasStore((s) => s.currentProgramId)
   const canvasNodes = useCanvasStore((s) => s.nodes)
   const canvasEdges = useCanvasStore((s) => s.edges)
+
+  const saveMutation = useSaveGraph(currentProgramId ?? '')
 
   // Look up label + type for a node id (for removed/modified nodes which are
   // still on canvas at render time)
@@ -124,6 +129,10 @@ export function GraphDiffCard({ diff, summary }: GraphDiffCardProps) {
   function handleAccept() {
     applyGraphDiff(diff)
     setAccepted(true)
+    // Persist to backend so the program is immediately runnable
+    if (currentProgramId) {
+      saveMutation.mutate(buildGraph())
+    }
   }
 
   function handleReject() {
@@ -136,7 +145,7 @@ export function GraphDiffCard({ diff, summary }: GraphDiffCardProps) {
         <div className="flex items-center gap-1.5 text-xs text-eva-green-500">
           <Check className="h-3.5 w-3.5" />
           <span className="font-display uppercase tracking-widest">
-            Graph diff applied — {totalChanges} change{totalChanges !== 1 ? 's' : ''} — canvas updated
+            Program diff applied — {totalChanges} change{totalChanges !== 1 ? 's' : ''} — canvas updated
           </span>
         </div>
       </div>
@@ -148,7 +157,7 @@ export function GraphDiffCard({ diff, summary }: GraphDiffCardProps) {
       {/* Header */}
       <div className="flex items-center gap-1.5 border-b border-terminal-700 px-3 py-2 text-xs font-display uppercase tracking-widest text-magi-blue-400">
         <GitMerge className="h-3.5 w-3.5" />
-        Graph Diff
+        Program Diff
         <div className="ml-auto flex items-center gap-1">
           <CountBadge count={diff.addedNodes.length + diff.addedEdges.length} color={DIFF_COLORS.added} />
           <CountBadge count={diff.modifiedNodes.length} color={DIFF_COLORS.modified} />
