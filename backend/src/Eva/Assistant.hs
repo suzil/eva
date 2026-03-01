@@ -344,11 +344,28 @@ assistantTools =
   , ToolSpec
       { toolName        = "propose_graph"
       , toolDescription =
-          "Propose a new program graph for the user to preview and accept. "
-          <> "The 'graph' must be valid Eva Graph JSON (nodes map + edges list). "
-          <> "The 'summary' is a short human-readable description of what the graph does."
+          "Propose a new program graph for the user to preview and accept.\n"
+          <> "The 'graph' MUST follow this EXACT schema — field names and enum values are case-sensitive:\n\n"
+          <> "GRAPH: {\"nodes\": {<id>: NODE, ...}, \"edges\": [EDGE, ...]}\n\n"
+          <> "NODE: {\"id\":\"<str>\", \"label\":\"<str>\", \"posX\":<num>, \"posY\":<num>, \"type\": NODETYPE}\n\n"
+          <> "NODETYPE: {\"type\": \"<kind>\", \"config\": <CONFIG>}\n"
+          <> "  kind=trigger  CONFIG: {\"type\": \"manual\"|\"cron\"|\"webhook\"|\"connectorevent\", \"schedule\":\"<cron>\"(opt)}\n"
+          <> "  kind=agent    CONFIG: {\"model\":\"<str>\", \"systemPrompt\":\"<str>\", "
+          <> "\"responseFormat\":\"text\"|\"json\", \"temperature\":<0-1>, \"maxIterations\":<int>}\n"
+          <> "  kind=knowledge CONFIG: {\"source\": CONTENTSOURCE, \"format\":\"text\"|\"json\"|\"embedded\", "
+          <> "\"refreshPolicy\":{\"type\":\"static\"|\"on_run\"}}\n"
+          <> "  kind=action   CONFIG: {\"operation\":\"template\"|\"code\"|\"api_call\"|\"format\", "
+          <> "\"parameters\":{}, \"errorHandling\":{\"mode\":\"fail\"|\"continue\"}}\n"
+          <> "  kind=connector CONFIG: {\"system\":\"linear\"|\"github\"|\"http\"|\"codebase\", \"actionFilter\":[]}\n\n"
+          <> "CONTENTSOURCE (for knowledge nodes): {\"type\":\"_inline_text\", \"value\":\"<str>\"}\n"
+          <> "  Other source types: \"_file_ref\", \"_url_ref\", \"_library_ref\" (all need \"value\"), "
+          <> "or \"_upstream_port\" (no value field).\n\n"
+          <> "EDGE: {\"id\":\"<str>\", \"sourceNode\":\"<id>\", \"sourcePort\":\"output\", "
+          <> "\"targetNode\":\"<id>\", \"targetPort\":\"input\", \"category\":\"data\"|\"resource\"}\n\n"
+          <> "Use claude-3-5-haiku-20241022 as the model for agent nodes. "
+          <> "Prefer simple trigger+agent graphs for demos."
       , toolParameters  = objSchema
-          [ ("graph",   object ["type" .= ("object" :: Text), "description" .= ("Complete Eva Graph JSON with nodes and edges." :: Text)])
+          [ ("graph",   object ["type" .= ("object" :: Text), "description" .= ("Complete Eva Graph JSON. Follow the schema in the tool description exactly." :: Text)])
           , ("summary", strProp "One-sentence description of the proposed program.")
           ]
           ["graph", "summary"]
@@ -696,6 +713,9 @@ toolProposeGraph :: Value -> AppM ToolResult
 toolProposeGraph args = do
   let mGraph   = parseMaybe (withObject "args" (.: "graph"))   args :: Maybe Value
       mSummary = parseMaybe (withObject "args" (.: "summary")) args :: Maybe Text
+  liftIO $ hPutStrLn stderr $
+    "[MAGI] propose_graph: hasGraph=" <> show (maybe False (const True) mGraph)
+    <> " hasSummary=" <> show (maybe False (const True) mSummary)
   case (mGraph, mSummary) of
     (Nothing, _) -> pure $ ToolResultText
                       "propose_graph: missing required 'graph' argument"
@@ -703,7 +723,10 @@ toolProposeGraph args = do
                       "propose_graph: missing required 'summary' argument"
     (Just gVal, Just summary) ->
       case fromJSON gVal of
-        Error e -> pure $ ToolResultText
+        Error e -> do
+          liftIO $ hPutStrLn stderr $
+            "[MAGI] propose_graph: fromJSON error: " <> e
+          pure $ ToolResultText
                      ("propose_graph: invalid Graph JSON: " <> T.pack e)
         Success g ->
           let errs = validateGraph g
