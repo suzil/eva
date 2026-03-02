@@ -102,6 +102,13 @@ interface CanvasState {
   setHoveredNodeId: (id: string | null) => void
   /** Apply a GraphDiff as a single undoable batch (snapshot → remove → add → modify). */
   applyGraphDiff: (diff: GraphDiff) => void
+
+  /** Delete a node by id (undoable via applyNodeChanges). */
+  deleteNode: (id: string) => void
+  /** Duplicate a node — clones it with a new id, offset position (+40, +40), and cleared selection. */
+  duplicateNode: (id: string) => void
+  /** Delete an edge by id (undoable via applyEdgeChanges). */
+  deleteEdge: (id: string) => void
 }
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
@@ -337,6 +344,27 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setAcceptedPreviewGraph: (graph) => set({ acceptedPreviewGraph: graph }),
   markDirty: () => set({ isDirty: true }),
   setHoveredNodeId: (id) => set({ hoveredNodeId: id }),
+
+  deleteNode: (id) => {
+    get().applyNodeChanges([{ type: 'remove', id }])
+  },
+
+  duplicateNode: (id) => {
+    const node = get().nodes.find((n) => n.id === id)
+    if (!node) return
+    const cloned: Node<EvaNodeData> = {
+      ...node,
+      id: crypto.randomUUID(),
+      selected: false,
+      position: { x: node.position.x + 40, y: node.position.y + 40 },
+      data: { ...node.data, nodeType: { ...node.data.nodeType, config: { ...node.data.nodeType.config } } as typeof node.data.nodeType },
+    }
+    get().addNode(cloned)
+  },
+
+  deleteEdge: (id) => {
+    get().applyEdgeChanges([{ type: 'remove', id }])
+  },
 
   applyGraphDiff: (diff) => {
     get().snapshot()
