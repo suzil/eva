@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -26,6 +26,7 @@ import { useCanvasStore } from '../../store/canvasStore'
 import { useUiStore } from '../../store/uiStore'
 import { useProgram, useKnowledgeEntries, useRefreshKnowledge } from '../../api/hooks'
 import { GraphPreviewOverlay } from '../canvas/GraphPreviewOverlay'
+import { ContextMenu, type MenuItem } from '../canvas/ContextMenu'
 
 // ---------------------------------------------------------------------------
 // KnowledgeStalenessBar — shown when any entry scanned_at is >24h old
@@ -144,6 +145,9 @@ function CanvasInner() {
   const setSelectedNode = useCanvasStore((s) => s.setSelectedNode)
   const setSelectedEdge = useCanvasStore((s) => s.setSelectedEdge)
   const clearSelection = useCanvasStore((s) => s.clearSelection)
+  const deleteNodeFromStore = useCanvasStore((s) => s.deleteNode)
+  const duplicateNodeFromStore = useCanvasStore((s) => s.duplicateNode)
+  const deleteEdgeFromStore = useCanvasStore((s) => s.deleteEdge)
   const snapshot = useCanvasStore((s) => s.snapshot)
   const triggerFitView = useCanvasStore((s) => s.triggerFitView)
   const setTriggerFitView = useCanvasStore((s) => s.setTriggerFitView)
@@ -232,17 +236,119 @@ function CanvasInner() {
     [isOperate, screenToFlowPosition, addNodeToStore],
   )
 
+  // ---------------------------------------------------------------------------
+  // Context menu state
+  // ---------------------------------------------------------------------------
+
+  const [contextMenu, setContextMenu] = useState<{
+    type: 'pane' | 'node' | 'edge'
+    x: number
+    y: number
+    flowPosition?: { x: number; y: number }
+    targetId?: string
+  } | null>(null)
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), [])
+
+  const onPaneContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (isOperate) return
+      e.preventDefault()
+      const flowPosition = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+      setContextMenu({ type: 'pane', x: e.clientX, y: e.clientY, flowPosition })
+    },
+    [isOperate, screenToFlowPosition],
+  )
+
+  const onNodeContextMenu = useCallback(
+    (e: React.MouseEvent, node: Node<EvaNodeData>) => {
+      if (isOperate) return
+      e.preventDefault()
+      setContextMenu({ type: 'node', x: e.clientX, y: e.clientY, targetId: node.id })
+    },
+    [isOperate],
+  )
+
+  const onEdgeContextMenu = useCallback(
+    (e: React.MouseEvent, edge: Edge) => {
+      if (isOperate) return
+      e.preventDefault()
+      setContextMenu({ type: 'edge', x: e.clientX, y: e.clientY, targetId: edge.id })
+    },
+    [isOperate],
+  )
+
   const onNodeClick: NodeMouseHandler<Node<EvaNodeData>> = useCallback(
-    (_e, node) => setSelectedNode(node.id),
-    [setSelectedNode],
+    (_e, node) => { setSelectedNode(node.id); closeContextMenu() },
+    [setSelectedNode, closeContextMenu],
   )
 
   const onEdgeClick: EdgeMouseHandler = useCallback(
-    (_e, edge) => setSelectedEdge(edge.id),
-    [setSelectedEdge],
+    (_e, edge) => { setSelectedEdge(edge.id); closeContextMenu() },
+    [setSelectedEdge, closeContextMenu],
   )
 
-  const onPaneClick = useCallback(() => clearSelection(), [clearSelection])
+  const onPaneClick = useCallback(() => { clearSelection(); closeContextMenu() }, [clearSelection, closeContextMenu])
+
+  // ---------------------------------------------------------------------------
+  // Context menu items
+  // ---------------------------------------------------------------------------
+
+  const contextMenuItems = useMemo((): MenuItem[] => {
+    if (!contextMenu) return []
+
+    if (contextMenu.type === 'pane') {
+      const nodeTypeKeys = Object.keys(NODE_TYPE_META) as (keyof typeof NODE_TYPE_META)[]
+      return [
+        {
+          kind: 'submenu',
+          label: 'Add Node',
+          items: nodeTypeKeys.map((type) => ({
+            kind: 'action' as const,
+            label: NODE_TYPE_META[type].label,
+            icon: NODE_TYPE_META[type].icon,
+            onClick: () => {
+              if (!contextMenu.flowPosition) return
+              const id = crypto.randomUUID()
+              addNodeToStore(buildDefaultNode(id, type, contextMenu.flowPosition))
+            },
+          })),
+        },
+      ]
+    }
+
+    if (contextMenu.type === 'node' && contextMenu.targetId) {
+      const targetId = contextMenu.targetId
+      return [
+        {
+          kind: 'action',
+          label: 'Duplicate',
+          onClick: () => duplicateNodeFromStore(targetId),
+        },
+        { kind: 'separator' },
+        {
+          kind: 'action',
+          label: 'Delete',
+          danger: true,
+          onClick: () => { deleteNodeFromStore(targetId); clearSelection() },
+        },
+      ]
+    }
+
+    if (contextMenu.type === 'edge' && contextMenu.targetId) {
+      const targetId = contextMenu.targetId
+      return [
+        {
+          kind: 'action',
+          label: 'Delete',
+          danger: true,
+          onClick: () => { deleteEdgeFromStore(targetId); clearSelection() },
+        },
+      ]
+    }
+
+    return []
+  }, [contextMenu, addNodeToStore, deleteNodeFromStore, duplicateNodeFromStore, deleteEdgeFromStore, clearSelection])
 
   // Animate data edges whose source node is currently running
   const animatedEdges = useMemo(
@@ -275,6 +381,9 @@ function CanvasInner() {
           onNodeDragStart={isOperate ? undefined : onNodeDragStart}
           onEdgeClick={onEdgeClick}
           onPaneClick={onPaneClick}
+          onPaneContextMenu={onPaneContextMenu}
+          onNodeContextMenu={onNodeContextMenu}
+          onEdgeContextMenu={onEdgeContextMenu}
           nodesDraggable={!isOperate}
           nodesConnectable={!isOperate}
           edgesReconnectable={!isOperate}
@@ -307,6 +416,15 @@ function CanvasInner() {
 
       {/* Graph preview overlay — shown when the assistant proposes a graph */}
       <GraphPreviewOverlay />
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems}
+          onClose={closeContextMenu}
+        />
+      )}
     </div>
   )
 }

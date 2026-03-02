@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Trash2 } from 'lucide-react'
 import { useCanvasStore } from '../../store/canvasStore'
 import { NODE_TYPE_META } from '../nodes/constants'
 
@@ -6,6 +6,8 @@ export function EdgePanel() {
   const selectedEdgeId = useCanvasStore((s) => s.selectedEdgeId)
   const edges = useCanvasStore((s) => s.edges)
   const nodes = useCanvasStore((s) => s.nodes)
+  const deleteEdge = useCanvasStore((s) => s.deleteEdge)
+  const clearSelection = useCanvasStore((s) => s.clearSelection)
 
   const edge = edges.find((e) => e.id === selectedEdgeId)
   if (!edge) return null
@@ -15,41 +17,55 @@ export function EdgePanel() {
   const isResource = edge.type === 'resource'
 
   return (
-    <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
-      {/* Edge category badge */}
-      <div className="flex items-center gap-2">
-        <span
-          className={[
-            'rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
-            isResource
-              ? 'border-terminal-500 text-terminal-300'
-              : 'border-magi-blue-800 text-magi-blue-400',
-          ].join(' ')}
-        >
-          {isResource ? 'Resource' : 'Data'}
-        </span>
-        <span className="text-[11px] text-terminal-400">
-          {isResource ? 'Static capability binding' : 'Runtime message flow'}
-        </span>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+        {/* Edge category badge */}
+        <div className="flex items-center gap-2">
+          <span
+            className={[
+              'rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
+              isResource
+                ? 'border-terminal-500 text-terminal-300'
+                : 'border-magi-blue-800 text-magi-blue-400',
+            ].join(' ')}
+          >
+            {isResource ? 'Resource' : 'Data'}
+          </span>
+          <span className="text-[11px] text-terminal-400">
+            {isResource ? 'Static capability binding' : 'Runtime message flow'}
+          </span>
+        </div>
+
+        {/* Source → Target */}
+        <div className="rounded-lg border border-terminal-500 bg-terminal-800/50 p-3">
+          <NodePortRow
+            label="Source"
+            nodeName={sourceNode?.data.label ?? edge.source}
+            nodeType={sourceNode?.type ?? ''}
+            portName={edge.sourceHandle ?? '—'}
+          />
+          <div className="my-2 flex items-center justify-center">
+            <ArrowRight className="h-3.5 w-3.5 text-terminal-500" />
+          </div>
+          <NodePortRow
+            label="Target"
+            nodeName={targetNode?.data.label ?? edge.target}
+            nodeType={targetNode?.type ?? ''}
+            portName={edge.targetHandle ?? '—'}
+          />
+        </div>
       </div>
 
-      {/* Source → Target */}
-      <div className="rounded-lg border border-terminal-500 bg-terminal-800/50 p-3">
-        <NodePortRow
-          label="Source"
-          nodeName={sourceNode?.data.label ?? edge.source}
-          nodeType={sourceNode?.type ?? ''}
-          portName={edge.sourceHandle ?? '—'}
-        />
-        <div className="my-2 flex items-center justify-center">
-          <ArrowRight className="h-3.5 w-3.5 text-terminal-500" />
-        </div>
-        <NodePortRow
-          label="Target"
-          nodeName={targetNode?.data.label ?? edge.target}
-          nodeType={targetNode?.type ?? ''}
-          portName={edge.targetHandle ?? '—'}
-        />
+      {/* Delete action */}
+      <div className="border-t border-terminal-600 p-3">
+        <button
+          onClick={() => { deleteEdge(edge.id); clearSelection() }}
+          className="flex w-full items-center justify-center gap-2 rounded border border-terminal-600 py-1.5 text-sm text-terminal-400 transition-colors hover:border-red-800 hover:text-red-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
+          aria-label="Delete edge"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete edge
+        </button>
       </div>
     </div>
   )
