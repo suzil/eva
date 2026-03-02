@@ -110,7 +110,11 @@ describe('Toolbar', () => {
     expect(hoisted.mockSave).toHaveBeenCalled()
   })
 
-  it('Run button is visible for a draft program and calls validateMutation on click', () => {
+  it('Run button is enabled for an active program and calls validateMutation on click', () => {
+    // Run is disabled for draft programs (must deploy first); use active state
+    vi.mocked(apiHooks.useProgram).mockReturnValue({
+      data: { id: 'p1', name: 'Test Program', state: 'active' as const },
+    } as unknown as ReturnType<typeof apiHooks.useProgram>)
     // isDirty: false skips the save-before-run guard so validate fires directly
     useCanvasStore.setState({ isDirty: false })
     renderToolbar()
@@ -129,6 +133,10 @@ describe('Toolbar', () => {
   })
 
   it('shows run error banner when validation onError is called', () => {
+    // Run requires an active program (draft disables the Run button)
+    vi.mocked(apiHooks.useProgram).mockReturnValue({
+      data: { id: 'p1', name: 'Test Program', state: 'active' as const },
+    } as unknown as ReturnType<typeof apiHooks.useProgram>)
     // isDirty: false skips the save-before-run guard so validate fires directly
     useCanvasStore.setState({ isDirty: false })
     vi.mocked(apiHooks.useValidateProgram).mockReturnValue({

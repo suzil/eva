@@ -21,7 +21,7 @@ describe('App', () => {
     const aside = screen.getByRole('complementary')
     expect(within(aside).getByRole('button', { name: 'Programs' })).toBeInTheDocument()
     expect(within(aside).getByRole('button', { name: 'Node Palette' })).toBeInTheDocument()
-    expect(within(aside).getByRole('button', { name: 'Knowledge' })).toBeInTheDocument()
+    expect(within(aside).getByRole('button', { name: 'Knowledge Library' })).toBeInTheDocument()
     expect(within(aside).getByRole('button', { name: 'Runs' })).toBeInTheDocument()
     expect(within(aside).getByRole('button', { name: 'Settings' })).toBeInTheDocument()
   })
