@@ -1,0 +1,160 @@
+---
+description: Eva Playwright E2E test setup, conventions, and known issues
+---
+
+# Eva E2E Tests (Playwright)
+
+## Location
+
+`frontend/e2e/` — all test files, fixtures, and helpers.
+
+## Running
+
+```bash
+make e2e                         # headless run (Playwright manages Vite startup)
+cd frontend && npm run e2e       # same
+cd frontend && npm run e2e:ui    # interactive UI mode
+cd frontend && npm run e2e:headed # with browser visible
+```
+
+`playwright.config.ts` uses `webServer: { command: 'npm run dev', url: 'http://localhost:5173', reuseExistingServer: true }`.
+
+## Test Structure
+
+```
+frontend/e2e/
+  fixtures/eva-fixture.ts        — custom fixtures: programId, deployedProgramId, apiHelpers, app
+  helpers/api.ts                 — direct REST API helpers for test setup/teardown
+  tests/
+    program-lifecycle.spec.ts    — create, rename, select programs
+    graph-authoring.spec.ts      — drag nodes, detail panel, save, undo/redo, right-click context menus
+    deploy-and-run.spec.ts       — deploy, run, pause, resume, cancel, runs panel
+    spec-editor.spec.ts          — YAML tab, Monaco, dirty indicator, SyncWarningModal (B2)
+    assistant-panel.spec.ts      — MAGI panel, slash commands, template picker
+    settings.spec.ts             — LLM settings, Credentials section
+    knowledge-library.spec.ts    — Knowledge Library, Templates, Codebase panel
+```
+
+## Key Conventions
+
+### API payload shapes (backend expects)
+
+```typescript
+// Graph.nodes is an OBJECT keyed by NodeId, NOT an array
+{ nodes: { [id]: { id, label, posX, posY, type: { type: 'trigger', config: ... } } } }
+
+// Agent config
+{ type: 'agent', config: { model: 'gpt-4o-mini', systemPrompt: '...', responseFormat: 'text', temperature: 0.7, maxIterations: 3 } }
+
+// Edge uses sourceNode/targetNode (not sourceNodeId/targetNodeId)
+{ id, sourceNode, sourcePort, targetNode, targetPort, category }
+
+// Agent node's trigger port is 'instruction' (NOT 'trigger')
+{ sourcePort: 'event', targetPort: 'instruction' }
+
+// Run creation requires a body with triggerPayload
+POST /api/programs/{id}/runs  { triggerPayload: null }
+```
+
+### Unique IDs for test data
+Always use `crypto.randomUUID()` for node/edge IDs in `makeTriggerAgentGraph()` to avoid
+SQLite primary key collisions across test runs.
+
+### Selector pitfalls
+
+- `button:has-text("SPEC")` matches BOTH "Spec" tab AND "Inspector" (contains "inSPECtor").
+  Use `getByRole('button', { name: 'Spec', exact: true })` instead.
+- `text=/generate` is parsed as a regex; use `.filter({ hasText: '/generate' })` or
+  `.locator('.font-mono').filter({ hasText: '/generate' })`.
+- `.react-flow__node` is the correct class for ReactFlow v12 node containers (not `[data-testid="rf__node"]`).
+- Right-click context menus: use `locator.click({ button: 'right' })` or
+  `locator.click({ button: 'right', position: { x, y } })`. Context menu items are rendered
+  as `<button>` elements in a portal — use `getByRole('button', { name: 'Delete' })` etc.
+  Playwright suppresses the browser's native context menu, so `page.dispatchEvent('contextmenu')`
+  is not needed — `click({ button: 'right' })` is sufficient.
+
+### MAGI / Assistant WS instability
+
+The `useAssistantStream` WebSocket connects to `ws://localhost:5173/api/ws` (proxied
+through Vite). In headless Playwright, the WS connects briefly then disconnects.
+`setSelectedProgramId` resets `wsConnected` to `null`, contributing to instability.
+
+**Impact**: Tests that require WS to be open when sending cannot reliably wait for
+`[aria-label="Backend connected"]`. Instead:
+- Tests verify that the input textarea is CLEARED after pressing Enter/Send (which
+  always happens in `handleSend`, regardless of WS state).
+- Tests that need the message in the list should be approached via a live backend
+  with proper LLM credentials in a non-headless environment.
+
+### SyncWarningModal (B2)
+The modal renders INSIDE `SpecEditorView` when `specSyncState === 'conflict'`.
+Leaving the Spec tab with dirty YAML sets `specSyncState = 'conflict'`.
+The modal only APPEARS when you RETURN to the Spec tab. Test flow:
+1. Open Spec tab, make dirty
+2. Switch to Graph tab (sets conflict state)
+3. Switch BACK to Spec tab → modal appears
+
+### Settings panel
+
+- Section header: "MAGI / LLM Provider" (not "LLM Settings")
+- Provider is TWO BUTTONS: "OpenAI" | "Anthropic" (not a `<select>`)
+- Model is ONE `<select>` element
+- Credentials section header: "Credentials" (not "CREDENTIALS")
+
+### Knowledge Library
+
+- Segment tabs: `button:has-text("knowledge")` and `button:has-text("templates")` (LOWERCASE)
+- Search input: `data-testid="knowledge-search"` or `placeholder="Search knowledge…"`
+- `text="${exactString}"` (with quotes) is an EXACT match; use `text=substring` for substring
+
+### Codebase panel
+
+Empty state shows: `input[placeholder="/absolute/path/to/repo"]`
+
+## Fixtures
+
+```typescript
+programId         // pre-created draft program, cleaned up after test
+deployedProgramId // pre-created program with Trigger→Agent graph, deployed to active state
+apiHelpers        // direct API methods: createProgram, saveGraph, deployProgram, createRun, etc.
+app               // EvaApp helper: goto(), selectProgram(), openMagi(), openActivity(), etc.
+```
+
+Each test gets a fresh isolated program. `localStorage` is cleared before each test
+to reset Zustand state.
+
+## LLM-dependent tests (Cancel button)
+
+Two tests require a real LLM call so the run stays "in-progress" long enough to assert:
+
+- "Cancel button appears while a run is in progress"
+- "cancelling a run removes the Cancel button"
+
+Without LLM, runs fail in <100 ms (dummyLLMClient) and the Cancel button enters
+and leaves the DOM before Playwright's polling detects it.
+
+**Fix**: set `EVA_ANTHROPIC_API_KEY` in BOTH the backend process (initialises
+`envAnthropicClient` at startup) and the test-runner process (so the fixture
+calls `makeTriggerAgentGraphForAnthropic()` which sets `provider: 'anthropic'`
+and `model: 'claude-3-5-haiku-20241022'` on the agent node).
+
+```bash
+export EVA_ANTHROPIC_API_KEY=sk-ant-...
+make dev          # starts backend with the key
+npm run e2e       # test runner also inherits the key
+```
+
+When `EVA_ANTHROPIC_API_KEY` is absent the two tests are automatically skipped
+(`test.skip(!HAS_ANTHROPIC_KEY, '...')`). All other 63 tests run fine without it.
+
+**Key detail**: `/api/llm-settings` (DB) is used only by MAGI assistant, NOT by
+agent nodes in runs. Agent nodes use `envAnthropicClient` / `envLLMClient`
+from the env-var-initialised `AppEnv`. Calling `configureLlmSettings` via API
+does NOT affect run execution.
+
+## Result (as of Mar 2, 2026)
+
+71 tests total — 71 pass with EVA_ANTHROPIC_API_KEY set. 69 pass without it
+(2 LLM tests auto-skipped). No known flaky tests.
+
+*+6 tests added in EVA-121: right-click context menus (graph-authoring.spec.ts)*

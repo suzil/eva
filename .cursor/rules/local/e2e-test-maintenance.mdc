@@ -1,0 +1,69 @@
+---
+description: USE WHEN making any Eva code change that could affect user-visible behavior — new features, changed UI components, new API endpoints, modified workflows, bug fixes, or structural refactors. Ensures the Playwright E2E suite stays in sync with the codebase.
+alwaysApply: false
+---
+
+# E2E Test Maintenance
+
+**This checklist is mandatory before any commit/PR for user-visible changes.** Do not skip it — missing tests is a defect in the implementation, not an optional follow-up. Run through every step before marking todos complete.
+
+## 1. Coverage audit — ask these questions
+
+| Change type | Consider |
+|---|---|
+| New UI component or panel | Does it need a smoke test? Add one to the relevant spec file. |
+| New API endpoint | Is it part of a user flow? If so, can the existing helpers in `helpers/api.ts` be extended to cover it? |
+| Changed aria-label / text / selector | Update matching selectors in the spec files — don't leave broken locators. |
+| New node type (Convergence, Voting, …) | Add drag-and-drop smoke test in `graph-authoring.spec.ts`. Add a `makeGraph*` variant in `helpers/api.ts`. |
+| New bottom-panel tab or activity-bar item | Add visibility smoke test in the relevant spec file. |
+| Bug fix for a regression listed in `eva-quality-audit.mdc` | The fix should have (or already have) a corresponding regression guard test with a `(Bxx guard)` comment. |
+| Deleted feature / removed route | Remove or skip tests that reference it. |
+| Renamed env var or config key | Update `fixtures/eva-fixture.ts` and any skip conditions. |
+
+## 2. Decide: add / expand / consolidate / remove
+
+- **Add** — new behaviour with no existing coverage.
+- **Expand** — existing test file has the right scope; add a test case.
+- **Consolidate** — two tests test the same thing; collapse into one.
+- **Remove** — behaviour is gone or the test is a permanent false-positive.
+
+## 3. Write the test
+
+Follow conventions in `eva-e2e-tests.mdc`:
+
+```
+frontend/e2e/
+  fixtures/eva-fixture.ts   ← fixtures and EvaApp helpers
+  helpers/api.ts            ← REST setup/teardown helpers
+  tests/<suite>.spec.ts     ← test cases
+```
+
+Key rules:
+- Each test owns its data (create via API, delete in fixture teardown).
+- Use `crypto.randomUUID()` for all node/edge IDs to avoid DB collisions.
+- LLM-dependent tests must guard with `test.skip(!HAS_ANTHROPIC_KEY, '...')`.
+- Prefer `aria-label` selectors; avoid brittle text selectors.
+- See `eva-e2e-tests.mdc` for selector pitfalls and fixture API.
+
+## 4. Run the suite
+
+```bash
+# With backend + Vite already running:
+cd frontend && SKIP_SERVER=1 npm run e2e
+
+# Or from repo root (Playwright starts Vite automatically):
+make e2e
+```
+
+Run with `--retries=0` if you want to surface flakiness immediately:
+```bash
+cd frontend && SKIP_SERVER=1 npx playwright test --retries=0
+```
+
+All tests must pass (or be correctly skipped) before the task is done.
+
+## 5. Capture new knowledge
+
+If you discovered a new selector pitfall, fixture pattern, or backend API quirk
+while writing the test, append it to `eva-e2e-tests.mdc` and update
+`~/.cursor/rules-meta.md`.
