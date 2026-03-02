@@ -4,13 +4,19 @@ import { type ActivityKey, useUiStore } from '../../store/uiStore'
 interface ActivityItem {
   key: ActivityKey
   label: string
+  description?: string
   Icon: React.ComponentType<{ className?: string }>
 }
 
 const ACTIVITIES: ActivityItem[] = [
   { key: 'programs', label: 'Programs', Icon: LayoutList },
   { key: 'nodes', label: 'Node Palette', Icon: Boxes },
-  { key: 'knowledge', label: 'Knowledge', Icon: BookOpen },
+  {
+    key: 'knowledge',
+    label: 'Knowledge Library',
+    description: 'Knowledge Library — browse, search, and manage knowledge entries extracted from your codebase and Linear',
+    Icon: BookOpen,
+  },
   { key: 'runs', label: 'Runs', Icon: History },
   { key: 'codebase', label: 'Codebase', Icon: FolderCode },
 ]
@@ -25,12 +31,12 @@ export function ActivityBar() {
   const detailPanelTab = useUiStore((s) => s.detailPanelTab)
   const setDetailPanelTab = useUiStore((s) => s.setDetailPanelTab)
 
-  const renderItem = ({ key, label, Icon }: ActivityItem) => {
+  const renderItem = ({ key, label, description, Icon }: ActivityItem) => {
     const isActive = activeActivity === key
     return (
       <button
         key={key}
-        title={label}
+        title={description ?? label}
         onClick={() => setActiveActivity(key)}
         className={[
           'group relative flex h-12 w-12 items-center justify-center rounded-md transition-colors',

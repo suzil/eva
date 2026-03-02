@@ -120,6 +120,11 @@ export function Toolbar() {
   const [runErrorMsg, setRunErrorMsg] = useState<string>('')
   const runErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Run-complete notification (shown when auto-switching to Operate after a run finishes)
+  const [showRunCompleteNotif, setShowRunCompleteNotif] = useState(false)
+  const runCompleteNotifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const runJustFinishedRef = useRef(false)
+
   // Deploy phase
   const [deployPhase, setDeployPhase] = useState<DeployPhase>('idle')
   const [deployErrors, setDeployErrors] = useState<ValidationError[]>([])
@@ -132,7 +137,10 @@ export function Toolbar() {
     if (activeRunId) {
       setRunPhase('running')
     } else {
-      setRunPhase((prev) => (prev === 'running' ? 'idle' : prev))
+      setRunPhase((prev) => {
+        if (prev === 'running') { runJustFinishedRef.current = true }
+        return prev === 'running' ? 'idle' : prev
+      })
     }
   }, [activeRunId])
 
@@ -175,6 +183,12 @@ export function Toolbar() {
   useEffect(() => {
     if (inspectedRunId && !activeRunId) {
       setMode('operate')
+      if (runJustFinishedRef.current) {
+        runJustFinishedRef.current = false
+        setShowRunCompleteNotif(true)
+        if (runCompleteNotifTimerRef.current) clearTimeout(runCompleteNotifTimerRef.current)
+        runCompleteNotifTimerRef.current = setTimeout(() => setShowRunCompleteNotif(false), 3000)
+      }
     }
   }, [inspectedRunId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -429,8 +443,9 @@ export function Toolbar() {
                         ? 'Starting…'
                         : 'Run'
                   }
+                  tooltip={programState === 'draft' ? 'Deploy this program before running' : undefined}
                   onClick={handleRun}
-                  disabled={!selectedProgramId || isRunBusy || runPhase === 'error'}
+                  disabled={!selectedProgramId || isRunBusy || runPhase === 'error' || programState === 'draft'}
                   variant="primary"
                 />
               )}
@@ -573,6 +588,21 @@ export function Toolbar() {
         </div>
       )}
 
+      {/* Run-complete notification — shown briefly when auto-switching to Operate after a run finishes */}
+      {showRunCompleteNotif && (
+        <div className="flex items-center gap-2 border-b border-at-field-700 bg-at-field-950/60 px-3 py-1.5 text-xs text-at-field-300">
+          <span className="shrink-0 font-semibold">Run complete.</span>
+          <span>Switched to Operate mode — select a run from the toolbar to inspect results.</span>
+          <button
+            onClick={() => setShowRunCompleteNotif(false)}
+            className="ml-auto shrink-0 text-at-field-600 hover:text-at-field-300"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Deploy error panel — list of clickable validation errors */}
       {deployPhase === 'error' && deployErrors.length > 0 && (
         <div className="border-b border-nerv-red-800 bg-nerv-red-950/60 px-3 py-2 text-xs text-nerv-red-300">
@@ -677,6 +707,11 @@ function ModeToggle({ mode, onChange }: { mode: AppMode; onChange: (m: AppMode) 
         <button
           key={m}
           onClick={() => onChange(m)}
+          title={
+            m === 'author'
+              ? 'Author mode — design and configure your program graph'
+              : 'Operate mode — view run history and inspect results'
+          }
           className={[
             'rounded px-2.5 py-1 capitalize transition-colors',
             mode === m
@@ -699,6 +734,7 @@ interface ToolbarButtonProps {
   disabled?: boolean
   variant?: 'default' | 'primary' | 'deploy' | 'danger' | 'ghost'
   hideLabel?: boolean
+  tooltip?: string
 }
 
 function WsStatusDot({ connected }: { connected: boolean }) {
@@ -713,7 +749,7 @@ function WsStatusDot({ connected }: { connected: boolean }) {
   )
 }
 
-function ToolbarButton({ icon, label, onClick, disabled, variant = 'default', hideLabel }: ToolbarButtonProps) {
+function ToolbarButton({ icon, label, onClick, disabled, variant = 'default', hideLabel, tooltip }: ToolbarButtonProps) {
   const base = 'flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-at-field-500 focus-visible:ring-offset-1 focus-visible:ring-offset-terminal-800'
   const styles = {
     default: 'bg-terminal-700 hover:bg-terminal-600 text-terminal-100 border border-terminal-500',
@@ -727,7 +763,7 @@ function ToolbarButton({ icon, label, onClick, disabled, variant = 'default', hi
     <button
       onClick={onClick}
       disabled={disabled}
-      title={label}
+      title={tooltip ?? label}
       aria-label={label}
       className={`${base} ${styles[variant]}`}
     >
