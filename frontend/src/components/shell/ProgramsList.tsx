@@ -5,6 +5,7 @@ import { useUiStore } from '../../store/uiStore'
 import { useCanvasStore } from '../../store/canvasStore'
 import type { ProgramState } from '../../types'
 import { ConfirmDialog } from './ConfirmDialog'
+import { ContextMenu } from '../canvas/ContextMenu'
 
 // ---------------------------------------------------------------------------
 // Badge
@@ -42,6 +43,7 @@ interface ProgramItemProps {
   onRenameStart: () => void
   onRenameChange: (value: string) => void
   onRenameCommit: () => void
+  onContextMenu: (x: number, y: number) => void
 }
 
 function ProgramItem({
@@ -55,6 +57,7 @@ function ProgramItem({
   onRenameStart,
   onRenameChange,
   onRenameCommit,
+  onContextMenu,
 }: ProgramItemProps) {
   const patchProgram = usePatchProgram(id)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -82,6 +85,10 @@ function ProgramItem({
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(e) => e.key === 'Enter' && onSelect()}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onContextMenu(e.clientX, e.clientY)
+      }}
       className={[
         'group relative flex min-h-[34px] cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors',
         isSelected
@@ -156,6 +163,7 @@ export function ProgramsPanel() {
   const [renameValue, setRenameValue] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingProgramId, setPendingProgramId] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null)
 
   const handleSelectProgram = (id: string) => {
     if (isDirty && selectedProgramId !== id) {
@@ -260,16 +268,39 @@ export function ProgramsPanel() {
               renameValue={renamingId === program.id ? renameValue : program.name}
               onSelect={() => handleSelectProgram(program.id)}
               onRenameStart={() => {
+                setContextMenu(null)
                 setRenamingId(program.id)
                 setRenameValue(program.name)
               }}
               onRenameChange={setRenameValue}
               onRenameCommit={() => setRenamingId(null)}
+              onContextMenu={(x, y) => setContextMenu({ x, y, id: program.id })}
             />
           ))}
         </div>
       )}
     </div>
+    {contextMenu && (
+      <ContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        items={[
+          {
+            kind: 'action',
+            label: 'Rename',
+            icon: Pencil,
+            onClick: () => {
+              const program = list.find((p) => p.id === contextMenu.id)
+              if (program) {
+                setRenamingId(program.id)
+                setRenameValue(program.name)
+              }
+            },
+          },
+        ]}
+        onClose={() => setContextMenu(null)}
+      />
+    )}
     </>
   )
 }

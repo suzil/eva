@@ -240,7 +240,7 @@ export function CredentialsPanel() {
         ) : (
           <ul className="divide-y divide-terminal-600/60">
             {credentials.map((cred) => (
-              <li key={cred.id} className="flex items-center gap-2 px-3 py-2.5 group hover:bg-terminal-700/30">
+              <li key={cred.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-terminal-700/30">
                 <KeyRound size={11} className="shrink-0 text-terminal-400" />
                 <div className="flex flex-1 flex-col min-w-0">
                   <span className="truncate text-[11px] text-terminal-100">{cred.name}</span>
@@ -251,7 +251,7 @@ export function CredentialsPanel() {
                 <button
                   onClick={() => requestDelete(cred.id)}
                   disabled={deletingId === cred.id}
-                  className="shrink-0 rounded p-1 text-terminal-500 opacity-0 group-hover:opacity-100 hover:bg-nerv-red-900/40 hover:text-nerv-red-400 disabled:opacity-50 transition-all"
+                  className="shrink-0 rounded p-1 text-terminal-500 hover:bg-nerv-red-900/40 hover:text-nerv-red-400 disabled:opacity-50 transition-colors"
                   title="Delete credential"
                   aria-label={`Delete ${cred.name}`}
                 >

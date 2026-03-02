@@ -92,6 +92,35 @@ test.describe('Program lifecycle', () => {
     await app.waitForProgramSelected(newName)
   })
 
+  test('renames a program via right-click context menu', async ({ app, programId, apiHelpers }) => {
+    const program = await apiHelpers.getProgram(programId)
+    await app.goto()
+    await app.selectProgram(program.name)
+
+    // Right-click the program item to open the context menu
+    const programItem = app.page.locator(`[role="button"]:has-text("${program.name}")`).first()
+    await programItem.click({ button: 'right' })
+
+    // Context menu should appear with a "Rename" option (exact match avoids collision
+    // with the hover pencil button whose accessible name is "Rename program")
+    const renameBtn = app.page.getByRole('button', { name: 'Rename', exact: true })
+    await expect(renameBtn).toBeVisible({ timeout: 5_000 })
+
+    await renameBtn.click()
+
+    // Rename input should appear
+    const input = app.page.locator('input[class*="ring-at-field"]')
+    await expect(input).toBeVisible()
+
+    const newName = `${program.name}-ctx-renamed`
+    await input.fill(newName)
+    await input.press('Enter')
+
+    // Updated name should appear in the list
+    await expect(app.page.locator(`[role="button"]:has-text("${newName}")`).first()).toBeVisible({ timeout: 5_000 })
+    await app.waitForProgramSelected(newName)
+  })
+
   test('shows empty state with "Create your first program" button', async ({ app }) => {
     await app.goto()
     // If there are no programs, the empty state is shown.
