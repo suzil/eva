@@ -9,19 +9,22 @@
 module Eva.Knowledge.Types
   ( -- * Identifiers
     KnowledgeEntryId (..)
+  , KnowledgeRelationId (..)
 
     -- * Enumerations
   , KnowledgeSourceType (..)
   , KnowledgeCategory (..)
+  , RelationType (..)
 
     -- * Domain types
   , KnowledgeEntry (..)
+  , KnowledgeRelation (..)
   , SearchQuery (..)
   , SearchResult (..)
   ) where
 
 import Data.Aeson
-import Data.Char (toLower)
+import Data.Char (isUpper, toLower)
 import Data.String (IsString)
 import Data.Text (Text)
 import Data.Time (UTCTime)
@@ -48,6 +51,10 @@ dropPrefix prefix =
 -- ---------------------------------------------------------------------------
 
 newtype KnowledgeEntryId = KnowledgeEntryId Text
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving newtype (ToJSON, FromJSON, ToJSONKey, FromJSONKey, IsString)
+
+newtype KnowledgeRelationId = KnowledgeRelationId Text
   deriving stock (Eq, Ord, Show, Generic)
   deriving newtype (ToJSON, FromJSON, ToJSONKey, FromJSONKey, IsString)
 
@@ -178,3 +185,65 @@ instance ToJSON SearchResult where
 
 instance FromJSON SearchResult where
   parseJSON = genericParseJSON (dropPrefix "searchResult")
+
+-- ---------------------------------------------------------------------------
+-- RelationType
+-- ---------------------------------------------------------------------------
+
+-- | The kind of relationship between two KnowledgeEntry nodes in the graph.
+-- Serializes to snake_case: PartOf -> "part_of", DependsOn -> "depends_on", etc.
+data RelationType
+  = PartOf
+  | DependsOn
+  | References
+  | SimilarTo
+  | DerivedFrom
+  | Implements
+  | Tests
+  | Documents
+  deriving stock (Eq, Ord, Show, Generic, Enum, Bounded)
+
+relationTypeOptions :: Options
+relationTypeOptions =
+  defaultOptions{constructorTagModifier = camelToSnake}
+  where
+    camelToSnake [] = []
+    camelToSnake (c : cs) = toLower c : go cs
+    go [] = []
+    go (x : xs)
+      | isUpper x = '_' : toLower x : go xs
+      | otherwise = x : go xs
+
+instance ToJSON RelationType where
+  toJSON = genericToJSON relationTypeOptions
+  toEncoding = genericToEncoding relationTypeOptions
+
+instance FromJSON RelationType where
+  parseJSON = genericParseJSON relationTypeOptions
+
+-- ---------------------------------------------------------------------------
+-- KnowledgeRelation
+-- ---------------------------------------------------------------------------
+
+-- | A directed relationship between two KnowledgeEntry nodes.
+-- Stored in the `knowledge_relations` SQLite table.
+-- The UNIQUE constraint on (source_id, target_id, relation_type) prevents
+-- duplicate edges. Cascade delete is handled by a trigger on knowledge_entries.
+data KnowledgeRelation = KnowledgeRelation
+  { knowledgeRelationId :: KnowledgeRelationId
+  , knowledgeRelationSourceId :: KnowledgeEntryId
+  , knowledgeRelationTargetId :: KnowledgeEntryId
+  , knowledgeRelationType :: RelationType
+  , knowledgeRelationConfidence :: Double
+  , knowledgeRelationMetadata :: Value
+  , knowledgeRelationCreatedBy :: Text
+  , knowledgeRelationCreatedAt :: UTCTime
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON KnowledgeRelation where
+  toJSON = genericToJSON (dropPrefix "knowledgeRelation")
+  toEncoding = genericToEncoding (dropPrefix "knowledgeRelation")
+
+instance FromJSON KnowledgeRelation where
+  parseJSON = genericParseJSON (dropPrefix "knowledgeRelation")
