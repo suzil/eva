@@ -1,4 +1,4 @@
-.PHONY: dev build test install install-ghcid install-hooks reset-db docker-build docker-run
+.PHONY: dev build test e2e install install-ghcid install-hooks reset-db docker-build docker-run
 
 # Start backend (ghcid hot-reload) and frontend (Vite) concurrently.
 # Ctrl+C kills both.
@@ -32,6 +32,13 @@ build:
 test:
 	unset SOURCE_DATE_EPOCH && cd backend && cabal test all --test-show-details=direct
 	cd frontend && npm test
+
+# Run Playwright e2e tests.
+# The Haskell backend must be running (make dev or cabal run eva in backend/).
+# Playwright will start Vite automatically and reuse it if already running.
+# Set BASE_URL / API_URL to test against a different environment.
+e2e:
+	cd frontend && npm run e2e
 
 # Seed the Weekly Project Summarizer demo program (backend must be running).
 # Idempotent: deletes any existing program with that name before re-creating.
