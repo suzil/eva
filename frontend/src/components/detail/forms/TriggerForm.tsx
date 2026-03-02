@@ -158,6 +158,12 @@ export function TriggerForm({ config, onChange }: Props) {
               </div>
             </div>
           )}
+
+          {/* Scheduling behavior info */}
+          <div className="rounded border border-terminal-500 bg-terminal-700 p-2.5 text-[10px] text-terminal-300">
+            Cron triggers fire while Eva is running. The scheduler checks for due triggers every
+            minute. If Eva restarts, missed scheduled runs during downtime are not replayed.
+          </div>
         </div>
       )}
     </div>
