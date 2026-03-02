@@ -276,4 +276,131 @@ test.describe('Graph authoring', () => {
     await authorBtn.click()
     await expect(authorBtn).toHaveAttribute('aria-pressed', 'true')
   })
+
+  // ---------------------------------------------------------------------------
+  // Context menus (EVA-121)
+  // ---------------------------------------------------------------------------
+
+  test('right-clicking empty canvas shows Add Node submenu', async ({ app, programId, apiHelpers }) => {
+    const program = await apiHelpers.getProgram(programId)
+    await app.goto()
+    await app.selectProgram(program.name)
+    await app.waitForProgramSelected(program.name)
+    await app.switchEditorTab('Graph')
+    await app.page.waitForSelector('.react-flow__pane', { state: 'visible' })
+
+    const pane = app.page.locator('.react-flow__pane')
+    const box = await pane.boundingBox()
+    expect(box).not.toBeNull()
+
+    await pane.click({ button: 'right', position: { x: box!.width / 2, y: box!.height / 2 } })
+
+    // Context menu should appear with "Add Node" label
+    await expect(app.page.locator('text=Add Node')).toBeVisible({ timeout: 3_000 })
+    // All 5 node types should be listed
+    await expect(app.page.getByRole('button', { name: 'Agent' }).first()).toBeVisible()
+    await expect(app.page.getByRole('button', { name: 'Knowledge' }).first()).toBeVisible()
+    await expect(app.page.getByRole('button', { name: 'Trigger' }).first()).toBeVisible()
+  })
+
+  test('right-click Add Node places a node at cursor position', async ({ app, programId, apiHelpers }) => {
+    const program = await apiHelpers.getProgram(programId)
+    await app.goto()
+    await app.selectProgram(program.name)
+    await app.waitForProgramSelected(program.name)
+    await app.switchEditorTab('Graph')
+    await app.page.waitForSelector('.react-flow__pane', { state: 'visible' })
+
+    const pane = app.page.locator('.react-flow__pane')
+    const box = await pane.boundingBox()
+    expect(box).not.toBeNull()
+
+    // Right-click canvas and add an Agent node
+    await pane.click({ button: 'right', position: { x: box!.width / 2, y: box!.height / 2 } })
+    await app.page.getByRole('button', { name: 'Agent' }).first().click()
+
+    // Node should appear on canvas
+    await expect(
+      app.page.locator('.react-flow__node').filter({ hasText: 'Agent' })
+    ).toBeVisible({ timeout: 5_000 })
+  })
+
+  test('right-clicking a node shows Duplicate and Delete', async ({ app, programId, apiHelpers }) => {
+    await apiHelpers.saveGraph(programId, makeTriggerAgentGraph())
+    const program = await apiHelpers.getProgram(programId)
+    await app.goto()
+    await app.selectProgram(program.name)
+    await app.waitForProgramSelected(program.name)
+    await app.page.waitForSelector('.react-flow__node', { state: 'visible', timeout: 10_000 })
+
+    // Right-click the Agent node
+    const agentNode = app.page.locator('.react-flow__node').filter({ hasText: 'Agent' })
+    await agentNode.click({ button: 'right' })
+
+    await expect(app.page.getByRole('button', { name: 'Duplicate' })).toBeVisible({ timeout: 3_000 })
+    await expect(app.page.getByRole('button', { name: 'Delete' })).toBeVisible({ timeout: 3_000 })
+  })
+
+  test('right-click Duplicate creates an offset copy of the node', async ({ app, programId, apiHelpers }) => {
+    await apiHelpers.saveGraph(programId, makeTriggerAgentGraph())
+    const program = await apiHelpers.getProgram(programId)
+    await app.goto()
+    await app.selectProgram(program.name)
+    await app.waitForProgramSelected(program.name)
+    await app.page.waitForSelector('.react-flow__node', { state: 'visible', timeout: 10_000 })
+
+    const agentNodesBefore = app.page.locator('.react-flow__node').filter({ hasText: 'Agent' })
+    await expect(agentNodesBefore).toHaveCount(1)
+
+    await agentNodesBefore.click({ button: 'right' })
+    await app.page.getByRole('button', { name: 'Duplicate' }).click()
+
+    // Two Agent nodes should now be on canvas
+    await expect(
+      app.page.locator('.react-flow__node').filter({ hasText: 'Agent' })
+    ).toHaveCount(2, { timeout: 5_000 })
+  })
+
+  test('right-click Delete removes the node', async ({ app, programId, apiHelpers }) => {
+    await apiHelpers.saveGraph(programId, makeTriggerAgentGraph())
+    const program = await apiHelpers.getProgram(programId)
+    await app.goto()
+    await app.selectProgram(program.name)
+    await app.waitForProgramSelected(program.name)
+    await app.page.waitForSelector('.react-flow__node', { state: 'visible', timeout: 10_000 })
+
+    await expect(app.page.locator('.react-flow__node').filter({ hasText: 'Agent' })).toHaveCount(1)
+
+    const agentNode = app.page.locator('.react-flow__node').filter({ hasText: 'Agent' })
+    await agentNode.click({ button: 'right' })
+    await app.page.getByRole('button', { name: 'Delete' }).click()
+
+    await expect(
+      app.page.locator('.react-flow__node').filter({ hasText: 'Agent' })
+    ).toHaveCount(0, { timeout: 5_000 })
+  })
+
+  test('context menus do not appear in Operate mode', async ({ app, programId, apiHelpers }) => {
+    await apiHelpers.saveGraph(programId, makeTriggerAgentGraph())
+    const program = await apiHelpers.getProgram(programId)
+    await app.goto()
+    await app.selectProgram(program.name)
+    await app.waitForProgramSelected(program.name)
+    await app.page.waitForSelector('.react-flow__node', { state: 'visible', timeout: 10_000 })
+
+    // Switch to Operate mode
+    await app.page.locator('[aria-label="App mode"] button:has-text("operate")').click()
+
+    // Right-click canvas — no context menu should appear
+    const pane = app.page.locator('.react-flow__pane')
+    const box = await pane.boundingBox()
+    expect(box).not.toBeNull()
+    await pane.click({ button: 'right', position: { x: box!.width / 2, y: box!.height / 2 } })
+    await expect(app.page.locator('text=Add Node')).not.toBeVisible({ timeout: 1_000 })
+
+    // Right-click a node — no context menu
+    const triggerNode = app.page.locator('.react-flow__node').filter({ hasText: 'Trigger' })
+    await triggerNode.click({ button: 'right' })
+    await expect(app.page.getByRole('button', { name: 'Delete' })).not.toBeVisible({ timeout: 1_000 })
+  })
 })
