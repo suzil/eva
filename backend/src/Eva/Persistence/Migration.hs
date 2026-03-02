@@ -1,23 +1,34 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | Auto-migration: runs runMigration on startup to create/update tables,
--- then creates the FTS5 virtual table and sync triggers for knowledge search.
+-- then creates the FTS5 virtual table, sync triggers, knowledge graph tables,
+-- embedding/cost tables, and idempotent column additions for knowledge_entries.
 -- Safe to call on every restart — persistent only applies missing changes,
--- and all DDL uses IF NOT EXISTS.
+-- all DDL uses IF NOT EXISTS, and ALTER TABLE is wrapped in try/catch.
 module Eva.Persistence.Migration
   ( runMigrations
   ) where
 
+import Control.Exception (SomeException, try)
+import Control.Monad (void)
 import Control.Monad.Logger (runNoLoggingT)
 import Data.Text (Text)
 import Database.Persist.Sql (ConnectionPool, rawExecute, runMigration, runSqlPool)
 import Eva.Persistence.Schema (migrateAll)
 
 -- | Create or update all tables. Idempotent: no-ops when schema is already
--- up to date. After Persistent migrations, creates the FTS5 virtual table
--- and 3 sync triggers if they don't already exist.
+-- up to date. After Persistent migrations, creates the FTS5 virtual table,
+-- 3 sync triggers, knowledge graph tables, embedding/cost tables, and adds
+-- updated_by/version columns to knowledge_entries via try/catch ALTER TABLE.
 runMigrations :: ConnectionPool -> IO ()
-runMigrations pool = runNoLoggingT $ runSqlPool go pool
+runMigrations pool = do
+  runNoLoggingT $ runSqlPool go pool
+  -- ALTER TABLE is not idempotent in SQLite (throws on duplicate column),
+  -- so each statement runs in its own transaction with exceptions swallowed.
+  addColumnIdempotent pool alterKnowledgeEntriesUpdatedBy
+  addColumnIdempotent pool alterKnowledgeEntriesVersion
   where
     go = do
       runMigration migrateAll
@@ -30,6 +41,15 @@ runMigrations pool = runNoLoggingT $ runSqlPool go pool
       rawExecute createRelationsTargetIdx []
       rawExecute createRelationsTypeIdx []
       rawExecute createRelationsCascadeDeleteTrigger []
+      rawExecute createEmbeddingsTable []
+      rawExecute createCostsTable []
+
+-- | Run an ALTER TABLE statement idempotently. SQLite throws when a column
+-- already exists; catching and ignoring makes re-runs safe.
+addColumnIdempotent :: ConnectionPool -> Text -> IO ()
+addColumnIdempotent pool stmt =
+  void . try @SomeException . runNoLoggingT $
+    runSqlPool (rawExecute stmt []) pool
 
 -- | Standalone FTS5 table indexing title and content of knowledge_entries.
 -- Porter stemmer + unicode61 tokenizer for multilingual support.
@@ -110,3 +130,48 @@ createRelationsCascadeDeleteTrigger =
   \  DELETE FROM knowledge_relations \
   \  WHERE source_id = OLD.id OR target_id = OLD.id; \
   \END"
+
+-- | Embedding vector storage: one row per knowledge entry, keyed by entry_id.
+-- Vectors are packed Float32 arrays stored in a BLOB column. Cosine similarity
+-- is computed in Haskell — no sqlite-vec extension required.
+-- ON DELETE CASCADE removes embeddings when the parent entry is deleted.
+createEmbeddingsTable :: Text
+createEmbeddingsTable =
+  "CREATE TABLE IF NOT EXISTS knowledge_embeddings ( \
+  \  entry_id     TEXT    PRIMARY KEY \
+  \                       REFERENCES knowledge_entries(id) ON DELETE CASCADE, \
+  \  model        TEXT    NOT NULL, \
+  \  dimensions   INTEGER NOT NULL, \
+  \  embedding    BLOB    NOT NULL, \
+  \  content_hash TEXT    NOT NULL, \
+  \  created_at   DATETIME NOT NULL \
+  \)"
+
+-- | Per-embedding-call cost tracking. Every call to an embedding provider
+-- (Voyage AI or OpenAI fallback) inserts a row here. Aggregate queries over
+-- this table power the cost summary shown in the Knowledge Library header.
+createCostsTable :: Text
+createCostsTable =
+  "CREATE TABLE IF NOT EXISTS knowledge_costs ( \
+  \  id          TEXT    PRIMARY KEY, \
+  \  operation   TEXT    NOT NULL, \
+  \  model       TEXT    NOT NULL, \
+  \  token_count INTEGER NOT NULL, \
+  \  cost_usd    REAL    NOT NULL, \
+  \  created_at  DATETIME NOT NULL \
+  \)"
+
+-- | Provenance: which agent, user, or system last wrote this entry.
+-- Added via idempotent ALTER TABLE since Persistent cannot add NOT NULL
+-- columns with defaults to existing tables via its migration DSL.
+alterKnowledgeEntriesUpdatedBy :: Text
+alterKnowledgeEntriesUpdatedBy =
+  "ALTER TABLE knowledge_entries \
+  \ADD COLUMN updated_by TEXT NOT NULL DEFAULT 'system'"
+
+-- | Optimistic concurrency version counter. Agents supplying a stale version
+-- on write will be rejected, preventing lost-update races.
+alterKnowledgeEntriesVersion :: Text
+alterKnowledgeEntriesVersion =
+  "ALTER TABLE knowledge_entries \
+  \ADD COLUMN version INTEGER NOT NULL DEFAULT 1"
